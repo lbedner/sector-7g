@@ -1,5 +1,5 @@
 _commit: 7e95cc97194a1959920a8d19c38c9e198d861850
-_src_path: /private/var/folders/nm/_z4yr9914mj3r44201b79y9m0000gn/T/copier._vcs.clone.4m6y1g4q
+_src_path: gh:lbedner/aegis-stack
 _template_version: 0.6.0
 ai_backend: memory
 ai_framework: pydantic-ai
