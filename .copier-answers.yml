@@ -1,0 +1,28 @@
+_commit: 7e95cc97194a1959920a8d19c38c9e198d861850
+_src_path: /private/var/folders/nm/_z4yr9914mj3r44201b79y9m0000gn/T/copier._vcs.clone.4m6y1g4q
+_template_version: 0.6.0
+ai_backend: memory
+ai_framework: pydantic-ai
+ai_providers: openai
+ai_rag: false
+ai_voice: false
+author_email: your.email@example.com
+author_name: Your Name
+database_engine: postgres
+github_username: your-username
+include_ai: false
+include_auth: true
+include_cache: false
+include_comms: false
+include_database: true
+include_redis: true
+include_scheduler: true
+include_worker: true
+project_description: A production-ready async Python application built with Aegis
+  Stack
+project_name: sector-7g
+project_slug: sector-7g
+python_version: 3.14
+scheduler_backend: postgres
+scheduler_with_persistence: true
+version: 0.1.0
