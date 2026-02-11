@@ -67,25 +67,25 @@ class TestWorkerHealthRegistration:
                     response_time_ms=None,
                     metadata={"configured_queues": 2, "active_workers": 2},
                     sub_components={
-                        "system": ComponentStatus(
-                            name="system",
+                        "inanimate_rod": ComponentStatus(
+                            name="inanimate_rod",
                             status=ComponentStatusType.HEALTHY,
-                            message="System maintenance: idle, 2 completed",
+                            message="Inanimate Carbon Rod: idle, 2 completed",
                             response_time_ms=None,
                             metadata={
-                                "queue_type": "system",
+                                "queue_type": "inanimate_rod",
                                 "worker_alive": True,
                                 "jobs_completed": 2,
                                 "jobs_failed": 0,
                             },
                         ),
-                        "load_test": ComponentStatus(
-                            name="load_test",
+                        "homer": ComponentStatus(
+                            name="homer",
                             status=ComponentStatusType.HEALTHY,
-                            message="Performance testing: idle, 3 completed",
+                            message="Homer Simpson: idle, 3 completed",
                             response_time_ms=None,
                             metadata={
-                                "queue_type": "load_test",
+                                "queue_type": "homer",
                                 "worker_alive": True,
                                 "jobs_completed": 3,
                                 "jobs_failed": 0,
@@ -159,8 +159,8 @@ class TestWorkerHealthRegistration:
 
                 # Verify queue sub-components
                 queues_component = worker_component.sub_components["queues"]
-                assert "system" in queues_component.sub_components
-                assert "load_test" in queues_component.sub_components
+                assert "inanimate_rod" in queues_component.sub_components
+                assert "homer" in queues_component.sub_components
 
         finally:
             # Restore original state

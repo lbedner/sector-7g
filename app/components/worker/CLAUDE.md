@@ -1,24 +1,30 @@
 # Worker Component Development Guide
 
-This guide covers arq worker architecture patterns and development for the Aegis Stack worker component.
+This guide covers arq worker architecture patterns and development for the sector-7g worker component.
 
 ## Worker Architecture (arq)
 
-Aegis Stack uses pure **arq patterns** without custom wrappers, following native arq CLI and configuration patterns.
+sector-7g uses pure **arq patterns** without custom wrappers, following native arq CLI and configuration patterns.
 
 ### Worker Configuration Structure
 
 Each worker queue has its own `WorkerSettings` class:
-- `app/components/worker/queues/system.py` - System maintenance worker
-- `app/components/worker/queues/load_test.py` - Load testing worker  
-- `app/components/worker/queues/media.py` - Media processing worker
+- `app/components/worker/queues/inanimate_rod.py` - Inanimate Carbon Rod (system maintenance + simulation)
+- `app/components/worker/queues/homer.py` - Homer Simpson worker (CPU-bound, low concurrency)
+- `app/components/worker/queues/lenny.py` - Lenny Leonard worker (I/O-bound, high concurrency)
+- `app/components/worker/queues/carl.py` - Carl Carlson worker (I/O-bound, high concurrency)
+- `app/components/worker/queues/charlie.py` - Charlie, plant worker (I/O-bound, moderate concurrency)
+- `app/components/worker/queues/grimey.py` - Frank Grimes, deceased (meticulous, max_jobs=1)
 
 ### Worker Services in Docker
 
 Workers run as separate Docker services with specific names:
-- **`worker-system`** - System maintenance tasks (low concurrency, high reliability)
-- **`worker-load-test`** - High-concurrency load testing (up to 50 concurrent jobs)
-- **`worker-media`** - File/media processing (commented out by default)
+- **`worker-inanimate-rod`** - Inanimate Carbon Rod: system maintenance + simulation (max_jobs=15)
+- **`worker-homer`** - Homer's tasks: donuts, naps, safety checks (max_jobs=3, CPU-bound)
+- **`worker-lenny`** - Lenny's tasks: diagnostics, inspections, reports (max_jobs=15, I/O-bound)
+- **`worker-carl`** - Carl's tasks: inspectors, reports, handoffs (max_jobs=15, I/O-bound)
+- **`worker-charlie`** - Charlie's tasks: gauges, restocking, shift notes (max_jobs=10, I/O-bound)
+- **`worker-grimey`** - Frank Grimes (deceased): meticulous audits (max_jobs=1)
 
 ## Adding Worker Tasks
 
@@ -29,10 +35,10 @@ Tasks are pure async functions in `app/components/worker/tasks/`:
 async def my_background_task() -> dict[str, str]:
     """My custom background task."""
     logger.info("Running my background task")
-    
+
     # Your task logic here
     await asyncio.sleep(1)  # Simulate work
-    
+
     return {
         "status": "completed",
         "timestamp": datetime.now(UTC).isoformat(),
@@ -43,19 +49,20 @@ async def my_background_task() -> dict[str, str]:
 ### 2. Register with Worker Queue
 Import and add to the appropriate `WorkerSettings`:
 ```python
-# app/components/worker/queues/system.py
+# app/components/worker/queues/rod.py
 from app.components.worker.tasks.my_tasks import my_background_task
 
 class WorkerSettings:
     functions = [
         system_health_check,
         cleanup_temp_files,
+        rod_sim_task,
         my_background_task,  # Add your task here
     ]
-    
+
     # Standard arq configuration
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
-    queue_name = "arq:queue:system"
+    queue_name = "arq:queue:inanimate_rod"
     max_jobs = 15
     job_timeout = 300
 ```
@@ -65,53 +72,32 @@ class WorkerSettings:
 ### Worker Health Checks
 ```bash
 # Check if workers can connect to Redis and validate configuration
-uv run python -m arq app.components.worker.queues.system.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.load_test.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.media.WorkerSettings --check
+uv run python -m arq app.components.worker.queues.inanimate_rod.WorkerSettings --check
+uv run python -m arq app.components.worker.queues.homer.WorkerSettings --check
+uv run python -m arq app.components.worker.queues.lenny.WorkerSettings --check
+uv run python -m arq app.components.worker.queues.carl.WorkerSettings --check
+uv run python -m arq app.components.worker.queues.charlie.WorkerSettings --check
+uv run python -m arq app.components.worker.queues.grimey.WorkerSettings --check
 ```
 
 ### Local Worker Development
 ```bash
 # Run worker locally with auto-reload for development
-uv run python -m arq app.components.worker.queues.system.WorkerSettings --watch app/
+uv run python -m arq app.components.worker.queues.inanimate_rod.WorkerSettings --watch app/
 
 # Run worker in burst mode (process all jobs and exit)
-uv run python -m arq app.components.worker.queues.system.WorkerSettings --burst
-```
-
-### Worker Configuration in Health Checks
-
-The health system reads worker configuration from `app/core/config.py` but workers themselves use their own `WorkerSettings` classes:
-
-```python
-# Health system reads this for monitoring
-WORKER_QUEUES: dict[str, dict[str, Any]] = {
-    "system": {
-        "description": "System maintenance and monitoring tasks",
-        "max_jobs": 15,
-        "timeout_seconds": 300,
-        "queue_name": "arq:queue:system",
-    },
-    "load_test": {
-        "description": "Load testing and performance testing",
-        "max_jobs": 50,
-        "timeout_seconds": 60,
-        "queue_name": "arq:queue:load_test",
-    }
-}
-
-# But workers use their own WorkerSettings classes for actual configuration
+uv run python -m arq app.components.worker.queues.inanimate_rod.WorkerSettings --burst
 ```
 
 ## Key Differences from Custom Worker Systems
 
-### ✅ What We Do (Pure arq):
+### What We Do (Pure arq):
 - Use native arq CLI: `python -m arq WorkerSettings`
 - Standard `WorkerSettings` classes with `functions` list
 - Direct task imports into worker configurations
 - Native arq health checking and monitoring
 
-### ❌ What We Don't Do (Avoided custom patterns):
+### What We Don't Do (Avoided custom patterns):
 - Custom worker wrapper classes
 - Central worker registry systems
 - Custom CLI commands for workers
@@ -124,58 +110,42 @@ This approach keeps workers transparent and lets developers use arq exactly as d
 ### View Worker Logs
 ```bash
 # View specific worker logs
-docker compose logs worker-system             # System worker logs
-docker compose logs worker-load-test          # Load test worker logs
-docker compose logs -f worker-system          # Follow system worker in real-time
-docker compose logs -f worker-load-test       # Follow load test worker in real-time
+docker compose logs worker-inanimate-rod
+docker compose logs worker-homer
+docker compose logs worker-lenny
+docker compose logs worker-carl
+docker compose logs worker-charlie
+docker compose logs worker-grimey
+
+# Follow workers in real-time
+docker compose logs -f worker-homer
 
 # View all workers at once
-docker compose logs -f worker-system worker-load-test
+docker compose logs -f worker-inanimate-rod worker-homer worker-lenny worker-carl worker-charlie worker-grimey
 
-# Filter for errors in specific workers
-docker compose logs worker-load-test | grep "ERROR\|failed\|TypeError"
+# Filter for errors
+docker compose logs worker-homer | grep "ERROR\|failed\|TypeError"
 
-# Monitor worker processes and resources
-docker compose exec worker-system ps aux      # Check system worker processes
-docker compose exec worker-load-test ps aux   # Check load test worker processes
-docker stats worker-system worker-load-test   # Monitor resource usage
-docker compose restart worker-system          # Restart specific worker
+# Monitor resource usage
+docker stats worker-inanimate-rod worker-homer worker-lenny worker-carl worker-charlie worker-grimey
+docker compose restart worker-homer
 ```
 
 ### Essential Docker Log Monitoring
 
-**Check Worker Logs for Load Test Issues:**
 ```bash
 # View real-time worker logs
-docker compose logs -f worker
-
-# Check specific container logs  
-docker logs <container-id>
+docker compose logs -f worker-homer worker-lenny worker-carl
 
 # View logs with timestamps
-docker compose logs --timestamps worker
+docker compose logs --timestamps worker-homer
 
 # Search logs for specific errors
-docker compose logs worker | grep "TypeError\|failed"
+docker compose logs worker-homer | grep "TypeError\|failed"
 
 # Check all service logs
 docker compose logs -f
 ```
-
-**Load Test Debugging Workflow:**
-1. **Run Load Test**: `uv run sector-7g load-test run --type io_simulation --tasks 10`
-2. **Monitor Worker Logs**: `docker compose logs -f worker-load-test` (in separate terminal)
-3. **Look for**: 
-   - `TypeError` messages indicating parameter mismatches
-   - Task completion vs failure counts (`j_complete=X j_failed=Y`)
-   - Task execution times and errors
-   - Redis connection issues
-
-**Common Error Patterns:**
-- `TypeError: function() got an unexpected keyword argument 'param'` - Parameter mismatch between orchestrator and task function
-- `j_failed=X` increasing rapidly - Worker tasks failing due to code issues
-- `Redis connection failed` - Infrastructure connectivity problems
-- `delayed=X.XXs` - Queue saturation or worker overload
 
 **System Health Verification:**
 ```bash

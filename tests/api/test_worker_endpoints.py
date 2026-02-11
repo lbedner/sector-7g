@@ -10,8 +10,8 @@ validates the API contract.
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from httpx import ASGITransport, AsyncClient
 import pytest
-from httpx import AsyncClient, ASGITransport
 
 from app.integrations.main import create_integrated_app
 
@@ -53,8 +53,8 @@ class TestWorkerEndpoints:
 
         # Test data with task_kwargs
         task_request = {
-            "task_name": "cpu_intensive_task",
-            "queue_type": "system",
+            "task_name": "eat_donut_task",
+            "queue_type": "inanimate_rod",
             "args": ["arg1", "arg2"],
             "task_kwargs": {
                 "keyword_arg": "value",
@@ -73,15 +73,15 @@ class TestWorkerEndpoints:
         assert response.status_code == 200
         response_data = response.json()
         assert response_data["task_id"] == "test-job-123"
-        assert response_data["task_name"] == "cpu_intensive_task"
-        assert response_data["queue_type"] == "system"
+        assert response_data["task_name"] == "eat_donut_task"
+        assert response_data["queue_type"] == "inanimate_rod"
 
         # Verify that enqueue_job was called with task_kwargs unpacked
         mock_pool.enqueue_job.assert_called_once_with(
-            "cpu_intensive_task",
+            "eat_donut_task",
             "arg1",
             "arg2",
-            _queue_name="arq:queue:system",
+            _queue_name="arq:queue:inanimate_rod",
             _defer_by=None,
             keyword_arg="value",
             another_kwarg=123
@@ -103,8 +103,8 @@ class TestWorkerEndpoints:
 
         # Test data without task_kwargs (should default to empty dict)
         task_request = {
-            "task_name": "io_simulation_task",
-            "queue_type": "system",
+            "task_name": "run_diagnostics_task",
+            "queue_type": "inanimate_rod",
             "args": [],
         }
 
@@ -121,15 +121,15 @@ class TestWorkerEndpoints:
 
         # Verify enqueue_job called with no extra kwargs
         mock_pool.enqueue_job.assert_called_once_with(
-            "io_simulation_task",
-            _queue_name="arq:queue:system",
+            "run_diagnostics_task",
+            _queue_name="arq:queue:inanimate_rod",
             _defer_by=None
         )
 
     async def test_enqueue_task_invalid_queue_type(self, async_client):
         """Test error handling for invalid queue type."""
         task_request = {
-            "task_name": "cpu_intensive_task",
+            "task_name": "eat_donut_task",
             "queue_type": "invalid_queue",
             "args": [],
             "task_kwargs": {}
@@ -150,7 +150,7 @@ class TestWorkerEndpoints:
         """Test TaskRequest model validation."""
         # Missing required task_name field
         invalid_request = {
-            "queue_type": "system",
+            "queue_type": "inanimate_rod",
             "args": [],
             "task_kwargs": {}
         }

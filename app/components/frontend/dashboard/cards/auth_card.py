@@ -6,6 +6,7 @@ Shows auth-specific metrics with a clean, functional layout.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import PrimaryText, SecondaryText
 from app.services.system.models import ComponentStatus
 

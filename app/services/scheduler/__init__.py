@@ -4,8 +4,8 @@
 from .models import (
     APSchedulerJob,
     ScheduledTask,
-    TaskStatistics,
     SchedulerHealthMetadata,
+    TaskStatistics,
     UpcomingTask,
 )
 from .scheduled_task_manager import ScheduledTaskManager

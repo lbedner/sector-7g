@@ -9,22 +9,13 @@ Includes proper session management with transaction handling.
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 
-from typing import Any
-
-
 from sqlalchemy import create_engine
-
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from sqlalchemy.orm import sessionmaker
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
-from app.core.log import logger
-
-
-
 
 # Create PostgreSQL engine with proper configuration (sync)
 engine = create_engine(
@@ -65,7 +56,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 @contextmanager
-def db_session(autocommit: bool = True) -> Generator[Session, None, None]:
+def db_session(autocommit: bool = True) -> Generator[Session]:
     """
     Database session context manager with automatic transaction handling.
 
@@ -93,7 +84,7 @@ def db_session(autocommit: bool = True) -> Generator[Session, None, None]:
 
 
 @asynccontextmanager
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_async_session() -> AsyncGenerator[AsyncSession]:
     """
     Async database session context manager with automatic transaction handling.
 

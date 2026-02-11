@@ -6,7 +6,6 @@ from typing import Any
 
 from sqlalchemy import inspect
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.db import async_engine, get_async_session
 from app.core.log import logger
@@ -54,7 +53,7 @@ class ScheduledTaskManager:
             # Query all jobs ordered by next run time (nulls last)
             result = await session.exec(
                 select(APSchedulerJob).order_by(
-                    APSchedulerJob.next_run_time.desc().nulls_last()  # type: ignore[union-attr]
+                    APSchedulerJob.next_run_time.desc().nulls_last()
                 )
             )
             jobs = result.all()

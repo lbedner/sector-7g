@@ -12,7 +12,7 @@ import flet as ft
 from ..theme import AegisTheme as Theme
 
 
-class TableHeaderText(ft.Text):  # type: ignore[misc]
+class TableHeaderText(ft.Text):
     """
     Table header text control with consistent styling.
 
@@ -35,7 +35,7 @@ class TableHeaderText(ft.Text):  # type: ignore[misc]
         )
 
 
-class TableCellText(ft.Text):  # type: ignore[misc]
+class TableCellText(ft.Text):
     """
     Table cell text control for data values.
 
@@ -57,7 +57,7 @@ class TableCellText(ft.Text):  # type: ignore[misc]
         )
 
 
-class TableNameText(ft.Text):  # type: ignore[misc]
+class TableNameText(ft.Text):
     """
     Table entity name text control.
 

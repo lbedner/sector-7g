@@ -11,6 +11,7 @@ Provides commonly used section patterns across component detail modals:
 from typing import Any
 
 import flet as ft
+
 from app.components.frontend.controls import (
     BodyText,
     H3Text,

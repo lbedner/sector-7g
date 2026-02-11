@@ -16,7 +16,7 @@ def get_worker_settings(queue_name: str) -> Any:
     """Import and return WorkerSettings class for a queue.
 
     Args:
-        queue_name: Name of the queue (e.g., 'system', 'load_test')
+        queue_name: Name of the queue (e.g., 'inanimate_rod', 'homer')
 
     Returns:
         WorkerSettings class from the queue module

@@ -28,14 +28,6 @@ app = typer.Typer(
 app.add_typer(health.app, name="health")
 app.add_typer(docs.app, name="docs")
 
-# Conditionally register load-test command if worker components are available
-try:
-    load_test_module = importlib.import_module("app.cli.load_test")
-    app.add_typer(load_test_module.app, name="load-test")
-except ImportError:
-    # Worker components not available, skip load-test commands
-    pass
-
 # Conditionally register tasks command if scheduler components are available
 try:
     tasks_module = importlib.import_module("app.cli.tasks")
@@ -105,7 +97,7 @@ def main() -> None:
     except click.exceptions.Exit as e:
         # Normal exit requested (e.g., after showing error message)
         sys.exit(e.exit_code)
-    except SystemExit as e:
+    except SystemExit:
         # Re-raise system exits (normal exit codes)
         raise
 

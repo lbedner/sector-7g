@@ -5,9 +5,9 @@ Displays documentation URLs for installed components and services.
 
 from pathlib import Path
 
-import typer
 from rich.console import Console
 from rich.panel import Panel
+import typer
 
 app = typer.Typer(
     name="docs", help="Show documentation links", invoke_without_command=True

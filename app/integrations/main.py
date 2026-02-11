@@ -1,17 +1,18 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
 import flet.fastapi as flet_fastapi
+
 from app.components.backend.hooks import backend_hooks
 from app.components.backend.main import create_backend_app
 from app.components.frontend.main import create_frontend_app
 from app.core.config import settings
 from app.core.log import logger, setup_logging
-from fastapi import FastAPI
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     Application lifespan manager.
     Handles startup/shutdown concerns using component-specific hooks.

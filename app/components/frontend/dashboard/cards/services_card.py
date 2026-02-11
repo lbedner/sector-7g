@@ -7,6 +7,7 @@ individual service statuses.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import LabelText, PrimaryText
 from app.components.frontend.controls.tech_badge import TechBadge
 from app.services.system.models import ComponentStatus

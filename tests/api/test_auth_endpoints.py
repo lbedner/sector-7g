@@ -5,14 +5,14 @@ This module tests the auth endpoints including user registration,
 login, token validation, and protected endpoint access.
 """
 
+from fastapi import status
+from fastapi.testclient import TestClient
 import pytest
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.core.security import create_access_token
 from app.models.user import UserCreate
 from app.services.auth.user_service import UserService
-from fastapi import status
-from fastapi.testclient import TestClient
-from sqlmodel import Session
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class TestAuthEndpoints:

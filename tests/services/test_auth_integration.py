@@ -5,14 +5,15 @@ This module tests the integration between auth services, database,
 and other components in realistic scenarios.
 """
 
+from fastapi import HTTPException
 import pytest
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.core.security import create_access_token, verify_password, verify_token
 from app.models.user import User, UserCreate
 from app.services.auth.auth_service import get_current_user_from_token
 from app.services.auth.user_service import UserService
-from fastapi import HTTPException
-from sqlmodel import Session, select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class TestAuthServiceIntegration:

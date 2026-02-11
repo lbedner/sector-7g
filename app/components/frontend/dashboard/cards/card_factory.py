@@ -6,6 +6,7 @@ reducing duplication across different card types.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import (
     LabelText,
     MetricText,
@@ -57,7 +58,7 @@ class CardFactory:
         Create a standardized metric indicator box.
 
         Args:
-            label: Label for the metric (e.g., "LOAD_TEST")
+            label: Label for the metric (e.g., "HOMER")
             value: Value to display (e.g., "0 jobs")
             icon: Emoji icon for the metric
             color: Border and accent color

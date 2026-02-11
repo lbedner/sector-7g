@@ -1,13 +1,14 @@
 """Authentication API routes."""
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.components.backend.api.deps import get_async_db
 from app.core.security import create_access_token, verify_password
 from app.models.user import UserCreate, UserResponse
 from app.services.auth.auth_service import get_current_user_from_token
 from app.services.auth.user_service import UserService
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 

@@ -31,7 +31,7 @@ elif [ "$run_command" = "scheduler" ]; then
     uv run python -m app.entrypoints.scheduler
 elif [ "$run_command" = "worker" ]; then
     # Worker component using STANDARD arq CLI
-    queue_type="${1:-system}"  # Default to system queue if not specified
+    queue_type="${1:-inanimate_rod}"  # Default to inanimate_rod queue if not specified
     shift
 
     # Build the module path for the queue

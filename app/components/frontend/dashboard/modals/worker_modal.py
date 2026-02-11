@@ -6,6 +6,7 @@ Each section is a self-contained Flet control that can be reused and tested.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import (
     BodyText,
     DataTableColumn,
@@ -42,7 +43,7 @@ def _build_queue_expanded_content(queue_name: str) -> ft.Control:
     """Build expanded content showing registered functions for a queue.
 
     Args:
-        queue_name: Name of the queue (e.g., 'system', 'load_test')
+        queue_name: Name of the queue (e.g., 'rod', 'homer')
 
     Returns:
         Column with queue description and registered functions in table format
@@ -448,11 +449,12 @@ class WorkerDetailDialog(BaseDetailPopup):
             subtitle_text=get_component_label("worker"),
             sections=sections,
             status_detail=status_detail,
+            width=1100,
         )
 
     @staticmethod
     def _compute_status_detail(component_data: ComponentStatus) -> str | None:
-        """Get status detail - only for non-healthy states, using health check message."""
+        """Get status detail for non-healthy states."""
         from app.components.frontend.dashboard.cards.card_utils import get_status_detail
 
         return get_status_detail(component_data)

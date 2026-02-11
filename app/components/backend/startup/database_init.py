@@ -9,10 +9,8 @@ when the backend starts up (only when database component is included).
 
 from app.core.log import logger
 
-
 # Import models to register them with SQLModel metadata
 from app.models.user import User  # noqa: F401
-
 
 
 def _check_and_stamp_existing_tables() -> None:
@@ -27,12 +25,12 @@ def _check_and_stamp_existing_tables() -> None:
     Fix: If signature table for a migration exists, stamp it as complete.
     """
     try:
+        from sqlalchemy import inspect
+
         from alembic import command
         from alembic.config import Config
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
-        from sqlalchemy import inspect
-
         from app.core.db import db_session
 
         alembic_cfg = Config("alembic/alembic.ini")
@@ -84,11 +82,11 @@ def _check_and_fix_stale_revision() -> None:
     and stamp to head (tables already exist, just need version sync).
     """
     try:
+        from sqlmodel import text
+
         from alembic import command
         from alembic.config import Config
         from alembic.script import ScriptDirectory
-        from sqlmodel import text
-
         from app.core.db import db_session
 
         alembic_cfg = Config("alembic/alembic.ini")
@@ -163,7 +161,7 @@ async def startup_database_init() -> None:
     1. Verify database connectivity
     2. Run Alembic migrations (idempotent - safe to run multiple times)
     3. Verify database schema is ready
-    
+
     """
     try:
 
@@ -177,9 +175,10 @@ async def startup_database_init() -> None:
 
         # Verify database connectivity
         try:
-            from app.core.db import db_session
-            from sqlmodel import text
             from sqlalchemy import inspect
+            from sqlmodel import text
+
+            from app.core.db import db_session
 
             with db_session(autocommit=False) as session:
                 # Basic connectivity check

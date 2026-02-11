@@ -6,20 +6,20 @@ Tests the service layer for scheduled task management, including database
 operations and task data transformations.
 """
 
-import pickle
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+import pickle
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.scheduler.scheduled_task_manager import ScheduledTaskManager
 from app.services.scheduler.models import APSchedulerJob, ScheduledTask, TaskStatistics
+from app.services.scheduler.scheduled_task_manager import ScheduledTaskManager
 
 
 class MockTrigger:
     """Simple mock trigger that can be pickled for testing."""
-    
+
     def __init__(self):
         self.__class__.__name__ = "IntervalTrigger"
 

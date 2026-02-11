@@ -6,6 +6,7 @@ Uses DataTable for consistent styling with other tables in the app.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import DataTable, DataTableColumn
 from app.services.system.models import ComponentStatus
 from app.services.system.ui import get_component_label
@@ -103,7 +104,11 @@ def get_component_display_info(
 
     elif component_name == "ingress":
         version = metadata.get("version", "")
-        subtitle = f"Traefik {version}" if version and version != "unknown" else "Traefik"
+        subtitle = (
+            f"Traefik {version}"
+            if version and version != "unknown"
+            else "Traefik"
+        )
         return ("Ingress", subtitle)
 
 

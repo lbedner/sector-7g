@@ -6,6 +6,7 @@ routers, services, and entrypoints configuration.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import (
     BodyText,
     H3Text,

@@ -1,31 +1,30 @@
 """
-System worker queue configuration.
+Inanimate Carbon Rod worker queue configuration.
 
-Handles system maintenance and monitoring tasks using native arq patterns.
+Employee of the Month. Handles system maintenance + Rod simulation tasks.
 """
 
-# Import system tasks
+from arq.connections import RedisSettings
+
+from app.components.worker.tasks.inanimate_rod_tasks import inanimate_rod_sim_task
 from app.components.worker.tasks.simple_system_tasks import (
     cleanup_temp_files,
     system_health_check,
 )
 from app.core.config import settings
-from arq.connections import RedisSettings
 
 
 class WorkerSettings:
-    """System maintenance worker configuration."""
+    """Inanimate Carbon Rod — Employee of the Month."""
 
-    # Human-readable description
-    description = "System maintenance and monitoring tasks"
+    description = "Inanimate Carbon Rod, Employee of the Month"
 
-    # Task functions for this queue
     functions = [
         system_health_check,
         cleanup_temp_files,
+        inanimate_rod_sim_task,
     ]
 
-    # arq configuration with improved connection settings
     base_settings = RedisSettings.from_dsn(settings.REDIS_URL)
     redis_settings = RedisSettings(
         host=base_settings.host,
@@ -36,9 +35,9 @@ class WorkerSettings:
         conn_retries=settings.REDIS_CONN_RETRIES,
         conn_retry_delay=settings.REDIS_CONN_RETRY_DELAY,
     )
-    queue_name = "arq:queue:system"
-    max_jobs = 15  # Moderate concurrency for administrative operations
-    job_timeout = 300  # 5 minutes
+    queue_name = "arq:queue:inanimate_rod"
+    max_jobs = 15
+    job_timeout = 300
     keep_result = settings.WORKER_KEEP_RESULT_SECONDS
     max_tries = settings.WORKER_MAX_TRIES
     health_check_interval = settings.WORKER_HEALTH_CHECK_INTERVAL

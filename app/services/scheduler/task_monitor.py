@@ -1,16 +1,13 @@
 """Task health monitoring service for scheduler health checks."""
 
-from datetime import datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.log import logger
+
 from .models import SchedulerHealthMetadata, UpcomingTask
-
-
 from .scheduled_task_manager import ScheduledTaskManager
-
 
 
 class TaskHealthMonitor:
@@ -23,10 +20,10 @@ class TaskHealthMonitor:
     """
 
     def __init__(self) -> None:
-        
+
         self.task_manager = ScheduledTaskManager()
-        
-    
+
+
     async def get_health_metadata(
         self, scheduler: AsyncIOScheduler | None
     ) -> SchedulerHealthMetadata:
@@ -41,11 +38,11 @@ class TaskHealthMonitor:
         """
         try:
             # First, try to get enhanced data if persistence is available
-            
+
             if await self.task_manager.has_persistence():
                 return await self._get_persistent_metadata()
-            
-            
+
+
             # If no persistence, we need a scheduler instance for direct inspection
             if scheduler is None:
                 return SchedulerHealthMetadata(
@@ -55,10 +52,10 @@ class TaskHealthMonitor:
                     upcoming_tasks=[],
                     scheduler_state="not_initialized"
                 )
-            
+
             # Fallback to direct scheduler inspection
             return await self._get_direct_scheduler_metadata(scheduler)
-            
+
         except Exception as e:
             logger.error("Error getting scheduler health metadata", error=str(e))
             # Return basic fallback data - only if we have a scheduler instance
@@ -73,17 +70,17 @@ class TaskHealthMonitor:
                     scheduler_state="error"
                 )
 
-    
+
     async def _get_persistent_metadata(self) -> SchedulerHealthMetadata:
         """Get detailed metadata using ScheduledTaskManager (persistent mode)."""
         try:
             # Get statistics
             stats = await self.task_manager.get_statistics()
-            
-            # Get upcoming tasks (limit to top 5)
+
+            # Get all upcoming tasks
             tasks = await self.task_manager.list_tasks()
             upcoming_tasks = []
-            
+
             for task in tasks:
                 if task.next_run_time and task.status == "active":
                     # Try to get docstring from function reference
@@ -96,11 +93,10 @@ class TaskHealthMonitor:
                         function=task.function,
                         description=description,
                     ))
-            
-            # Sort by next run time and take top 5
+
+            # Sort by next run time
             upcoming_tasks.sort(key=lambda x: x.next_run)
-            upcoming_tasks = upcoming_tasks[:5]
-            
+
             return SchedulerHealthMetadata(
                 total_tasks=stats.total_tasks,
                 active_tasks=stats.active_tasks,
@@ -108,12 +104,12 @@ class TaskHealthMonitor:
                 upcoming_tasks=upcoming_tasks,
                 scheduler_state="running_persistent"
             )
-            
+
         except Exception as e:
             logger.error("Error getting persistent metadata", error=str(e))
             raise
-    
-    
+
+
     async def _get_direct_scheduler_metadata(
         self, scheduler: AsyncIOScheduler
     ) -> SchedulerHealthMetadata:
@@ -121,17 +117,17 @@ class TaskHealthMonitor:
         try:
             jobs = scheduler.get_jobs()
             total_tasks = len(jobs)
-            
+
             # Count active jobs (those with next_run_time)
             active_tasks = sum(1 for job in jobs if job.next_run_time is not None)
             paused_tasks = total_tasks - active_tasks
-            
-            # Get upcoming tasks (top 5)
+
+            # Get all upcoming tasks
             upcoming_tasks = []
             active_jobs = [job for job in jobs if job.next_run_time is not None]
             active_jobs.sort(key=lambda x: x.next_run_time)
-            
-            for job in active_jobs[:5]:
+
+            for job in active_jobs:
                 # Get function info
                 func_path = self._get_function_path(job)
                 func_doc = self._get_function_docstring(job)
@@ -144,7 +140,7 @@ class TaskHealthMonitor:
                     function=func_path,
                     description=func_doc,
                 ))
-            
+
             return SchedulerHealthMetadata(
                 total_tasks=total_tasks,
                 active_tasks=active_tasks,
@@ -152,7 +148,7 @@ class TaskHealthMonitor:
                 upcoming_tasks=upcoming_tasks,
                 scheduler_state="running_memory"
             )
-            
+
         except Exception as e:
             logger.error("Error getting direct scheduler metadata", error=str(e))
             return SchedulerHealthMetadata(
@@ -162,14 +158,14 @@ class TaskHealthMonitor:
                 upcoming_tasks=[],
                 scheduler_state="error"
             )
-    
+
     def _format_trigger_simple(self, trigger: Any) -> str:
         """Simple trigger formatting for non-persistent mode."""
         if not trigger:
             return "Unknown"
-        
+
         trigger_type = type(trigger).__name__
-        
+
         if trigger_type == "IntervalTrigger":
             if hasattr(trigger, "interval"):
                 seconds = trigger.interval.total_seconds()
@@ -187,15 +183,15 @@ class TaskHealthMonitor:
                 else:
                     days = int(seconds / 86400)
                     return f"Every {days}d"
-        
+
         elif trigger_type == "CronTrigger":
             # Simple cron description
             return "Cron schedule"
-        
+
         elif trigger_type == "DateTrigger":
             if hasattr(trigger, "run_date"):
                 return f"Once at {trigger.run_date.strftime('%Y-%m-%d %H:%M')}"
-        
+
         return trigger_type.replace("Trigger", "")
 
     def _get_function_path(self, job: Any) -> str:
@@ -206,7 +202,10 @@ class TaskHealthMonitor:
             if hasattr(job, "func") and job.func:
                 func = job.func
                 module = getattr(func, "__module__", "")
-                name = getattr(func, "__qualname__", getattr(func, "__name__", "unknown"))
+                name = getattr(
+                    func, "__qualname__",
+                    getattr(func, "__name__", "unknown"),
+                )
                 if module:
                     return f"{module}.{name}"
                 return name

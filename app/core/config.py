@@ -271,4 +271,3 @@ def is_valid_queue(queue_name: str) -> bool:
     except ImportError:
         # Worker components not available, no queues are valid
         return False
-
