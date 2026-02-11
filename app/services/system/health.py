@@ -1343,4 +1343,3 @@ async def check_ingress_health() -> ComponentStatus:
             response_time_ms=None,
             metadata={"error": str(e)},
         )
-

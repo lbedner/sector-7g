@@ -4,8 +4,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
-from app.core.config import settings
 from jose import JWTError, jwt
+
+from app.core.config import settings
 
 
 def _truncate_password(password: str) -> str:

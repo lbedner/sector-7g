@@ -92,6 +92,7 @@ celerybeat-schedule
 
 # Environments
 .env
+.env.deploy
 .venv
 env/
 venv/
@@ -129,3 +130,6 @@ dmypy.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+.aegis
+*.backup

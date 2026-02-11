@@ -5,10 +5,8 @@ Revises: None
 Create Date: 2026-02-10 02:10:58.002584
 
 """
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
-import sqlmodel
 
 from alembic import op
 

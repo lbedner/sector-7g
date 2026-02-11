@@ -11,6 +11,7 @@ Displays comprehensive database information in a tabbed interface:
 from datetime import datetime
 
 import flet as ft
+
 from app.components.frontend.controls import (
     DataTable,
     DataTableColumn,
@@ -218,7 +219,8 @@ def _build_table_expanded_content(table_schema: dict, is_dark_mode: bool) -> ft.
             unique = idx.get("unique", False)
             unique_str = "UNIQUE " if unique else ""
             lines.append(
-                f"CREATE {unique_str}INDEX {idx_name} ON {name} ({', '.join(idx_cols)});"
+                f"CREATE {unique_str}INDEX {idx_name}"
+                f" ON {name} ({', '.join(idx_cols)});"
             )
 
     if foreign_keys:

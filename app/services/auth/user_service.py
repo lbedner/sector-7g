@@ -2,10 +2,11 @@
 
 from datetime import UTC, datetime
 
-from app.core.security import get_password_hash
-from app.models.user import User, UserCreate
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.core.security import get_password_hash
+from app.models.user import User, UserCreate
 
 
 class UserService:

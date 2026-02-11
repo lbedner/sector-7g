@@ -9,6 +9,7 @@ import contextlib
 from datetime import datetime
 
 import flet as ft
+
 from app.components.frontend.controls import SecondaryText
 from app.components.frontend.theme import AegisTheme as Theme
 from app.services.system.models import ComponentStatus
@@ -239,15 +240,29 @@ class SchedulerCard:
                 )
             )
 
+        scrollable_rows = ft.Column(
+            rows,
+            spacing=0,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
         return ft.Container(
             content=ft.Column(
-                [header_row] + rows,
+                [header_row, scrollable_rows],
                 spacing=0,
+                expand=True,
             ),
-            bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.GREY),
+            bgcolor=ft.Colors.with_opacity(
+                0.08, ft.Colors.GREY
+            ),
             border_radius=8,
-            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.GREY)),
+            border=ft.border.all(
+                1,
+                ft.Colors.with_opacity(0.15, ft.Colors.GREY),
+            ),
             padding=ft.padding.all(12),
+            expand=True,
         )
 
     def _create_stats_row(self) -> ft.Container:
@@ -281,6 +296,7 @@ class SchedulerCard:
                     self._create_stats_row(),
                 ],
                 spacing=0,
+                expand=True,
             ),
             padding=ft.padding.all(16),
             expand=True,

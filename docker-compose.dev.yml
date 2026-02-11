@@ -14,11 +14,27 @@ services:
     volumes:
       - .:/code
 
-  worker-load-test:
+  worker-inanimate-rod:
     volumes:
       - .:/code
 
-  worker-system:
+  worker-homer:
+    volumes:
+      - .:/code
+
+  worker-lenny:
+    volumes:
+      - .:/code
+
+  worker-carl:
+    volumes:
+      - .:/code
+
+  worker-charlie:
+    volumes:
+      - .:/code
+
+  worker-grimey:
     volumes:
       - .:/code
 
@@ -33,6 +49,7 @@ services:
   traefik:
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080"  # Dashboard
 
   test_runner:

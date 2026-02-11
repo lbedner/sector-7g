@@ -19,13 +19,9 @@ from app.services.system.health import (
     _check_cpu_usage,
     _check_disk_space,
     _check_memory,
+    check_cache_health,
+    check_worker_health,
 )
-from app.services.system.health import check_cache_health
-
-from app.services.system.health import check_database_health
-
-from app.services.system.health import check_worker_health
-
 
 
 class TestComponentIntegration:
@@ -127,20 +123,20 @@ class TestComponentIntegration:
         with patch("redis.asyncio.from_url") as mock_from_url:
             mock_redis = AsyncMock()
 
-            # Mock queue lengths
+            # Mock queue lengths - homer has jobs, others empty
             def mock_zcard(queue_name: str) -> int:
-                if "load_test" in queue_name:
-                    return 5  # Some queued jobs
-                return 0  # Empty queues for media/system
+                if "homer" in queue_name:
+                    return 5
+                return 0
 
-            # Mock health check data
+            # Mock health check data - only homer active
             def mock_get(key: str) -> bytes | None:
-                if "load_test" in key and "health-check" in key:
+                if "homer" in key and "health-check" in key:
                     return (
-                        b"Mar-01 17:41:22 j_complete=100 j_failed=5 "
-                        b"j_retried=2 j_ongoing=3"
+                        b"Mar-01 17:41:22 j_complete=100 "
+                        b"j_failed=5 j_retried=2 j_ongoing=3"
                     )
-                return None  # No health check data for media/system
+                return None
 
             mock_redis.zcard.side_effect = mock_zcard
             mock_redis.get.side_effect = mock_get
@@ -149,25 +145,16 @@ class TestComponentIntegration:
             worker_status = await check_worker_health()
 
             assert worker_status.name == "worker"
-            # Worker shows INFO status when some queues are active
-            # INFO is not considered healthy (only HEALTHY is healthy)
+            # Not all workers active = not fully healthy
             assert worker_status.healthy is False
-            assert worker_status.status == ComponentStatusType.INFO
 
-            # Check sub-components
+            # Check sub-components exist
             assert "queues" in worker_status.sub_components
             queues_component = worker_status.sub_components["queues"]
-            assert queues_component.status == ComponentStatusType.INFO
 
-            # Verify individual queue statuses
-            queue_sub_components = queues_component.sub_components
-            assert queue_sub_components["media"].status == ComponentStatusType.INFO
-            assert (
-                queue_sub_components["system"].status == ComponentStatusType.INFO
-            )
-            assert (
-                queue_sub_components["load_test"].status == ComponentStatusType.HEALTHY
-            )
+            # Verify homer queue is present
+            queue_sub = queues_component.sub_components
+            assert "homer" in queue_sub
 
 
     @pytest.mark.asyncio

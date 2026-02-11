@@ -13,7 +13,7 @@ from ..theme import AegisTheme as Theme
 from ..theme import DarkColorPalette
 
 
-class PrimaryText(ft.Text):  # type: ignore[misc]
+class PrimaryText(ft.Text):
     """
     Primary text component using theme-aware text colors.
 
@@ -33,7 +33,7 @@ class PrimaryText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SecondaryText(ft.Text):  # type: ignore[misc]
+class SecondaryText(ft.Text):
     """
     Secondary text component using theme-aware secondary text colors.
 
@@ -56,7 +56,7 @@ class SecondaryText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class TitleText(ft.Text):  # type: ignore[misc]
+class TitleText(ft.Text):
     """
     Title text component for headings and prominent labels.
 
@@ -81,7 +81,7 @@ class TitleText(ft.Text):  # type: ignore[misc]
         )
 
 
-class ConfirmationText(ft.Text):  # type: ignore[misc]
+class ConfirmationText(ft.Text):
     """
     Confirmation/error text component with error coloring.
 
@@ -100,7 +100,7 @@ class ConfirmationText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class MetricText(ft.Text):  # type: ignore[misc]
+class MetricText(ft.Text):
     """
     Specialized text for displaying metrics and numerical values.
 
@@ -118,7 +118,7 @@ class MetricText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class LabelText(ft.Text):  # type: ignore[misc]
+class LabelText(ft.Text):
     """
     Label text component for form labels and small descriptive text.
 
@@ -148,7 +148,7 @@ class LabelText(ft.Text):  # type: ignore[misc]
 # ============================================================================
 
 
-class DisplayText(ft.Text):  # type: ignore[misc]
+class DisplayText(ft.Text):
     """
     Hero display text - largest emphasis.
 
@@ -166,7 +166,7 @@ class DisplayText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class H1Text(ft.Text):  # type: ignore[misc]
+class H1Text(ft.Text):
     """
     H1 heading text for page titles.
 
@@ -184,7 +184,7 @@ class H1Text(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class H2Text(ft.Text):  # type: ignore[misc]
+class H2Text(ft.Text):
     """
     H2 heading text for major section headers.
 
@@ -202,7 +202,7 @@ class H2Text(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class H3Text(ft.Text):  # type: ignore[misc]
+class H3Text(ft.Text):
     """
     H3 heading text for subsection headers.
 
@@ -220,7 +220,7 @@ class H3Text(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class BodyText(ft.Text):  # type: ignore[misc]
+class BodyText(ft.Text):
     """
     Standard body text for general content.
 
@@ -238,7 +238,7 @@ class BodyText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class AccentText(ft.Text):  # type: ignore[misc]
+class AccentText(ft.Text):
     """
     Accent-colored text for emphasis and highlights.
 
@@ -257,7 +257,7 @@ class AccentText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SuccessText(ft.Text):  # type: ignore[misc]
+class SuccessText(ft.Text):
     """
     Success-colored text for positive feedback.
 
@@ -276,7 +276,7 @@ class SuccessText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class WarningText(ft.Text):  # type: ignore[misc]
+class WarningText(ft.Text):
     """
     Warning-colored text for caution messages.
 
@@ -295,7 +295,7 @@ class WarningText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class ErrorText(ft.Text):  # type: ignore[misc]
+class ErrorText(ft.Text):
     """
     Error-colored text for error messages and critical feedback.
 
@@ -319,7 +319,7 @@ class ErrorText(ft.Text):  # type: ignore[misc]
 # ============================================================================
 
 
-class ModalText(ft.Text):  # type: ignore[misc]
+class ModalText(ft.Text):
     """
     Modal title text with bold emphasis.
 
@@ -337,7 +337,7 @@ class ModalText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class ModalSubtitleText(ft.Text):  # type: ignore[misc]
+class ModalSubtitleText(ft.Text):
     """
     Modal subtitle text for supporting information.
 
@@ -355,7 +355,7 @@ class ModalSubtitleText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SidebarLabelText(ft.Text):  # type: ignore[misc]
+class SidebarLabelText(ft.Text):
     """
     Sidebar label text with ellipsis overflow.
 
@@ -381,7 +381,7 @@ class SidebarLabelText(ft.Text):  # type: ignore[misc]
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SidebarLabelHeadingText(ft.Text):  # type: ignore[misc]
+class SidebarLabelHeadingText(ft.Text):
     """
     Sidebar heading text for section headers.
 

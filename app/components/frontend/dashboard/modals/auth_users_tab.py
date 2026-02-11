@@ -10,6 +10,7 @@ from typing import Any
 
 import flet as ft
 import httpx
+
 from app.components.frontend.controls import (
     ConfirmDialog,
     DataTable,
@@ -151,6 +152,7 @@ class AuthUsersTab(ft.Container):
         )
 
         self.content = self._content_column
+        self.expand = True
 
     def did_mount(self) -> None:
         """Called when the control is added to the page. Fetches data."""
@@ -208,6 +210,7 @@ class AuthUsersTab(ft.Container):
             ),
         ]
         self._content_column.scroll = ft.ScrollMode.AUTO
+        self._content_column.expand = True
         self._content_column.spacing = 0
         self.update()
 
@@ -308,7 +311,11 @@ class AuthUsersTab(ft.Container):
         ConfirmDialog(
             page=page,
             title="Delete User",
-            message=f"Permanently delete '{user.get('email')}'?\n\nThis cannot be undone.",
+            message=(
+                f"Permanently delete"
+                f" '{user.get('email')}'?"
+                f"\n\nThis cannot be undone."
+            ),
             confirm_text="Delete",
             on_confirm=do_delete,
             destructive=True,

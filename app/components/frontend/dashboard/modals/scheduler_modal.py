@@ -6,6 +6,7 @@ Each section is self-contained and can be reused and tested independently.
 """
 
 import flet as ft
+
 from app.components.frontend.controls import (
     DataTableColumn,
     ExpandableDataTable,
@@ -179,9 +180,14 @@ def _build_job_expanded_content(task: dict) -> ft.Control:
     # wip_notice = ft.Container(
     #     content=ft.Row(
     #         [
-    #             ft.Icon(ft.Icons.CONSTRUCTION, size=16, color=ft.Colors.ORANGE_900),
+    #             ft.Icon(
+    #                 ft.Icons.CONSTRUCTION,
+    #                 size=16,
+    #                 color=ft.Colors.ORANGE_900,
+    #             ),
     #             ft.Text(
-    #                 "Work in progress - data below is placeholder, not real execution history",
+    #                 "Work in progress - data below is"
+    #                 " placeholder, not real history",
     #                 size=12,
     #                 color=ft.Colors.ORANGE_900,
     #             ),
@@ -228,7 +234,10 @@ def _build_job_expanded_content(task: dict) -> ft.Control:
     # content.append(ft.Container(height=Theme.Spacing.MD))
 
     # === Section 3: Recent Executions (hidden for now) ===
-    # content.append(SecondaryText("Recent Executions", size=Theme.Typography.BODY_SMALL))
+    # content.append(SecondaryText(
+    #     "Recent Executions",
+    #     size=Theme.Typography.BODY_SMALL,
+    # ))
     # content.append(ft.Container(height=Theme.Spacing.XS))
     #
     # # Build execution rows
@@ -436,13 +445,23 @@ class SchedulerDetailDialog(BaseDetailPopup):
         """
         metadata = component_data.metadata or {}
 
-        # Build sections
+        # Overview stays pinned; jobs table scrolls independently
+        jobs_section = JobsSection(metadata)
+        scrollable_jobs = ft.Container(
+            content=ft.Column(
+                [jobs_section],
+                spacing=0,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+            expand=True,
+        )
+
         sections = [
             OverviewSection(metadata),
-            JobsSection(metadata),
+            scrollable_jobs,
         ]
 
-        # Initialize base popup with custom sections
+        # scrollable=False so the overview stays fixed
         super().__init__(
             page=page,
             component_data=component_data,
@@ -450,4 +469,5 @@ class SchedulerDetailDialog(BaseDetailPopup):
             subtitle_text="APScheduler",
             sections=sections,
             status_detail=get_status_detail(component_data),
+            scrollable=False,
         )

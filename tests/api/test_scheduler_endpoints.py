@@ -7,20 +7,20 @@ ensuring API responses match expected format and handle errors correctly.
 """
 
 from collections.abc import AsyncGenerator
-
-import pytest
 from unittest.mock import AsyncMock, patch
-from httpx import AsyncClient, ASGITransport
+
+from httpx import ASGITransport, AsyncClient
+import pytest
 
 from app.integrations.main import create_integrated_app
-from app.services.scheduler.models import ScheduledTask, TaskStatistics
+from app.services.scheduler.models import ScheduledTask
 
 
 class TestSchedulerEndpoints:
     """Test scheduler API endpoints with various states."""
 
     @pytest.fixture
-    async def async_client(self) -> AsyncGenerator[AsyncClient, None]:
+    async def async_client(self) -> AsyncGenerator[AsyncClient]:
         """Async HTTP client for testing."""
         app = create_integrated_app()
 

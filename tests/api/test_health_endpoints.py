@@ -7,8 +7,8 @@ ensuring API responses match expected CLI input format and handle errors correct
 
 from collections.abc import AsyncIterator
 
+from httpx import ASGITransport, AsyncClient
 import pytest
-from httpx import AsyncClient, ASGITransport
 
 from app.integrations.main import create_integrated_app
 
@@ -205,8 +205,8 @@ class TestHealthEndpoints:
                         if "sub_components" in queues_component:
                             queue_sub_components = queues_component["sub_components"]
 
-                            # Should have system and load_test queues
-                            for queue_name in ["system", "load_test"]:
+                            # Should have rod and homer queues
+                            for queue_name in ["inanimate_rod", "homer"]:
                                 if queue_name in queue_sub_components:
                                     queue_comp = queue_sub_components[queue_name]
                                     assert "name" in queue_comp

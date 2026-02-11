@@ -8,6 +8,7 @@ user statistics, JWT settings, and user management.
 from typing import Any
 
 import flet as ft
+
 from app.components.frontend.controls import (
     BodyText,
     H3Text,
@@ -278,7 +279,8 @@ class AuthDetailDialog(BaseDetailPopup):
             indicator_color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
-        # Initialize base popup with tabs (non-scrollable - tabs handle their own scrolling)
+        # Initialize base popup with tabs
+        # (non-scrollable - tabs handle own scrolling)
         super().__init__(
             page=page,
             component_data=component_data,

@@ -6,6 +6,7 @@ middleware stack, system metrics, and configuration details in a tabbed interfac
 """
 
 import flet as ft
+
 from app.components.frontend.controls import (
     BodyText,
     ExpandArrow,
@@ -123,7 +124,7 @@ class LifecycleInspector(ft.Container):
         self.padding = ft.padding.all(Theme.Spacing.MD)
         self.width = 300
 
-    def select_card(self, card: "LifecycleCard") -> None:
+    def select_card(self, card: LifecycleCard) -> None:
         """Select a card and update inspector."""
         # Deselect previous
         if self._selected_card:
@@ -1147,7 +1148,8 @@ class BackendDetailDialog(BaseDetailPopup):
             indicator_color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
-        # Initialize base popup with tabs (non-scrollable - tabs handle their own scrolling)
+        # Initialize base popup with tabs
+        # (non-scrollable - tabs handle own scrolling)
         super().__init__(
             page=page,
             component_data=backend_component,

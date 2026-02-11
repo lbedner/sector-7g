@@ -1,12 +1,13 @@
 """Models for scheduled task management - both database and service layer."""
 
-import pickle
 from datetime import datetime
+import pickle
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, Float, LargeBinary, String
-from sqlmodel import Field as SQLField, SQLModel
+from sqlmodel import Field as SQLField
+from sqlmodel import SQLModel
 
 # ============================================================================
 # DATABASE MODELS (SQLModel)
@@ -44,7 +45,7 @@ class APSchedulerJob(SQLModel, table=True):
             This is safe because we're reading APScheduler's own data format.
             APScheduler writes pickled job data to this table - we're just reading it.
         """
-        return pickle.loads(self.job_state)  # type: ignore[no-any-return]
+        return pickle.loads(self.job_state)
 
 
 # ============================================================================
@@ -112,6 +113,6 @@ class SchedulerHealthMetadata(BaseModel):
     active_tasks: int = Field(0, description="Number of active tasks")
     paused_tasks: int = Field(0, description="Number of paused tasks")
     upcoming_tasks: list[UpcomingTask] = Field(
-        default_factory=list, description="List of upcoming tasks (max 5)"
+        default_factory=list, description="List of upcoming tasks"
     )
     scheduler_state: str = Field("unknown", description="Scheduler state description")

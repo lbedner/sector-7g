@@ -36,12 +36,12 @@ class ComponentStatus(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional component metadata"
     )
-    sub_components: dict[str, "ComponentStatus"] = Field(
+    sub_components: dict[str, ComponentStatus] = Field(
         default_factory=dict,
         description="Sub-components (e.g., system metrics under backend)",
     )
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def healthy(self) -> bool:
         """

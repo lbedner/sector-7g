@@ -25,8 +25,9 @@ async def check_database_health() -> ComponentStatus:
         ComponentStatus indicating database health
     """
     try:
-        from app.core.db import db_session
         from sqlalchemy import text
+
+        from app.core.db import db_session
 
         # Use effective URL which handles Docker vs local hostname translation
         db_url = settings.database_url_effective
@@ -183,7 +184,11 @@ async def check_database_health() -> ComponentStatus:
                             columns = inspector.get_columns(table_name)
                             # Get primary key columns
                             pk_constraint = inspector.get_pk_constraint(table_name)
-                            pk_columns = set(pk_constraint.get("constrained_columns", []))
+                            pk_columns = set(
+                                pk_constraint.get(
+                                    "constrained_columns", []
+                                )
+                            )
 
                             schema_info["columns"] = [
                                 {

@@ -7,6 +7,7 @@ Shows recent system activity and events using the existing DataTable component.
 from datetime import datetime
 
 import flet as ft
+
 from app.components.frontend.controls import (
     DataTable,
     DataTableColumn,

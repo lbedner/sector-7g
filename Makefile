@@ -51,7 +51,7 @@ logs-web: ## Follow webserver logs only
 
 logs-worker: ## Follow worker logs only
 	@echo "Following worker logs..."
-	@docker compose logs -f worker-system worker-load-test
+	@docker compose logs -f worker-inanimate-rod worker-homer worker-lenny worker-carl worker-charlie worker-grimey
 
 logs-redis: ## Follow Redis logs only
 	@echo "Following Redis logs..."
@@ -67,7 +67,7 @@ shell: ## Open shell in webserver container
 
 shell-worker: ## Open shell in worker container
 	@echo "Opening shell in worker container..."
-	@docker compose exec worker-system /bin/bash
+	@docker compose exec worker-homer /bin/bash
 
 ps: ## Show running containers
 	@echo "Docker containers status:"
@@ -213,7 +213,7 @@ db-fresh: db-clean serve ## Nuclear DB reset + restart
 
 worker-test: ## Test workers in burst mode (process and exit)
 	@echo "Testing system worker in burst mode..."
-	@uv run python -m arq app.components.worker.queues.system.WorkerSettings --burst
+	@uv run python -m arq app.components.worker.queues.homer.WorkerSettings --burst
 
 #=============================================================================
 # DEPLOYMENT (Production Server)

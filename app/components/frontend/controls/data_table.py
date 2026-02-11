@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import flet as ft
+
 from app.components.frontend.controls.text import BodyText, PrimaryText, SecondaryText
 from app.components.frontend.theme import AegisTheme as Theme
 
@@ -123,7 +124,10 @@ class DataTableRow(ft.Container):
             else None
         )
         self.on_hover = self._on_hover
-        # self.animate = ft.Animation(150, ft.AnimationCurve.EASE_OUT)  # Disabled for debugging
+        # Disabled for debugging
+        # self.animate = ft.Animation(
+        #     150, ft.AnimationCurve.EASE_OUT
+        # )
 
     def _on_hover(self, e: ft.ControlEvent) -> None:
         """Handle hover state change."""

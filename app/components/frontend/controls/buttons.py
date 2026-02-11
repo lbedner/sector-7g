@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 
 import flet as ft
+
 from app.components.frontend import styles
 from app.components.frontend.controls.text import BodyText, H3Text
 
@@ -41,7 +42,7 @@ class BaseElevatedButton(ft.ElevatedButton):
         self.args = args
         self.content = ft.Text(self.text, **asdict(self.text_style))
         self.on_click = lambda _: self.on_click_callable()
-        self.on_hover = self.on_hover_event  # type: ignore[assignment]
+        self.on_hover = self.on_hover_event
         self.kwargs = kwargs
         self.height = 36  # Consistent button height
 
