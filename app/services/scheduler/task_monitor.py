@@ -77,7 +77,7 @@ class TaskHealthMonitor:
             # Get statistics
             stats = await self.task_manager.get_statistics()
 
-            # Get all upcoming tasks
+            # Get upcoming tasks (limit to top 5)
             tasks = await self.task_manager.list_tasks()
             upcoming_tasks = []
 
@@ -94,8 +94,9 @@ class TaskHealthMonitor:
                         description=description,
                     ))
 
-            # Sort by next run time
+            # Sort by next run time and take top 5
             upcoming_tasks.sort(key=lambda x: x.next_run)
+            upcoming_tasks = upcoming_tasks[:5]
 
             return SchedulerHealthMetadata(
                 total_tasks=stats.total_tasks,
@@ -122,12 +123,12 @@ class TaskHealthMonitor:
             active_tasks = sum(1 for job in jobs if job.next_run_time is not None)
             paused_tasks = total_tasks - active_tasks
 
-            # Get all upcoming tasks
+            # Get upcoming tasks (top 5)
             upcoming_tasks = []
             active_jobs = [job for job in jobs if job.next_run_time is not None]
             active_jobs.sort(key=lambda x: x.next_run_time)
 
-            for job in active_jobs:
+            for job in active_jobs[:5]:
                 # Get function info
                 func_path = self._get_function_path(job)
                 func_doc = self._get_function_docstring(job)

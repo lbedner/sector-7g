@@ -1,8 +1,6 @@
 from fastapi import FastAPI
 
-from app.components.backend.api import health
-from app.components.backend.api import worker
-from app.components.backend.api import scheduler
+from app.components.backend.api import health, scheduler, worker
 from app.components.backend.api.auth.router import router as auth_router
 
 

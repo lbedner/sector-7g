@@ -43,7 +43,7 @@ def _build_queue_expanded_content(queue_name: str) -> ft.Control:
     """Build expanded content showing registered functions for a queue.
 
     Args:
-        queue_name: Name of the queue (e.g., 'rod', 'homer')
+        queue_name: Name of the queue (e.g., 'inanimate_rod', 'homer')
 
     Returns:
         Column with queue description and registered functions in table format
@@ -449,12 +449,14 @@ class WorkerDetailDialog(BaseDetailPopup):
             subtitle_text=get_component_label("worker"),
             sections=sections,
             status_detail=status_detail,
-            width=1100,
         )
 
     @staticmethod
     def _compute_status_detail(component_data: ComponentStatus) -> str | None:
-        """Get status detail for non-healthy states."""
+        """Get status detail for non-healthy states.
+
+        Uses health check message for detail text.
+        """
         from app.components.frontend.dashboard.cards.card_utils import get_status_detail
 
         return get_status_detail(component_data)

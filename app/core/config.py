@@ -6,7 +6,6 @@ This module centralizes application settings, allowing them to be loaded
 from environment variables for easy configuration in different environments.
 """
 
-from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
