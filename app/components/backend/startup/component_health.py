@@ -36,10 +36,10 @@ def _initialize_route_metadata_cache() -> None:
     Called once during startup to avoid recreating the app on every health check.
     """
     global _cached_route_metadata, _cached_middleware_metadata
-    
+
     if _cached_route_metadata is not None and _cached_middleware_metadata is not None:
         return  # Already initialized
-    
+
     try:
         app = get_configured_app()
         if app is not None:
@@ -51,7 +51,7 @@ def _initialize_route_metadata_cache() -> None:
                     f"{_cached_route_metadata.total_routes} routes, "
                     f"{_cached_route_metadata.total_endpoints} endpoints"
                 )
-            
+
             # Cache middleware metadata
             if _cached_middleware_metadata is None:
                 _cached_middleware_metadata = get_fastapi_middleware_metadata(app)
@@ -160,14 +160,14 @@ async def _backend_component_health() -> ComponentStatus:
     if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in os.getenv("_", ""):
         # Even in test mode, try to get route and middleware information if possible
         try:
-            
+
             # Initialize cache if not already done (might happen in tests)
             if _cached_route_metadata is None or _cached_middleware_metadata is None:
                 _initialize_route_metadata_cache()
-            
+
             route_metadata = _cached_route_metadata
             middleware_metadata = _cached_middleware_metadata
-            
+
             # Handle case where metadata is not available in test mode
             if route_metadata is None or middleware_metadata is None:
                 return ComponentStatus(
@@ -183,14 +183,14 @@ async def _backend_component_health() -> ComponentStatus:
                         "middleware_introspection": "unavailable",
                     },
                 )
-            
+
             # Create message with both route and middleware info
             message_parts = [f"{route_metadata.total_routes} routes"]
             if middleware_metadata.security_count > 0:
                 message_parts.append(
                     f"{middleware_metadata.security_count} security layers"
                 )
-            
+
             return ComponentStatus(
                 name="backend",
                 status=ComponentStatusType.HEALTHY,
@@ -234,10 +234,10 @@ async def _backend_component_health() -> ComponentStatus:
                 "initializing now..."
             )
             _initialize_route_metadata_cache()
-        
+
         route_metadata = _cached_route_metadata
         middleware_metadata = _cached_middleware_metadata
-        
+
         # Handle case where metadata is still not available
         if route_metadata is None or middleware_metadata is None:
             return ComponentStatus(
@@ -255,19 +255,19 @@ async def _backend_component_health() -> ComponentStatus:
                     "check_method": "internal_execution",
                 },
             )
-        
+
         # Create descriptive message based on route and middleware data
         total_routes = route_metadata.total_routes
         total_endpoints = route_metadata.total_endpoints
         method_counts = route_metadata.method_counts
         security_count = middleware_metadata.security_count
-        
+
         # Format method summary (e.g., "12 GET, 5 POST")
         method_summary = ", ".join([
-            f"{count} {method}" 
+            f"{count} {method}"
             for method, count in sorted(method_counts.items())
         ])
-        
+
         message_parts = [f"{total_routes} routes"]
         if total_endpoints != total_routes:
             message_parts.append(f"{total_endpoints} endpoints")
@@ -275,7 +275,7 @@ async def _backend_component_health() -> ComponentStatus:
             message_parts.append(f"{security_count} security layers")
         if method_summary:
             message_parts.append(f"({method_summary})")
-        
+
         message = f"FastAPI backend active: {', '.join(message_parts)}"
 
         # Initialize lifecycle cache if not already done
@@ -385,20 +385,20 @@ async def _scheduler_component_health() -> ComponentStatus:
 
     With persistence: Gets real task data from database
     """
-    
+
     try:
         from app.services.scheduler.task_monitor import TaskHealthMonitor
         monitor = TaskHealthMonitor()
         # No scheduler instance available in backend
         health_data = await monitor.get_health_metadata(None)
-        
+
         # Format message based on task data
         total_tasks = health_data.total_tasks
         if total_tasks > 0:
             message = f"Scheduler running with {total_tasks} tasks"
         else:
             message = "Scheduler running (no tasks)"
-        
+
         return ComponentStatus(
             name="scheduler",
             status=ComponentStatusType.HEALTHY,
@@ -420,7 +420,7 @@ async def _scheduler_component_health() -> ComponentStatus:
                 "error_details": str(e),
             },
         )
-    
+
 
 
 async def startup_hook() -> None:
@@ -442,9 +442,9 @@ async def startup_hook() -> None:
     logger.info("Backend component health check registered")
     # Register scheduler component health check
     register_health_check("scheduler", _scheduler_component_health)
-    
+
     logger.info("Scheduler component health check registered (with task data)")
-    
+
     # Register worker health check (shows queue status and job metrics)
     from app.services.system.health import check_worker_health
     register_health_check("worker", check_worker_health)
@@ -457,7 +457,7 @@ async def startup_hook() -> None:
     from app.services.system.health_db import check_database_health
     register_health_check("database", check_database_health)
     logger.info("Database component health check registered")
-    
+
     # Register ingress health check (Traefik reverse proxy)
     from app.services.system.health import check_ingress_health
     register_health_check("ingress", check_ingress_health)

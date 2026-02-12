@@ -8,6 +8,7 @@ No inheritance or ABC complexity - just common functionality extracted.
 from collections.abc import Callable
 
 import flet as ft
+
 from app.components.frontend.controls import (
     H3Text,
     LabelText,

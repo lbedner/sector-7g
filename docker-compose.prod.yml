@@ -9,6 +9,18 @@
 services:
   webserver:
     volumes: []  # Remove dev code mount - code is baked into the image
+    labels:
+      # Public router (HTTPS)
+      - "traefik.http.routers.webserver.rule=Host(`sector-7g.dev`)"
+      - "traefik.http.routers.webserver.entrypoints=websecure"
+      - "traefik.http.routers.webserver.tls.certresolver=letsencrypt"
+      # Admin paths - IP restricted (set ADMIN_IP_ALLOWLIST in .env)
+      - "traefik.http.routers.webserver-admin.rule=Host(`sector-7g.dev`) && (PathPrefix(`/dashboard`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.webserver-admin.entrypoints=websecure"
+      - "traefik.http.routers.webserver-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.webserver-admin.service=webserver"
+      - "traefik.http.routers.webserver-admin.middlewares=admin-ipallowlist"
+      - "traefik.http.middlewares.admin-ipallowlist.ipallowlist.sourcerange=${ADMIN_IP_ALLOWLIST:-0.0.0.0/0}"
     profiles:
       - dev
       - prod

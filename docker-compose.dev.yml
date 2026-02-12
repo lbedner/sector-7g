@@ -9,6 +9,11 @@ services:
   webserver:
     volumes:
       - .:/code
+    labels:
+      # Dev router (HTTP, localhost — no TLS)
+      - "traefik.http.routers.webserver-dev.rule=Host(`localhost`) || Host(`127.0.0.1`)"
+      - "traefik.http.routers.webserver-dev.entrypoints=web"
+      - "traefik.http.routers.webserver-dev.service=webserver"
 
   scheduler:
     volumes:
@@ -47,9 +52,10 @@ services:
       - "5432:5432"
 
   traefik:
+    volumes:
+      - ./traefik/traefik.dev.yml:/etc/traefik/traefik.yml:ro
     ports:
       - "80:80"
-      - "443:443"
       - "8080:8080"  # Dashboard
 
   test_runner:
