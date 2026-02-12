@@ -1,6 +1,5 @@
-# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
 _commit: 7e95cc97194a1959920a8d19c38c9e198d861850
-_src_path: gh:lbedner/aegis-stack
+_src_path: git+file:///Users/leonardbedner/Workspace/house_bedner/aegis-stack
 _template_version: 0.6.0
 ai_backend: memory
 ai_framework: pydantic-ai
