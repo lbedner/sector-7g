@@ -55,6 +55,14 @@ install_docker_fedora() {
     dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
+install_docker_rhel() {
+    echo "Installing Docker on RHEL/Rocky/AlmaLinux/CentOS..."
+
+    dnf -y install dnf-plugins-core
+    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+}
+
 # Install Docker if not present
 if ! command -v docker &> /dev/null; then
     case $OS in
@@ -63,6 +71,9 @@ if ! command -v docker &> /dev/null; then
             ;;
         fedora)
             install_docker_fedora
+            ;;
+        rocky|almalinux|centos|rhel)
+            install_docker_rhel
             ;;
         *)
             echo "ERROR: Unsupported OS: $OS"
@@ -85,7 +96,7 @@ case $OS in
     ubuntu|debian)
         apt-get install -y --no-install-recommends build-essential
         ;;
-    fedora)
+    fedora|rocky|almalinux|centos|rhel)
         dnf install -y gcc gcc-c++ make
         ;;
 esac

@@ -161,7 +161,6 @@ async def startup_database_init() -> None:
     1. Verify database connectivity
     2. Run Alembic migrations (idempotent - safe to run multiple times)
     3. Verify database schema is ready
-
     """
     try:
 

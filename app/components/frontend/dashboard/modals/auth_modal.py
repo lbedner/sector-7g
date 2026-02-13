@@ -280,7 +280,7 @@ class AuthDetailDialog(BaseDetailPopup):
         )
 
         # Initialize base popup with tabs
-        # (non-scrollable - tabs handle own scrolling)
+        # (non-scrollable - tabs handle their own scrolling)
         super().__init__(
             page=page,
             component_data=component_data,
