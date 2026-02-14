@@ -124,10 +124,8 @@ class DataTableRow(ft.Container):
             else None
         )
         self.on_hover = self._on_hover
-        # Disabled for debugging
-        # self.animate = ft.Animation(
-        #     150, ft.AnimationCurve.EASE_OUT
-        # )
+        # Animation disabled for debugging
+        # self.animate = ft.Animation(150, ft.AnimationCurve.EASE_OUT)
 
     def _on_hover(self, e: ft.ControlEvent) -> None:
         """Handle hover state change."""

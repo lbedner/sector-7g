@@ -1,11 +1,11 @@
 """Task health monitoring service for scheduler health checks."""
 
+from datetime import datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.log import logger
-
 from .models import SchedulerHealthMetadata, UpcomingTask
 from .scheduled_task_manager import ScheduledTaskManager
 
@@ -20,9 +20,7 @@ class TaskHealthMonitor:
     """
 
     def __init__(self) -> None:
-
         self.task_manager = ScheduledTaskManager()
-
 
     async def get_health_metadata(
         self, scheduler: AsyncIOScheduler | None
@@ -38,10 +36,8 @@ class TaskHealthMonitor:
         """
         try:
             # First, try to get enhanced data if persistence is available
-
             if await self.task_manager.has_persistence():
                 return await self._get_persistent_metadata()
-
 
             # If no persistence, we need a scheduler instance for direct inspection
             if scheduler is None:
@@ -70,15 +66,16 @@ class TaskHealthMonitor:
                     scheduler_state="error"
                 )
 
-
     async def _get_persistent_metadata(self) -> SchedulerHealthMetadata:
         """Get detailed metadata using ScheduledTaskManager (persistent mode)."""
         try:
-            # Get statistics
-            stats = await self.task_manager.get_statistics()
-
-            # Get upcoming tasks (limit to top 5)
+            # Single list_tasks() call -- compute stats inline instead of
+            # calling get_statistics() (which internally calls list_tasks() again)
             tasks = await self.task_manager.list_tasks()
+
+            active_count = sum(1 for t in tasks if t.status == "active")
+            paused_count = sum(1 for t in tasks if t.status == "paused")
+
             upcoming_tasks = []
 
             for task in tasks:
@@ -94,14 +91,13 @@ class TaskHealthMonitor:
                         description=description,
                     ))
 
-            # Sort by next run time and take top 5
+            # Sort by next run time
             upcoming_tasks.sort(key=lambda x: x.next_run)
-            upcoming_tasks = upcoming_tasks[:5]
 
             return SchedulerHealthMetadata(
-                total_tasks=stats.total_tasks,
-                active_tasks=stats.active_tasks,
-                paused_tasks=stats.paused_tasks,
+                total_tasks=len(tasks),
+                active_tasks=active_count,
+                paused_tasks=paused_count,
                 upcoming_tasks=upcoming_tasks,
                 scheduler_state="running_persistent"
             )
@@ -109,7 +105,6 @@ class TaskHealthMonitor:
         except Exception as e:
             logger.error("Error getting persistent metadata", error=str(e))
             raise
-
 
     async def _get_direct_scheduler_metadata(
         self, scheduler: AsyncIOScheduler
@@ -123,12 +118,11 @@ class TaskHealthMonitor:
             active_tasks = sum(1 for job in jobs if job.next_run_time is not None)
             paused_tasks = total_tasks - active_tasks
 
-            # Get upcoming tasks (top 5)
             upcoming_tasks = []
             active_jobs = [job for job in jobs if job.next_run_time is not None]
             active_jobs.sort(key=lambda x: x.next_run_time)
 
-            for job in active_jobs[:5]:
+            for job in active_jobs:
                 # Get function info
                 func_path = self._get_function_path(job)
                 func_doc = self._get_function_docstring(job)
