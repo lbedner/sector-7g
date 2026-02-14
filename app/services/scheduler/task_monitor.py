@@ -1,11 +1,11 @@
 """Task health monitoring service for scheduler health checks."""
 
-from datetime import datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.log import logger
+
 from .models import SchedulerHealthMetadata, UpcomingTask
 from .scheduled_task_manager import ScheduledTaskManager
 
