@@ -15,7 +15,7 @@ This Aegis Stack project includes the following components:
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.13+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ### Installation

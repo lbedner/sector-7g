@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-sector-7g is a production-ready async Python 3.14 application built with the Aegis Stack template. It runs as a Docker Compose multi-service architecture with FastAPI backend, Flet frontend dashboard, arq workers (Redis-backed), APScheduler, PostgreSQL, and Traefik reverse proxy.
+sector-7g is a production-ready async Python 3.13 application built with the Aegis Stack template. It runs as a Docker Compose multi-service architecture with FastAPI backend, Flet frontend dashboard, arq workers (Redis-backed), APScheduler, PostgreSQL, and Traefik reverse proxy.
 
 ## Common Commands
 

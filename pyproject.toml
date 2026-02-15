@@ -3,7 +3,7 @@ name = "sector-7g"
 version = "0.1.0"
 description = "A production-ready async Python application built with Aegis Stack"
 readme = "README.md"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.13,<3.14"
 
 authors = [
     {name = "Your Name", email = "admin@sector-7g.dev"}
@@ -75,7 +75,7 @@ packages = ["app"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]  # Added UP for pyupgrade (modern Python syntax)
