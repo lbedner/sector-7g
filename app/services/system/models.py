@@ -5,6 +5,8 @@ Type-safe data models for system health monitoring, alerts, and status reporting
 All models provide runtime validation and automatic FastAPI integration.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
 from typing import Any

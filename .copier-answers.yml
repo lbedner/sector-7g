@@ -22,7 +22,7 @@ project_description: A production-ready async Python application built with Aegi
   Stack
 project_name: sector-7g
 project_slug: sector-7g
-python_version: 3.14
+python_version: "3.13"
 scheduler_backend: postgres
 scheduler_with_persistence: true
 version: 0.1.0

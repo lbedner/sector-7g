@@ -5,6 +5,8 @@ Displays comprehensive backend/FastAPI information including routes,
 middleware stack, system metrics, and configuration details in a tabbed interface.
 """
 
+from __future__ import annotations
+
 import flet as ft
 
 from app.components.frontend.controls import (

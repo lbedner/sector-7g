@@ -5,7 +5,7 @@ This guide covers how to develop and maintain sector-7g.
 ## Getting Started
 
 ### Prerequisites
-- Python 3.14+
+- Python 3.13+
 - UV package manager
 
 ### Setup

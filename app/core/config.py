@@ -207,7 +207,9 @@ class Settings(BaseSettings):
         return self.TRAEFIK_API_URL
 
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     def reload(self) -> None:
         """
