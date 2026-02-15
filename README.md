@@ -1,5 +1,7 @@
 # sector-7g
 
+![Mr. Burns watches sector 7G](docs/images/burns.png)
+
 A production-ready async Python application built with Aegis Stack
 
 ## Components
