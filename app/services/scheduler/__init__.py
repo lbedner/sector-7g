@@ -1,4 +1,3 @@
-
 """Scheduler service layer for async task management."""
 
 from .models import (

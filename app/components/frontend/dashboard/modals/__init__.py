@@ -4,6 +4,7 @@ Dashboard Modal Components
 Reusable modal dialogs for displaying detailed component information.
 Each modal inherits from ft.AlertDialog and uses component composition.
 """
+
 from .auth_modal import AuthDetailDialog
 from .backend_modal import BackendDetailDialog
 from .database_modal import DatabaseDetailDialog

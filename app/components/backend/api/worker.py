@@ -1,4 +1,3 @@
-
 """Worker task API endpoints."""
 
 from datetime import datetime, timedelta
@@ -177,7 +176,7 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
             error=error,
             enqueue_time=None,
             start_time=None,
-            finish_time=None
+            finish_time=None,
         )
 
     except Exception as e:
@@ -264,7 +263,7 @@ async def get_task_result(task_id: str) -> TaskResultResponse:
                 result=result_data,
                 enqueue_time=None,
                 start_time=None,
-                finish_time=None
+                finish_time=None,
             )
 
         except Exception as e:

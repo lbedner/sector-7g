@@ -1,6 +1,5 @@
 """FastAPI dependencies for the backend API."""
 
-
 from collections.abc import AsyncGenerator, Generator
 
 from sqlmodel import Session
@@ -58,4 +57,3 @@ async def get_async_db() -> AsyncGenerator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
-

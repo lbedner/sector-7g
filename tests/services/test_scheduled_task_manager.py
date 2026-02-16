@@ -1,4 +1,3 @@
-
 """
 Tests for ScheduledTaskManager service.
 
@@ -52,7 +51,7 @@ class TestScheduledTaskManager:
         return APSchedulerJob(
             id="test_job_id",
             next_run_time=datetime.now().timestamp(),
-            job_state=job_state
+            job_state=job_state,
         )
 
     @pytest.mark.asyncio
@@ -114,11 +113,12 @@ class TestScheduledTaskManager:
         self, manager: ScheduledTaskManager, mock_apscheduler_job: APSchedulerJob
     ) -> None:
         """Test list_tasks returns properly formatted tasks."""
-        with patch.object(manager, "has_persistence", return_value=True), \
-             patch(
-                 "app.services.scheduler.scheduled_task_manager.get_async_session"
-             ) as mock_session:
-
+        with (
+            patch.object(manager, "has_persistence", return_value=True),
+            patch(
+                "app.services.scheduler.scheduled_task_manager.get_async_session"
+            ) as mock_session,
+        ):
             # Mock session and query result
             mock_session_instance = AsyncMock()
             mock_session.return_value.__aenter__.return_value = mock_session_instance
@@ -141,11 +141,12 @@ class TestScheduledTaskManager:
         self, manager: ScheduledTaskManager
     ) -> None:
         """Test list_tasks returns empty list when no jobs in database."""
-        with patch.object(manager, "has_persistence", return_value=True), \
-             patch(
-                 "app.services.scheduler.scheduled_task_manager.get_async_session"
-             ) as mock_session:
-
+        with (
+            patch.object(manager, "has_persistence", return_value=True),
+            patch(
+                "app.services.scheduler.scheduled_task_manager.get_async_session"
+            ) as mock_session,
+        ):
             mock_session_instance = AsyncMock()
             mock_session.return_value.__aenter__.return_value = mock_session_instance
 
@@ -179,9 +180,7 @@ class TestScheduledTaskManager:
             assert task.name == "Test Job"
 
     @pytest.mark.asyncio
-    async def test_get_task_not_found(
-        self, manager: ScheduledTaskManager
-    ) -> None:
+    async def test_get_task_not_found(self, manager: ScheduledTaskManager) -> None:
         """Test get_task returns None when task not found."""
         with patch(
             "app.services.scheduler.scheduled_task_manager.get_async_session"
@@ -202,16 +201,34 @@ class TestScheduledTaskManager:
         # Mock list_tasks to return test data
         mock_tasks = [
             ScheduledTask(
-                job_id="job1", name="Job 1", function="test.func1", schedule="Every 1m",
-                trigger_type="interval", status="active", max_instances=1, coalesce=True
+                job_id="job1",
+                name="Job 1",
+                function="test.func1",
+                schedule="Every 1m",
+                trigger_type="interval",
+                status="active",
+                max_instances=1,
+                coalesce=True,
             ),
             ScheduledTask(
-                job_id="job2", name="Job 2", function="test.func2", schedule="Every 5m",
-                trigger_type="interval", status="paused", max_instances=1, coalesce=True
+                job_id="job2",
+                name="Job 2",
+                function="test.func2",
+                schedule="Every 5m",
+                trigger_type="interval",
+                status="paused",
+                max_instances=1,
+                coalesce=True,
             ),
             ScheduledTask(
-                job_id="job3", name="Job 3", function="test.func3", schedule="Daily",
-                trigger_type="cron", status="active", max_instances=1, coalesce=True
+                job_id="job3",
+                name="Job 3",
+                function="test.func3",
+                schedule="Daily",
+                trigger_type="cron",
+                status="active",
+                max_instances=1,
+                coalesce=True,
             ),
         ]
 

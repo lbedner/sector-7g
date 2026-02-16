@@ -15,9 +15,7 @@ branch_labels = None
 depends_on = None
 
 # Pre-hashed password for "springfield" using bcrypt via app/core/security.py
-HASHED_PASSWORD = (
-    "$2b$12$buReOwHLL3AxSdJmpycuU.LlSGggzXTDOHWQQ/iWU7Qp0n5Cd34mC"
-)
+HASHED_PASSWORD = "$2b$12$buReOwHLL3AxSdJmpycuU.LlSGggzXTDOHWQQ/iWU7Qp0n5Cd34mC"
 
 CHARACTERS = [
     {

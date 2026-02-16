@@ -5,4 +5,3 @@ Provides comprehensive health checking for SQLite databases including
 file existence, version info, PRAGMA settings, table information, and
 migration history.
 """
-

@@ -33,7 +33,7 @@ class FastAPIMiddlewareInspector:
             middleware_stack = []
 
             # Inspect middleware stack using FastAPI's user_middleware attribute
-            if hasattr(self.app, 'user_middleware'):
+            if hasattr(self.app, "user_middleware"):
                 for idx, middleware_item in enumerate(self.app.user_middleware):
                     middleware_info = (
                         self._extract_middleware_info_from_middleware_item(
@@ -67,9 +67,7 @@ class FastAPIMiddlewareInspector:
             # FastAPI stores middleware as Middleware(cls, **kwargs) objects
             middleware_cls = middleware_item.cls
             middleware_kwargs = (
-                middleware_item.kwargs
-                if hasattr(middleware_item, 'kwargs')
-                else {}
+                middleware_item.kwargs if hasattr(middleware_item, "kwargs") else {}
             )
 
             middleware_type = middleware_cls.__name__
@@ -141,34 +139,42 @@ class FastAPIMiddlewareInspector:
 
         try:
             # CORS Middleware configuration
-            if hasattr(middleware, 'allow_origins'):
-                config.update({
-                    "allow_origins": getattr(middleware, 'allow_origins', []),
-                    "allow_methods": getattr(middleware, 'allow_methods', []),
-                    "allow_headers": getattr(middleware, 'allow_headers', []),
-                    "allow_credentials": getattr(
-                        middleware, 'allow_credentials', False
-                    ),
-                })
+            if hasattr(middleware, "allow_origins"):
+                config.update(
+                    {
+                        "allow_origins": getattr(middleware, "allow_origins", []),
+                        "allow_methods": getattr(middleware, "allow_methods", []),
+                        "allow_headers": getattr(middleware, "allow_headers", []),
+                        "allow_credentials": getattr(
+                            middleware, "allow_credentials", False
+                        ),
+                    }
+                )
 
             # JWT/Auth middleware configuration
-            elif hasattr(middleware, 'algorithm'):
-                config.update({
-                    "algorithm": getattr(middleware, 'algorithm', 'Unknown'),
-                })
+            elif hasattr(middleware, "algorithm"):
+                config.update(
+                    {
+                        "algorithm": getattr(middleware, "algorithm", "Unknown"),
+                    }
+                )
 
             # Rate limiting middleware
-            elif hasattr(middleware, 'calls') and hasattr(middleware, 'period'):
-                config.update({
-                    "calls": getattr(middleware, 'calls', 0),
-                    "period": getattr(middleware, 'period', 0),
-                })
+            elif hasattr(middleware, "calls") and hasattr(middleware, "period"):
+                config.update(
+                    {
+                        "calls": getattr(middleware, "calls", 0),
+                        "period": getattr(middleware, "period", 0),
+                    }
+                )
 
             # Security headers middleware
-            elif hasattr(middleware, 'csp'):
-                config.update({
-                    "csp": getattr(middleware, 'csp', {}),
-                })
+            elif hasattr(middleware, "csp"):
+                config.update(
+                    {
+                        "csp": getattr(middleware, "csp", {}),
+                    }
+                )
 
         except Exception as e:
             logger.debug(f"Could not extract config from {type(middleware)}: {e}")
@@ -180,9 +186,16 @@ class FastAPIMiddlewareInspector:
     ) -> bool:
         """Determine if middleware is security-related based on type and module."""
         security_keywords = [
-            'cors', 'auth', 'jwt', 'rate', 'security', 'limit', 'csrf', 'xss'
+            "cors",
+            "auth",
+            "jwt",
+            "rate",
+            "security",
+            "limit",
+            "csrf",
+            "xss",
         ]
-        security_modules = ['starlette.middleware.cors', 'fastapi.middleware.cors']
+        security_modules = ["starlette.middleware.cors", "fastapi.middleware.cors"]
 
         # Check type name for security keywords
         type_lower = middleware_type.lower()

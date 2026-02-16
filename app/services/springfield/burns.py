@@ -38,13 +38,15 @@ async def make_announcement() -> dict[str, Any]:
 
     await asyncio.sleep(random.uniform(0.1, 0.3))
 
-    announcement = random.choice([
-        "Attention: The beatings will continue until morale improves.",
-        "Reminder: Employee of the Month parking has been converted to my helipad.",
-        "The vending machines now accept company scrip only.",
-        "All employees must work through the weekend. Excellent.",
-        "I've decided to block out the sun. Details to follow.",
-    ])
+    announcement = random.choice(
+        [
+            "Attention: The beatings will continue until morale improves.",
+            "Reminder: Employee of the Month parking has been converted to my helipad.",
+            "The vending machines now accept company scrip only.",
+            "All employees must work through the weekend. Excellent.",
+            "I've decided to block out the sun. Details to follow.",
+        ]
+    )
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     return {

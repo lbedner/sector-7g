@@ -5,8 +5,6 @@ Provides database backup functionality for scheduled backup jobs.
 Included when scheduler and database components are both present.
 """
 
-
-
 from datetime import datetime
 from pathlib import Path
 import subprocess
@@ -18,7 +16,6 @@ from app.core.log import logger
 
 BACKUP_FILE_PATTERN = "database_backup_*.sql"
 BACKUP_FILE_PREFIX = "database_backup_"
-
 
 
 async def backup_database_job() -> None:
@@ -52,7 +49,6 @@ async def backup_database_job() -> None:
         else:
             logger.error(f"pg_dump failed: {result.stderr}")
 
-
         # Clean up old backups (keep last 7) - always run regardless of backup success
         await _cleanup_old_backups(backup_dir)
 
@@ -70,10 +66,7 @@ async def _cleanup_old_backups(backup_dir: Path, keep_count: int = 7) -> None:
     """
     try:
         # Get all backup files sorted by modification time (newest first)
-        backup_files = [
-            f for f in backup_dir.glob(BACKUP_FILE_PATTERN)
-            if f.is_file()
-        ]
+        backup_files = [f for f in backup_dir.glob(BACKUP_FILE_PATTERN) if f.is_file()]
         backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
 
         # Remove old backups beyond keep_count
@@ -84,9 +77,7 @@ async def _cleanup_old_backups(backup_dir: Path, keep_count: int = 7) -> None:
 
         if old_backups:
             kept_count = min(len(backup_files), keep_count)
-            logger.info(
-                f"Cleaned up {len(old_backups)} old backups, kept {kept_count}"
-            )
+            logger.info(f"Cleaned up {len(old_backups)} old backups, kept {kept_count}")
 
     except Exception as e:
         logger.error(f"Backup cleanup failed: {e}")
@@ -109,7 +100,6 @@ async def restore_database_from_backup(backup_filename: str) -> bool:
         if not backup_path.exists():
             logger.error(f"Backup file not found: {backup_path}")
             return False
-
 
         # Create backup before restore
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -134,7 +124,6 @@ async def restore_database_from_backup(backup_filename: str) -> bool:
         else:
             logger.error(f"psql restore failed: {result.stderr}")
             return False
-
 
     except Exception as e:
         logger.error(f"Database restore failed: {e}")

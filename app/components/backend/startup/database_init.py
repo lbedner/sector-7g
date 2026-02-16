@@ -5,8 +5,6 @@ Runs Alembic migrations and verifies connectivity
 when the backend starts up (only when database component is included).
 """
 
-
-
 from app.core.log import logger
 
 # Import models to register them with SQLModel metadata
@@ -46,7 +44,7 @@ def _check_and_stamp_existing_tables() -> None:
 
         # Signature table for each migration (first table created by that migration)
         signature_tables = {
-            "001": "user",        # auth migration
+            "001": "user",  # auth migration
             "002": "llm_vendor",  # ai migration
         }
 
@@ -98,9 +96,7 @@ def _check_and_fix_stale_revision() -> None:
         # Check current database revision
         with db_session(autocommit=False) as session:
             try:
-                result = session.exec(
-                    text("SELECT version_num FROM alembic_version")
-                )
+                result = session.exec(text("SELECT version_num FROM alembic_version"))
                 db_revisions = [row[0] for row in result.fetchall()]
             except Exception:
                 # Table doesn't exist or other error - let migrations handle it
@@ -163,8 +159,6 @@ async def startup_database_init() -> None:
     3. Verify database schema is ready
     """
     try:
-
-
         # Run Alembic migrations (idempotent)
         migrations_ok = _run_migrations()
 
@@ -195,8 +189,6 @@ async def startup_database_init() -> None:
         except Exception as e:
             logger.warning(f"Database verification failed: {e}")
             # Don't fail startup - let the app run and show clear errors
-
-
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

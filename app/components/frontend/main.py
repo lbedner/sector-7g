@@ -109,7 +109,7 @@ class SystemDashboard:
 
             # Attempt to access Flet's private connection attribute
             # This may break with future Flet versions, but will fail safely
-            if not hasattr(self._page, '_Page__conn'):
+            if not hasattr(self._page, "_Page__conn"):
                 logger.debug(
                     "Flet page connection attribute not found - assuming disconnected"
                 )
@@ -157,7 +157,7 @@ class SystemDashboard:
                     "function": "update_health_status",
                     "healthy_count": healthy_count,
                     "total_count": total_count,
-                }
+                },
             )
 
     async def update_component_cards(
@@ -207,7 +207,7 @@ class SystemDashboard:
                     "error_type": type(e).__name__,
                     "function": "update_component_cards",
                     "component_count": len(components),
-                }
+                },
             )
 
     async def update_status_overview(
@@ -242,12 +242,10 @@ class SystemDashboard:
                     "error_type": type(e).__name__,
                     "function": "update_status_overview",
                     "component_count": len(components),
-                }
+                },
             )
 
-    async def update_diagram_view(
-        self, components: dict[str, ComponentStatus]
-    ) -> None:
+    async def update_diagram_view(self, components: dict[str, ComponentStatus]) -> None:
         """Safely update the diagram view."""
         if not self._is_page_connected():
             logger.debug("Page disconnected, skipping diagram view update")
@@ -272,7 +270,7 @@ class SystemDashboard:
                     "error_type": type(e).__name__,
                     "function": "update_diagram_view",
                     "component_count": len(components),
-                }
+                },
             )
 
     async def show_error_status(self) -> None:
@@ -303,7 +301,7 @@ class SystemDashboard:
                 extra={
                     "error_type": type(e).__name__,
                     "function": "show_error_status",
-                }
+                },
             )
 
 
@@ -388,9 +386,9 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                         "error_type": type(e).__name__,
                         "function": "update_logo",
                         "is_dark_mode": getattr(
-                            theme_manager, 'is_dark_mode', 'unknown'
-                        )
-                    }
+                            theme_manager, "is_dark_mode", "unknown"
+                        ),
+                    },
                 )
 
         async def toggle_theme(_: Any) -> None:
@@ -419,10 +417,7 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 logger.error(
                     f"Theme toggle failed: {e}",
                     exc_info=True,
-                    extra={
-                        "error_type": type(e).__name__,
-                        "function": "toggle_theme"
-                    }
+                    extra={"error_type": type(e).__name__, "function": "toggle_theme"},
                 )
 
         theme_button.on_click = toggle_theme
@@ -560,10 +555,7 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 logger.error(
                     f"View toggle failed: {e}",
                     exc_info=True,
-                    extra={
-                        "error_type": type(e).__name__,
-                        "function": "toggle_view"
-                    }
+                    extra={"error_type": type(e).__name__, "function": "toggle_view"},
                 )
 
         view_toggle_button.on_click = toggle_view
@@ -590,9 +582,9 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
             ft.Container(
                 content=ft.Column(
                     [
-                        stack_view_container,   # Stack + Activity view (default)
-                        cards_view_container,   # Cards view
-                        diagram_view_container, # Diagram view
+                        stack_view_container,  # Stack + Activity view (default)
+                        cards_view_container,  # Cards view
+                        diagram_view_container,  # Diagram view
                     ],
                     spacing=20,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -622,34 +614,25 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 elif component_name == "worker":
                     return WorkerCard(component_data).build()
 
-
                 elif component_name == "cache":
                     return RedisCard(component_data).build()
-
 
                 elif component_name == "database":
                     return DatabaseCard(component_data).build()
 
-
                 elif component_name == "ingress":
                     return IngressCard(component_data).build()
 
-
-
                 elif component_name == "scheduler":
                     return SchedulerCard(component_data).build()
-
 
                 elif component_name == "services":
                     return ServicesCard(component_data).build()
 
                 # Service cards - specific checks BEFORE generic fallback
 
-
                 elif component_name == "service_auth":
                     return AuthCard(component_data).build()
-
-
 
                 elif component_name.startswith("service_"):
                     # For other services, use generic ServicesCard for now
@@ -675,8 +658,8 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                         "error_type": type(e).__name__,
                         "function": "create_component_card",
                         "component_name": component_name,
-                        "component_data": component_data
-                    }
+                        "component_data": component_data,
+                    },
                 )
                 # Return fallback card on error
                 return ft.Container(
@@ -745,8 +728,8 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                             extra={
                                 "error_type": type(e).__name__,
                                 "function": "convert_component",
-                                "comp_data": comp_data
-                            }
+                                "comp_data": comp_data,
+                            },
                         )
                         # Return a fallback ComponentStatus
                         return ComponentStatus(
@@ -771,9 +754,9 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                         for service_name, service_data in comp_data[
                             "sub_components"
                         ].items():
-                            components[
-                                f"{SERVICE_PREFIX}{service_name}"
-                            ] = convert_component(service_data)
+                            components[f"{SERVICE_PREFIX}{service_name}"] = (
+                                convert_component(service_data)
+                            )
                     else:
                         # For other groupings, add as-is
                         components[name] = convert_component(comp_data)
@@ -827,8 +810,8 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                     exc_info=True,
                     extra={
                         "error_type": type(e).__name__,
-                        "function": "refresh_dashboard"
-                    }
+                        "function": "refresh_dashboard",
+                    },
                 )
                 # Show error indicator using safe dashboard method
                 await dashboard.show_error_status()

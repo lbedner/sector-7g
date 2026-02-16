@@ -38,10 +38,10 @@ def client(app: FastAPI) -> Generator[TestClient]:
     """Create a test client for the FastAPI app."""
     with TestClient(app) as test_client:
         yield test_client
+
+
 @pytest.fixture
-def client_with_db(
-    app: FastAPI, db_session: Session
-) -> Generator[TestClient]:
+def client_with_db(app: FastAPI, db_session: Session) -> Generator[TestClient]:
     """Create a test client with database dependency override."""
     from app.components.backend.api.deps import get_db
 
@@ -55,6 +55,7 @@ def client_with_db(
 
     # Clean up dependency override
     app.dependency_overrides.clear()
+
 
 @pytest.fixture(scope="session")
 def engine() -> Engine:
@@ -70,7 +71,7 @@ def engine() -> Engine:
     engine = create_engine(
         "sqlite:///:memory:",
         echo=False,  # Set to True for SQL debugging
-        connect_args={"check_same_thread": False}  # Allow multi-threaded access
+        connect_args={"check_same_thread": False},  # Allow multi-threaded access
     )
 
     # Critical: Enable foreign key constraints in SQLite
@@ -128,7 +129,7 @@ async def async_engine():
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         echo=False,  # Set to True for SQL debugging
-        connect_args={"check_same_thread": False}  # Allow multi-threaded access
+        connect_args={"check_same_thread": False},  # Allow multi-threaded access
     )
 
     # Create all tables once per test session
@@ -182,5 +183,3 @@ async def async_client_with_db(
 
     # Clean up dependency override
     app.dependency_overrides.clear()
-
-

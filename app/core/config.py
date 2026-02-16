@@ -6,7 +6,6 @@ This module centralizes application settings, allowing them to be loaded
 from environment variables for easy configuration in different environments.
 """
 
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,7 +61,6 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-
     # Redis settings for arq background tasks
     REDIS_URL: str = "redis://redis:6379"  # Docker service name by default
     REDIS_URL_LOCAL: str | None = None  # Override for local CLI usage
@@ -95,8 +93,6 @@ class Settings(BaseSettings):
 
         return self.REDIS_URL
 
-
-
     # arq worker settings (shared across all workers)
     WORKER_KEEP_RESULT_SECONDS: int = 3600  # Keep job results for 1 hour
     WORKER_MAX_TRIES: int = 3
@@ -112,8 +108,6 @@ class Settings(BaseSettings):
     # PURE ARQ IMPLEMENTATION - NO CONFIGURATION NEEDED!
     # Worker configuration comes from individual WorkerSettings classes
     # in app/components/worker/queues/ - just import and use as arq intended!
-
-
 
     # Database settings
 
@@ -148,38 +142,19 @@ class Settings(BaseSettings):
 
         return self.DATABASE_URL
 
-
-
-
-
-
-
-
     # Scheduler settings
     SCHEDULER_FORCE_UPDATE: bool = False  # Force update jobs from code on restart
-
-
 
     # Traefik Ingress settings
     TRAEFIK_API_URL: str = "http://traefik:8080"  # Docker service name
     TRAEFIK_API_URL_LOCAL: str | None = None  # Override for local CLI usage
 
-
-
-
-
     @property
     def is_docker(self) -> bool:
         """Detect if running inside Docker container."""
         import os
-        return (
-            os.path.exists("/.dockerenv") or
-            bool(os.getenv("DOCKER_CONTAINER"))
-        )
 
-
-
-
+        return os.path.exists("/.dockerenv") or bool(os.getenv("DOCKER_CONTAINER"))
 
     @property
     def traefik_api_url_effective(self) -> str:
@@ -205,7 +180,6 @@ class Settings(BaseSettings):
                 return urlunparse(parsed._replace(netloc=netloc))
 
         return self.TRAEFIK_API_URL
-
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -239,12 +213,12 @@ def reload_settings() -> None:
     settings.reload()
 
 
-
 # Pure arq queue helper functions - use dynamic discovery
 def get_available_queues() -> list[str]:
     """Get all available queue names via dynamic discovery."""
     try:
         from app.components.worker.registry import discover_worker_queues
+
         queues: list[str] = discover_worker_queues()
         return queues
     except ImportError:
@@ -271,6 +245,7 @@ def is_valid_queue(queue_name: str) -> bool:
     """Check if a queue name is valid."""
     try:
         from app.components.worker.registry import validate_queue_name
+
         result: bool = validate_queue_name(queue_name)
         return result
     except ImportError:

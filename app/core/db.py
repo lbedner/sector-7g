@@ -41,7 +41,6 @@ async_engine = create_async_engine(
 )
 
 
-
 # Configure session factory with SQLModel Session (sync)
 SessionLocal = sessionmaker(
     class_=Session, bind=engine, autoflush=False, autocommit=False
@@ -119,4 +118,3 @@ def init_database() -> None:
     # PostgreSQL uses Alembic migrations - create_all() would conflict
     # This no-op exists so code calling init_database() still works
     pass
-

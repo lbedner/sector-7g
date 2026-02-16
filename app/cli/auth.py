@@ -53,7 +53,7 @@ async def find_next_available_email(
         if local_part == prefix:
             used_numbers.add(0)  # Base email without number
         elif local_part.startswith(prefix):
-            suffix = local_part[len(prefix):]
+            suffix = local_part[len(prefix) :]
             if suffix.isdigit():
                 used_numbers.add(int(suffix))
 

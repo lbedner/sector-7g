@@ -19,27 +19,12 @@ from .cards.card_utils import (
 # Map status overview component names to modal names
 MODAL_NAME_MAP = {
     "backend": "backend",
-
     "database": "database",
-
-
-
     "cache": "redis",
-
-
     "worker": "worker",
-
-
     "scheduler": "scheduler",
-
-
     "service_auth": "auth",
-
-
-
-
     "ingress": "ingress",
-
     "frontend": "frontend",
 }
 
@@ -80,7 +65,6 @@ def get_component_display_info(
     elif component_name == "cache":
         return ("Cache", "Redis")
 
-
     elif component_name == "scheduler":
         return ("Scheduler", "APScheduler")
 
@@ -101,16 +85,12 @@ def get_component_display_info(
     elif component_name == "service_comms":
         return ("Comms Service", "Resend + Twilio")
 
-
     elif component_name == "ingress":
         version = metadata.get("version", "")
         subtitle = (
-            f"Traefik {version}"
-            if version and version != "unknown"
-            else "Traefik"
+            f"Traefik {version}" if version and version != "unknown" else "Traefik"
         )
         return ("Ingress", subtitle)
-
 
     elif component_name == "frontend":
         return ("Frontend", "Flet")
@@ -202,27 +182,12 @@ class StatusOverviewPanel(ft.Container):
         # Define display order (most important first)
         display_order = [
             "backend",
-
             "database",
-
-
-
             "cache",
-
-
             "worker",
-
-
             "scheduler",
-
-
             "service_auth",
-
-
-
-
             "ingress",
-
         ]
 
         # Build rows in order
