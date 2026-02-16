@@ -1,4 +1,3 @@
-
 """
 Tests for worker health registration and integration.
 
@@ -33,6 +32,7 @@ class TestWorkerHealthRegistration:
         try:
             # Import and register worker health check (simulating startup)
             from app.services.system.health import check_worker_health
+
             register_health_check("worker", check_worker_health)
 
             # Verify registration worked
@@ -234,6 +234,7 @@ class TestWorkerHealthRegistration:
         _health_checks.clear()
 
         try:
+
             async def dummy_health_check() -> ComponentStatus:
                 return ComponentStatus(
                     name="test",

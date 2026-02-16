@@ -26,7 +26,7 @@ class TestAuthEndpoints:
         user_data = {
             "email": "test@example.com",
             "full_name": "Test User",
-            "password": "testpassword123"
+            "password": "testpassword123",
         }
 
         response = async_client_with_db.post("/api/v1/auth/register", json=user_data)
@@ -52,7 +52,7 @@ class TestAuthEndpoints:
         existing_user = UserCreate(
             email="existing@example.com",
             full_name="Existing User",
-            password="password123"
+            password="password123",
         )
         await user_service.create_user(existing_user)
 
@@ -60,7 +60,7 @@ class TestAuthEndpoints:
         duplicate_user_data = {
             "email": "existing@example.com",
             "full_name": "Another User",
-            "password": "differentpassword"
+            "password": "differentpassword",
         }
 
         response = async_client_with_db.post(
@@ -75,7 +75,7 @@ class TestAuthEndpoints:
         """Test registration with invalid data."""
         invalid_user_data = {
             "email": "not-an-email",  # Invalid email format
-            "password": "123"  # Too short
+            "password": "123",  # Too short
         }
 
         response = async_client_with_db.post(
@@ -94,14 +94,14 @@ class TestAuthEndpoints:
         user_data = UserCreate(
             email="login@example.com",
             full_name="Login User",
-            password="loginpassword123"
+            password="loginpassword123",
         )
         await user_service.create_user(user_data)
 
         # Login with valid credentials
         login_data = {
             "username": "login@example.com",  # OAuth2 uses username field
-            "password": "loginpassword123"
+            "password": "loginpassword123",
         }
 
         response = async_client_with_db.post("/api/v1/auth/token", data=login_data)
@@ -115,10 +115,7 @@ class TestAuthEndpoints:
     @pytest.mark.asyncio
     async def test_login_invalid_email(self, async_client_with_db: TestClient):
         """Test login with non-existent email."""
-        login_data = {
-            "username": "nonexistent@example.com",
-            "password": "somepassword"
-        }
+        login_data = {"username": "nonexistent@example.com", "password": "somepassword"}
 
         response = async_client_with_db.post("/api/v1/auth/token", data=login_data)
 
@@ -135,15 +132,12 @@ class TestAuthEndpoints:
         user_data = UserCreate(
             email="wrongpass@example.com",
             full_name="Wrong Pass User",
-            password="correctpassword"
+            password="correctpassword",
         )
         await user_service.create_user(user_data)
 
         # Login with wrong password
-        login_data = {
-            "username": "wrongpass@example.com",
-            "password": "wrongpassword"
-        }
+        login_data = {"username": "wrongpass@example.com", "password": "wrongpassword"}
 
         response = async_client_with_db.post("/api/v1/auth/token", data=login_data)
 
@@ -160,7 +154,7 @@ class TestAuthEndpoints:
         user_data = UserCreate(
             email="currentuser@example.com",
             full_name="Current User",
-            password="password123"
+            password="password123",
         )
         created_user = await user_service.create_user(user_data)
 
@@ -169,8 +163,7 @@ class TestAuthEndpoints:
 
         # Get current user
         response = async_client_with_db.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {token}"}
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -185,8 +178,7 @@ class TestAuthEndpoints:
     ):
         """Test getting current user with invalid token."""
         response = async_client_with_db.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": "Bearer invalid_token"}
+            "/api/v1/auth/me", headers={"Authorization": "Bearer invalid_token"}
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -208,21 +200,20 @@ class TestAuthEndpoints:
         user_data = UserCreate(
             email="expiredtoken@example.com",
             full_name="Expired Token User",
-            password="password123"
+            password="password123",
         )
         created_user = await user_service.create_user(user_data)
 
         # Create an expired token (negative expiry)
         from datetime import timedelta
+
         expired_token = create_access_token(
-            data={"sub": created_user.email},
-            expires_delta=timedelta(seconds=-1)
+            data={"sub": created_user.email}, expires_delta=timedelta(seconds=-1)
         )
 
         # Try to get current user with expired token
         response = async_client_with_db.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {expired_token}"}
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {expired_token}"}
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -240,7 +231,7 @@ class TestAuthIntegration:
         user_data = {
             "email": "fullflow@example.com",
             "full_name": "Full Flow User",
-            "password": "fullflowpassword123"
+            "password": "fullflowpassword123",
         }
 
         register_response = async_client_with_db.post(
@@ -249,10 +240,7 @@ class TestAuthIntegration:
         assert register_response.status_code == status.HTTP_200_OK
 
         # Step 2: Login with credentials
-        login_data = {
-            "username": user_data["email"],
-            "password": user_data["password"]
-        }
+        login_data = {"username": user_data["email"], "password": user_data["password"]}
 
         login_response = async_client_with_db.post(
             "/api/v1/auth/token", data=login_data
@@ -263,8 +251,7 @@ class TestAuthIntegration:
 
         # Step 3: Access protected endpoint
         me_response = async_client_with_db.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {token}"}
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
         )
 
         assert me_response.status_code == status.HTTP_200_OK
@@ -281,16 +268,13 @@ class TestAuthIntegration:
         user_data = {
             "email": "persistent@example.com",
             "full_name": "Persistent User",
-            "password": "persistentpassword"
+            "password": "persistentpassword",
         }
 
         async_client_with_db.post("/api/v1/auth/register", json=user_data)
 
         # Login in separate request
-        login_data = {
-            "username": user_data["email"],
-            "password": user_data["password"]
-        }
+        login_data = {"username": user_data["email"], "password": user_data["password"]}
 
         login_response = async_client_with_db.post(
             "/api/v1/auth/token", data=login_data

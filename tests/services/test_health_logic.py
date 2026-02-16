@@ -99,7 +99,7 @@ class TestComponentStatusPropagation:
             sub_components={
                 "sub_healthy": sub_component_healthy,
                 "sub_warning": sub_component_warning,
-            }
+            },
         )
 
         assert parent_component.healthy is False  # WARNING is not healthy
@@ -119,23 +119,29 @@ class TestSystemStatusWarningPropagation:
         """Test system status calculation with components having different states."""
 
         # Mock the health check registry to have controlled components
-        mock_healthy_component = AsyncMock(return_value=ComponentStatus(
-            name="healthy_service",
-            status=ComponentStatusType.HEALTHY,
-            message="Service is running well",
-        ))
+        mock_healthy_component = AsyncMock(
+            return_value=ComponentStatus(
+                name="healthy_service",
+                status=ComponentStatusType.HEALTHY,
+                message="Service is running well",
+            )
+        )
 
-        mock_warning_component = AsyncMock(return_value=ComponentStatus(
-            name="warning_service",
-            status=ComponentStatusType.WARNING,
-            message="Service has warnings",
-        ))
+        mock_warning_component = AsyncMock(
+            return_value=ComponentStatus(
+                name="warning_service",
+                status=ComponentStatusType.WARNING,
+                message="Service has warnings",
+            )
+        )
 
-        mock_unhealthy_component = AsyncMock(return_value=ComponentStatus(
-            name="unhealthy_service",
-            status=ComponentStatusType.UNHEALTHY,
-            message="Service is down",
-        ))
+        mock_unhealthy_component = AsyncMock(
+            return_value=ComponentStatus(
+                name="unhealthy_service",
+                status=ComponentStatusType.UNHEALTHY,
+                message="Service is down",
+            )
+        )
 
         # Mock the system metrics to avoid actual system calls
         mock_system_metrics = {
@@ -219,16 +225,17 @@ class TestSystemStatusWarningPropagation:
                     == ComponentStatusType.UNHEALTHY
                 )
 
-
     @pytest.mark.asyncio
     async def test_system_status_with_only_warnings_is_not_healthy(self) -> None:
         """Test that system with warnings is not considered overall healthy."""
 
-        mock_warning_component = AsyncMock(return_value=ComponentStatus(
-            name="warning_service",
-            status=ComponentStatusType.WARNING,
-            message="Service has warnings",
-        ))
+        mock_warning_component = AsyncMock(
+            return_value=ComponentStatus(
+                name="warning_service",
+                status=ComponentStatusType.WARNING,
+                message="Service has warnings",
+            )
+        )
 
         mock_system_metrics = {
             "memory": ComponentStatus(
@@ -255,7 +262,6 @@ class TestSystemStatusWarningPropagation:
                 return_value={"test": "info"},
             ),
         ):
-
             system_status = await get_system_status()
 
             # System is not healthy because WARNING is not healthy
@@ -321,12 +327,10 @@ class TestWorkerHealthLogic:
         # Note: WARNING status means healthy=False, so queues with WARNING
         # are not considered healthy
         def check_warning_propagation(
-            sub_components: dict[str, ComponentStatus]
+            sub_components: dict[str, ComponentStatus],
         ) -> ComponentStatusType:
             """Simulate queues component status determination."""
-            queues_healthy = all(
-                queue.healthy for queue in sub_components.values()
-            )
+            queues_healthy = all(queue.healthy for queue in sub_components.values())
 
             has_warnings = any(
                 queue.status == ComponentStatusType.WARNING
@@ -397,7 +401,7 @@ class TestComponentMetadata:
                     "max_jobs": 3,
                     "timeout_seconds": 600,
                 }
-            }
+            },
         }
 
         worker_status = ComponentStatus(
@@ -446,7 +450,7 @@ class TestComponentMetadata:
                     status=ComponentStatusType.HEALTHY,
                     message="Sub-component OK",
                 )
-            }
+            },
         )
 
         # Convert to dict (simulates JSON serialization)
@@ -461,6 +465,8 @@ class TestComponentMetadata:
         assert status_dict["metadata"]["key"] == "value"
         assert "sub1" in status_dict["sub_components"]
         assert status_dict["sub_components"]["sub1"]["status"] == "healthy"
+
+
 class TestDatabaseHealthCheck:
     """Test database health check functionality."""
 
@@ -479,9 +485,7 @@ class TestDatabaseHealthCheck:
                 return MagicMock()
             elif "select version()" in query_str:
                 result = MagicMock()
-                result.fetchone.return_value = [
-                    "PostgreSQL 16.1"
-                ]
+                result.fetchone.return_value = ["PostgreSQL 16.1"]
                 return result
             result = MagicMock()
             result.fetchone.return_value = None
@@ -490,21 +494,13 @@ class TestDatabaseHealthCheck:
         mock_session.execute.side_effect = mock_execute
 
         with (
-            patch(
-                "app.services.system.health_db_postgres.settings"
-            ) as mock_settings,
+            patch("app.services.system.health_db_postgres.settings") as mock_settings,
             patch("app.core.db.db_session") as mock_db,
         ):
-            mock_settings.database_url_effective = (
-                "postgresql://localhost/test"
-            )
+            mock_settings.database_url_effective = "postgresql://localhost/test"
             mock_settings.DATABASE_ENGINE_ECHO = False
-            mock_db.return_value.__enter__ = MagicMock(
-                return_value=mock_session
-            )
-            mock_db.return_value.__exit__ = MagicMock(
-                return_value=None
-            )
+            mock_db.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_db.return_value.__exit__ = MagicMock(return_value=None)
 
             result = await check_database_health()
 
@@ -529,9 +525,7 @@ class TestDatabaseHealthCheck:
                 raise ImportError("No db module")
             return real_import(name, *args, **kwargs)
 
-        with patch(
-            "builtins.__import__", side_effect=mock_import
-        ):
+        with patch("builtins.__import__", side_effect=mock_import):
             result = await check_database_health()
 
             assert result.name == "database"
@@ -545,14 +539,10 @@ class TestDatabaseHealthCheck:
         )
 
         with (
-            patch(
-                "app.services.system.health_db_postgres.settings"
-            ) as mock_settings,
+            patch("app.services.system.health_db_postgres.settings") as mock_settings,
             patch("app.core.db.db_session") as mock_db,
         ):
-            mock_settings.database_url_effective = (
-                "postgresql://localhost/nonexistent"
-            )
+            mock_settings.database_url_effective = "postgresql://localhost/nonexistent"
             mock_settings.DATABASE_ENGINE_ECHO = False
             mock_db.side_effect = Exception("connection refused")
 
@@ -574,26 +564,16 @@ class TestDatabaseHealthCheck:
         )
 
         mock_session = MagicMock()
-        mock_session.execute.side_effect = Exception(
-            "connection refused"
-        )
+        mock_session.execute.side_effect = Exception("connection refused")
 
         with (
-            patch(
-                "app.services.system.health_db_postgres.settings"
-            ) as mock_settings,
+            patch("app.services.system.health_db_postgres.settings") as mock_settings,
             patch("app.core.db.db_session") as mock_db,
         ):
-            mock_settings.database_url_effective = (
-                "postgresql://localhost/test"
-            )
+            mock_settings.database_url_effective = "postgresql://localhost/test"
             mock_settings.DATABASE_ENGINE_ECHO = False
-            mock_db.return_value.__enter__ = MagicMock(
-                return_value=mock_session
-            )
-            mock_db.return_value.__exit__ = MagicMock(
-                return_value=None
-            )
+            mock_db.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_db.return_value.__exit__ = MagicMock(return_value=None)
 
             result = await check_database_health()
 
@@ -620,7 +600,7 @@ class TestDatabaseHealthCheck:
             "pragma_settings": {
                 "foreign_keys": True,
                 "journal_mode": "delete",
-                "cache_size": 2000
+                "cache_size": 2000,
             },
             "wal_enabled": False,
         }

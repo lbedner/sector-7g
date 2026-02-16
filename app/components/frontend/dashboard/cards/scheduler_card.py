@@ -253,9 +253,7 @@ class SchedulerCard:
                 spacing=0,
                 expand=True,
             ),
-            bgcolor=ft.Colors.with_opacity(
-                0.08, ft.Colors.GREY
-            ),
+            bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.GREY),
             border_radius=8,
             border=ft.border.all(
                 1,

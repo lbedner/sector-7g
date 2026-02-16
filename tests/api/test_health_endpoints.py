@@ -23,13 +23,12 @@ class TestHealthEndpoints:
 
         # Manually trigger startup for health check registration
         from app.components.backend.hooks import backend_hooks
+
         await backend_hooks.discover_lifespan_hooks()
         await backend_hooks.execute_startup_hooks()
 
         transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
 
         # Clean up after test
@@ -300,9 +299,7 @@ class TestHealthEndpoints:
             # If services are enabled, verify each service has required fields
             if services.get("enabled") and services.get("services"):
                 for svc_name, svc_data in services["services"].items():
-                    assert "name" in svc_data, (
-                        f"Service {svc_name} missing 'name'"
-                    )
+                    assert "name" in svc_data, f"Service {svc_name} missing 'name'"
                     assert "healthy" in svc_data, (
                         f"Service {svc_name} missing 'healthy'"
                     )

@@ -28,7 +28,7 @@ class TestAuthServiceIntegration:
         user_data = UserCreate(
             email="integration@example.com",
             full_name="Integration Test User",
-            password="integrationpassword123"
+            password="integrationpassword123",
         )
 
         # Create user
@@ -59,7 +59,7 @@ class TestAuthServiceIntegration:
         user_data = UserCreate(
             email="authflow@example.com",
             full_name="Auth Flow User",
-            password="authflowpassword"
+            password="authflowpassword",
         )
         created_user = await user_service.create_user(user_data)
 
@@ -154,7 +154,7 @@ class TestAuthServiceIntegration:
         user_data = UserCreate(
             email="deactivate@example.com",
             full_name="Deactivate User",
-            password="deactivatepassword"
+            password="deactivatepassword",
         )
         created_user = await user_service.create_user(user_data)
         assert created_user.is_active is True
@@ -181,9 +181,7 @@ class TestAuthServiceIntegration:
 
         # Create first user
         user_data1 = UserCreate(
-            email="unique@example.com",
-            full_name="First User",
-            password="password1"
+            email="unique@example.com", full_name="First User", password="password1"
         )
         created_user1 = await user_service.create_user(user_data1)
         assert created_user1.id is not None
@@ -192,7 +190,7 @@ class TestAuthServiceIntegration:
         user_data2 = UserCreate(
             email="unique@example.com",  # Same email
             full_name="Second User",
-            password="password2"
+            password="password2",
         )
 
         # This should raise an exception or return None depending on implementation
@@ -211,9 +209,7 @@ class TestAuthServiceIntegration:
 
         password = "securepassword123"
         user_data = UserCreate(
-            email="security@example.com",
-            full_name="Security User",
-            password=password
+            email="security@example.com", full_name="Security User", password=password
         )
 
         created_user = await user_service.create_user(user_data)
@@ -228,7 +224,7 @@ class TestAuthServiceIntegration:
         user_data2 = UserCreate(
             email="security2@example.com",
             full_name="Security User 2",
-            password=password  # Same password
+            password=password,  # Same password
         )
         created_user2 = await user_service.create_user(user_data2)
 
@@ -254,7 +250,7 @@ class TestAuthServiceIntegration:
         user_data = UserCreate(
             email="transaction@example.com",
             full_name="Transaction User",
-            password="transactionpassword"
+            password="transactionpassword",
         )
         await user_service.create_user(user_data)
 
@@ -297,7 +293,7 @@ class TestAuthMigrationIntegration:
         user_data = UserCreate(
             email="column_test@example.com",
             full_name="Column Test User",
-            password="columntest123"
+            password="columntest123",
         )
 
         try:
@@ -311,7 +307,7 @@ class TestAuthMigrationIntegration:
             assert created_user.is_active is not None
             assert created_user.created_at is not None
             # updated_at may be None for new users
-            assert hasattr(created_user, 'updated_at')
+            assert hasattr(created_user, "updated_at")
 
         except Exception as e:
             pytest.fail(f"User table missing required columns: {e}")
@@ -327,7 +323,7 @@ class TestAuthMigrationIntegration:
         user_data = UserCreate(
             email="index_test@example.com",
             full_name="Index Test User",
-            password="indextest123"
+            password="indextest123",
         )
 
         created_user = await user_service.create_user(user_data)
@@ -337,7 +333,7 @@ class TestAuthMigrationIntegration:
         duplicate_user_data = UserCreate(
             email="index_test@example.com",  # Same email
             full_name="Duplicate User",
-            password="duplicate123"
+            password="duplicate123",
         )
 
         # Should either return None or raise exception due to unique constraint
@@ -360,7 +356,7 @@ class TestAuthMigrationIntegration:
         user_data = UserCreate(
             email="endpoint_test@example.com",
             full_name="Endpoint Test User",
-            password="endpointtest123"
+            password="endpointtest123",
         )
 
         try:
@@ -392,7 +388,7 @@ class TestAuthMigrationIntegration:
         user_data = UserCreate(
             email="e2e_test@example.com",
             full_name="End to End User",
-            password="e2etest123"
+            password="e2etest123",
         )
 
         try:
@@ -435,7 +431,7 @@ class TestAuthDatabaseInitialization:
         user_data = UserCreate(
             email="crud_test@example.com",
             full_name="CRUD Test User",
-            password="crudtest123"
+            password="crudtest123",
         )
 
         user_service = UserService(async_db_session)
@@ -484,7 +480,7 @@ class TestAuthDatabaseInitialization:
             user_data = UserCreate(
                 email=f"pool_test_{i}@example.com",
                 full_name=f"Pool Test User {i}",
-                password=f"pooltest{i}123"
+                password=f"pooltest{i}123",
             )
 
             created_user = await user_service.create_user(user_data)
@@ -507,7 +503,7 @@ class TestAuthDatabaseInitialization:
         user_data = UserCreate(
             email="schema_test@example.com",
             full_name="Schema Test User",
-            password="schematest123"
+            password="schematest123",
         )
 
         user_service = UserService(async_db_session)
@@ -524,7 +520,7 @@ class TestAuthDatabaseInitialization:
             assert created_user.is_active is not None
             assert created_user.created_at is not None
             # updated_at may be None initially
-            assert hasattr(created_user, 'updated_at')
+            assert hasattr(created_user, "updated_at")
 
         except Exception as e:
             pytest.fail(f"User model fields don't match database schema: {e}")

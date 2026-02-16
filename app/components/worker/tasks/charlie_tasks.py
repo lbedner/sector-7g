@@ -19,9 +19,7 @@ async def monitor_gauges_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, A
     return await monitor_gauges()
 
 
-async def restock_break_room_task(
-    ctx: dict[str, Any], **kwargs: Any
-) -> dict[str, Any]:
+async def restock_break_room_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
     """Charlie restocks the break room."""
     return await restock_break_room()
 

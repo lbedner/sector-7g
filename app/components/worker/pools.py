@@ -31,6 +31,7 @@ async def get_queue_pool(queue_type: str | None = None) -> tuple[ArqRedis, str]:
     # Use configured default queue if not specified
     if queue_type is None:
         from app.core.config import get_default_queue
+
         queue_type = get_default_queue()
 
     from app.core.config import get_available_queues, is_valid_queue

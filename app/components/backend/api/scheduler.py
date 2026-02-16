@@ -1,4 +1,3 @@
-
 """Scheduled job API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,24 +20,18 @@ async def get_task_manager() -> ScheduledTaskManager:
 
 @router.get("/jobs", response_model=ScheduledTaskListResponse)
 async def list_scheduled_jobs(
-    manager: ScheduledTaskManager = Depends(get_task_manager)
+    manager: ScheduledTaskManager = Depends(get_task_manager),
 ) -> ScheduledTaskListResponse:
     """Get list of all scheduled jobs."""
     try:
         tasks = await manager.list_tasks()
 
-        return ScheduledTaskListResponse(
-            tasks=tasks,
-            total_count=len(tasks)
-        )
+        return ScheduledTaskListResponse(tasks=tasks, total_count=len(tasks))
 
     except RuntimeError as e:
         raise HTTPException(
             status_code=503,
-            detail={
-                "error": "scheduler_unavailable",
-                "message": str(e)
-            }
+            detail={"error": "scheduler_unavailable", "message": str(e)},
         )
     except Exception as e:
         logger.error(f"Failed to list scheduled jobs: {e}")
@@ -46,8 +39,8 @@ async def list_scheduled_jobs(
             status_code=500,
             detail={
                 "error": "internal_error",
-                "message": f"Failed to retrieve scheduled jobs: {str(e)}"
-            }
+                "message": f"Failed to retrieve scheduled jobs: {str(e)}",
+            },
         )
 
 
@@ -64,8 +57,8 @@ async def get_scheduled_job(
                 status_code=404,
                 detail={
                     "error": "job_not_found",
-                    "message": f"Scheduled job '{job_id}' not found"
-                }
+                    "message": f"Scheduled job '{job_id}' not found",
+                },
             )
 
         return ScheduledTaskDetailResponse(task=task)
@@ -75,10 +68,7 @@ async def get_scheduled_job(
     except RuntimeError as e:
         raise HTTPException(
             status_code=503,
-            detail={
-                "error": "scheduler_unavailable",
-                "message": str(e)
-            }
+            detail={"error": "scheduler_unavailable", "message": str(e)},
         )
     except Exception as e:
         logger.error(f"Failed to get scheduled job {job_id}: {e}")
@@ -86,14 +76,14 @@ async def get_scheduled_job(
             status_code=500,
             detail={
                 "error": "internal_error",
-                "message": f"Failed to retrieve job details: {str(e)}"
-            }
+                "message": f"Failed to retrieve job details: {str(e)}",
+            },
         )
 
 
 @router.get("/statistics", response_model=ScheduledTaskStatisticsResponse)
 async def get_scheduler_statistics(
-    manager: ScheduledTaskManager = Depends(get_task_manager)
+    manager: ScheduledTaskManager = Depends(get_task_manager),
 ) -> ScheduledTaskStatisticsResponse:
     """Get scheduler statistics."""
     try:
@@ -104,10 +94,7 @@ async def get_scheduler_statistics(
     except RuntimeError as e:
         raise HTTPException(
             status_code=503,
-            detail={
-                "error": "scheduler_unavailable",
-                "message": str(e)
-            }
+            detail={"error": "scheduler_unavailable", "message": str(e)},
         )
     except Exception as e:
         logger.error(f"Failed to get scheduler statistics: {e}")
@@ -115,6 +102,6 @@ async def get_scheduler_statistics(
             status_code=500,
             detail={
                 "error": "internal_error",
-                "message": f"Failed to retrieve statistics: {str(e)}"
-            }
+                "message": f"Failed to retrieve statistics: {str(e)}",
+            },
         )

@@ -138,11 +138,10 @@ def create_scheduler() -> AsyncIOScheduler:
     init_database()
 
     # Configure SQLAlchemy jobstore for persistence
-    jobstore = SQLAlchemyJobStore(engine=engine, tablename='apscheduler_jobs')
-    jobstores = {'default': jobstore}
+    jobstore = SQLAlchemyJobStore(engine=engine, tablename="apscheduler_jobs")
+    jobstores = {"default": jobstore}
     scheduler = AsyncIOScheduler(jobstores=jobstores)
     logger.info("Scheduler using postgres database for job persistence")
-
 
     # ============================================================================
     # JOB SCHEDULE CONFIGURATION
@@ -156,7 +155,6 @@ def create_scheduler() -> AsyncIOScheduler:
     # To update schedules during deployment:
     #   SCHEDULER_FORCE_UPDATE=true docker-compose up -d scheduler
     # ============================================================================
-
 
     # Check config flag for force updates (useful during deployments)
     force_update = settings.SCHEDULER_FORCE_UPDATE
@@ -256,7 +254,6 @@ async def run_scheduler() -> None:
 
         for job in scheduler.get_jobs():
             logger.info(f"   • {job.name} - {job.trigger}")
-
 
         # Keep the scheduler running
         while True:

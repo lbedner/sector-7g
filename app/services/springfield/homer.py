@@ -32,10 +32,16 @@ async def eat_donut() -> dict[str, Any]:
         "character": "homer",
         "status": "completed",
         "message": "Mmm... donuts...",
-        "donut_type": random.choice([
-            "pink sprinkled", "chocolate glazed", "jelly filled",
-            "maple bar", "cruller", "boston cream",
-        ]),
+        "donut_type": random.choice(
+            [
+                "pink sprinkled",
+                "chocolate glazed",
+                "jelly filled",
+                "maple bar",
+                "cruller",
+                "boston cream",
+            ]
+        ),
         "fibonacci_n": n,
         "duration_ms": round(duration_ms, 2),
     }
@@ -115,10 +121,15 @@ async def clock_in() -> dict[str, Any]:
         "status": "completed",
         "message": "Homer clocked in. Only 15 minutes late (personal best).",
         "minutes_late": random.randint(10, 45),
-        "badge_found_in": random.choice([
-            "car seat", "donut box", "pants pocket",
-            "Bart's backpack", "under the couch",
-        ]),
+        "badge_found_in": random.choice(
+            [
+                "car seat",
+                "donut box",
+                "pants pocket",
+                "Bart's backpack",
+                "under the couch",
+            ]
+        ),
         "duration_ms": round(duration_ms, 2),
     }
 
@@ -157,9 +168,14 @@ async def rush_out() -> dict[str, Any]:
         "status": "completed",
         "message": "Homer left the building in record time. Tire marks in parking lot.",
         "exit_speed": "maximum",
-        "items_left_behind": random.choice([
-            "lunch box", "hard hat", "dignity", "safety manual",
-        ]),
+        "items_left_behind": random.choice(
+            [
+                "lunch box",
+                "hard hat",
+                "dignity",
+                "safety manual",
+            ]
+        ),
         "duration_ms": round(duration_ms, 2),
     }
 

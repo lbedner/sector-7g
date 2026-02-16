@@ -69,8 +69,11 @@ async def shift_handoff() -> dict[str, Any]:
     logger.info("Carl: Running shift handoff checklist...")
 
     checklist = [
-        "reactor_status", "open_work_orders", "safety_briefing",
-        "key_handoff", "log_review",
+        "reactor_status",
+        "open_work_orders",
+        "safety_briefing",
+        "key_handoff",
+        "log_review",
     ]
     completed = []
     for item in checklist:

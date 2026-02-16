@@ -105,6 +105,7 @@ class PrimaryTextStyle(TextStyle):
     size: int = FontConfig.SIZE_PRIMARY
     weight: str = ft.FontWeight.W_400
 
+
 @dataclass(frozen=True)
 class SecondaryTextStyle(TextStyle):
     """Secondary text style for supporting content."""
@@ -113,6 +114,7 @@ class SecondaryTextStyle(TextStyle):
     font_family: str = FontConfig.FAMILY_PRIMARY
     size: int = FontConfig.SIZE_SECONDARY
     weight: str = ft.FontWeight.W_400
+
 
 @dataclass(frozen=True)
 class ConfirmationTextStyle(TextStyle):
@@ -123,6 +125,7 @@ class ConfirmationTextStyle(TextStyle):
     size: int = FontConfig.SIZE_SECONDARY
     weight: str = ft.FontWeight.W_400
 
+
 @dataclass(frozen=True)
 class TitleTextStyle(TextStyle):
     """Text style for titles and headers."""
@@ -132,17 +135,20 @@ class TitleTextStyle(TextStyle):
     size: int = FontConfig.HEADER_SIZE
     weight: str = ft.FontWeight.W_700
 
+
 @dataclass(frozen=True)
 class ModalTitle(PrimaryTextStyle):
     """Text style for modal titles."""
 
     weight: str = ft.FontWeight.W_700
 
+
 @dataclass(frozen=True)
 class ModalSubtitle(SecondaryTextStyle):
     """Text style for modal subtitles."""
 
     weight: str = ft.FontWeight.W_400
+
 
 @dataclass(frozen=True)
 class TertiaryLabel(PrimaryTextStyle):
@@ -158,17 +164,20 @@ class SidebarLabelHeadingStyle(PrimaryTextStyle):
 
     weight: str = ft.FontWeight.W_700
 
+
 @dataclass(frozen=True)
 class SidebarLabelStyle(SecondaryTextStyle):
     """Text style for sidebar labels."""
 
     weight: str = ft.FontWeight.W_400
 
+
 @dataclass(frozen=True)
 class SliderLabelStyle(SecondaryTextStyle):
     """Text style for slider labels."""
 
     weight: str = ft.FontWeight.W_700
+
 
 @dataclass(frozen=True)
 class SliderValueStyle(SecondaryTextStyle):

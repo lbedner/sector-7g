@@ -221,7 +221,6 @@ def _build_table_expanded_content(table_schema: dict, is_dark_mode: bool) -> ft.
             cols_str = ", ".join(idx_cols)
             lines.append(f"CREATE {unique_str}INDEX {idx_name} ON {name} ({cols_str});")
 
-
     if foreign_keys:
         lines.append("")
         lines.append("-- Foreign Keys")

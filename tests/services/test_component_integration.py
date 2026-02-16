@@ -26,6 +26,7 @@ from app.services.system.health import (
 
 class TestComponentIntegration:
     """Test component health checks with controlled failure scenarios."""
+
     @pytest.mark.asyncio
     async def test_cache_health_redis_connection_failure(self) -> None:
         """Test cache health check when Redis connection fails."""
@@ -156,7 +157,6 @@ class TestComponentIntegration:
             queue_sub = queues_component.sub_components
             assert "homer" in queue_sub
 
-
     @pytest.mark.asyncio
     async def test_system_metrics_high_thresholds(self) -> None:
         """Test system metrics when resource usage exceeds thresholds."""
@@ -167,7 +167,6 @@ class TestComponentIntegration:
             patch("psutil.disk_usage") as mock_disk,
             patch("psutil.cpu_percent") as mock_cpu,
         ):
-
             # Mock high memory usage (above threshold)
             mock_memory_result = type(
                 "MockMemory",
@@ -217,7 +216,6 @@ class TestComponentIntegration:
             patch("psutil.disk_usage") as mock_disk,
             patch("psutil.cpu_percent") as mock_cpu,
         ):
-
             # Mock normal resource usage
             mock_memory_result = type(
                 "MockMemory",

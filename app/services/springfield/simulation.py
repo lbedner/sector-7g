@@ -89,9 +89,7 @@ async def generate_inanimate_rod_work() -> None:
 
         count = random.randint(2, 3)
         for _ in range(count):
-            await pool.enqueue_job(
-                "inanimate_rod_sim_task", _queue_name=queue_name
-            )
+            await pool.enqueue_job("inanimate_rod_sim_task", _queue_name=queue_name)
         logger.info(
             f"Simulation: enqueued {count} Inanimate Rod tasks (depth: {depth})"
         )

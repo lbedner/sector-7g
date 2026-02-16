@@ -1,6 +1,5 @@
 """Dashboard component cards."""
 
-
 from .auth_card import AuthCard
 from .database_card import DatabaseCard
 from .ingress_card import IngressCard
@@ -12,28 +11,11 @@ from .worker_card import WorkerCard
 
 __all__ = [
     "ServerCard",
-
-
     "AuthCard",
-
-
     "ServicesCard",
-
-
-
     "DatabaseCard",
-
-
     "IngressCard",
-
-
-
     "RedisCard",
-
-
     "SchedulerCard",
-
-
     "WorkerCard",
-
 ]

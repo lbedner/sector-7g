@@ -67,7 +67,7 @@ def list_jobs() -> None:
                     f"[/{status_color}]"
                 ),
                 next_run,
-                task.trigger_type or "Unknown"
+                task.trigger_type or "Unknown",
             )
 
         console.print(table)

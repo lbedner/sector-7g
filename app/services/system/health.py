@@ -41,9 +41,9 @@ def format_bytes(size: int) -> str:
         return "0 B"
 
     size_float = float(size)
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if size_float < 1024.0:
-            if unit == 'B':
+            if unit == "B":
                 return f"{int(size_float)} {unit}"
             else:
                 return f"{size_float:.1f} {unit}"
@@ -80,6 +80,7 @@ def propagate_status(child_statuses: list[ComponentStatusType]) -> ComponentStat
         return ComponentStatusType.HEALTHY
     else:
         return ComponentStatusType.HEALTHY  # Default for edge cases
+
 
 # Cache for system metrics to improve performance
 _system_metrics_cache: dict[str, tuple[ComponentStatus, datetime]] = {}
@@ -176,11 +177,11 @@ async def get_system_status() -> SystemStatus:
 
         # Propagate status from system metrics and original backend status
         system_metrics_statuses = [
-            getattr(metric, 'status', ComponentStatusType.HEALTHY)
+            getattr(metric, "status", ComponentStatusType.HEALTHY)
             for metric in system_metrics.values()
         ]
         original_backend_status = getattr(
-            backend_component, 'status', ComponentStatusType.HEALTHY
+            backend_component, "status", ComponentStatusType.HEALTHY
         )
         all_backend_statuses = system_metrics_statuses + [original_backend_status]
 
@@ -201,7 +202,7 @@ async def get_system_status() -> SystemStatus:
 
         # Propagate status from system metrics only
         system_metrics_statuses = [
-            getattr(metric, 'status', ComponentStatusType.HEALTHY)
+            getattr(metric, "status", ComponentStatusType.HEALTHY)
             for metric in system_metrics.values()
         ]
         backend_status = propagate_status(system_metrics_statuses)
@@ -232,11 +233,11 @@ async def get_system_status() -> SystemStatus:
 
     # Propagate status from all top-level components and services
     component_statuses = [
-        getattr(component, 'status', ComponentStatusType.HEALTHY)
+        getattr(component, "status", ComponentStatusType.HEALTHY)
         for component in component_results.values()
     ]
     service_statuses = [
-        getattr(service, 'status', ComponentStatusType.HEALTHY)
+        getattr(service, "status", ComponentStatusType.HEALTHY)
         for service in service_results.values()
     ]
     all_top_level_statuses = component_statuses + service_statuses
@@ -458,9 +459,12 @@ async def _run_health_check(
                 # Log on FIRST check (previous is None) OR status change
                 if previous_status is None or previous_status != current_status:
                     event_status = (
-                        "success" if current_status == ComponentStatusType.HEALTHY
-                        else "error" if current_status == ComponentStatusType.UNHEALTHY
-                        else "info" if current_status == ComponentStatusType.INFO
+                        "success"
+                        if current_status == ComponentStatusType.HEALTHY
+                        else "error"
+                        if current_status == ComponentStatusType.UNHEALTHY
+                        else "info"
+                        if current_status == ComponentStatusType.INFO
                         else "warning"
                     )
                     display_name = name.replace("_", " ").title()
@@ -497,7 +501,8 @@ async def _run_health_check(
             return ComponentStatus(
                 name=name,
                 status=(
-                    ComponentStatusType.HEALTHY if bool(result)
+                    ComponentStatusType.HEALTHY
+                    if bool(result)
                     else ComponentStatusType.UNHEALTHY
                 ),
                 message="OK" if result else "Failed",
@@ -635,6 +640,8 @@ async def _check_cpu_usage() -> ComponentStatus:
             message=f"Failed to check CPU usage: {e}",
             response_time_ms=None,
         )
+
+
 async def check_cache_health() -> ComponentStatus:
     """
     Check cache connectivity and basic functionality.
@@ -649,7 +656,7 @@ async def check_cache_health() -> ComponentStatus:
         # Create Redis connection with timeout
         redis_url = (
             settings.redis_url_effective
-            if hasattr(settings, 'redis_url_effective')
+            if hasattr(settings, "redis_url_effective")
             else settings.REDIS_URL
         )
         redis_connection = aioredis.from_url(  # type: ignore[no-untyped-call]
@@ -684,10 +691,10 @@ async def check_cache_health() -> ComponentStatus:
 
         # Get multiple INFO sections for comprehensive metrics
         info = await redis_info_client.info()
-        stats_info = await redis_info_client.info('stats')
-        memory_info = await redis_info_client.info('memory')
-        clients_info = await redis_info_client.info('clients')
-        keyspace_info = await redis_info_client.info('keyspace')
+        stats_info = await redis_info_client.info("stats")
+        memory_info = await redis_info_client.info("memory")
+        clients_info = await redis_info_client.info("clients")
+        keyspace_info = await redis_info_client.info("keyspace")
 
         # Get recent slow query log entries from Redis SLOWLOG
         slowlog_entries: list[dict[str, Any]] = []
@@ -734,8 +741,8 @@ async def check_cache_health() -> ComponentStatus:
         await redis_info_client.aclose()
 
         # Calculate derived metrics
-        keyspace_hits = stats_info.get('keyspace_hits', 0)
-        keyspace_misses = stats_info.get('keyspace_misses', 0)
+        keyspace_hits = stats_info.get("keyspace_hits", 0)
+        keyspace_misses = stats_info.get("keyspace_misses", 0)
         total_keyspace_ops = keyspace_hits + keyspace_misses
         hit_rate = (keyspace_hits / max(total_keyspace_ops, 1)) * 100
 
@@ -743,16 +750,16 @@ async def check_cache_health() -> ComponentStatus:
         total_keys = 0
         keys_with_expiry = 0
         for key, value in keyspace_info.items():
-            if key.startswith('db'):
+            if key.startswith("db"):
                 # Redis info('keyspace') returns nested dict format
                 if isinstance(value, dict):
-                    total_keys += value.get('keys', 0)
-                    keys_with_expiry += value.get('expires', 0)
+                    total_keys += value.get("keys", 0)
+                    keys_with_expiry += value.get("expires", 0)
 
         # Memory usage calculations
-        used_memory = memory_info.get('used_memory', 0)
-        used_memory_peak = memory_info.get('used_memory_peak', 0)
-        mem_fragmentation_ratio = memory_info.get('mem_fragmentation_ratio', 1.0)
+        used_memory = memory_info.get("used_memory", 0)
+        used_memory_peak = memory_info.get("used_memory_peak", 0)
+        mem_fragmentation_ratio = memory_info.get("mem_fragmentation_ratio", 1.0)
 
         return ComponentStatus(
             name="cache",
@@ -764,17 +771,14 @@ async def check_cache_health() -> ComponentStatus:
                 "version": info.get("redis_version", "unknown"),
                 "url": redis_url,
                 "db": settings.REDIS_DB,
-
                 # Connection and client metrics
                 "connected_clients": clients_info.get("connected_clients", 0),
                 "blocked_clients": clients_info.get("blocked_clients", 0),
                 "client_longest_output_list": clients_info.get(
                     "client_longest_output_list", 0
                 ),
-
                 # Server uptime
                 "uptime_in_seconds": info.get("uptime_in_seconds", 0),
-
                 # Memory metrics
                 "used_memory": used_memory,
                 "used_memory_human": memory_info.get("used_memory_human", "unknown"),
@@ -785,7 +789,6 @@ async def check_cache_health() -> ComponentStatus:
                 "mem_fragmentation_ratio": mem_fragmentation_ratio,
                 "maxmemory": memory_info.get("maxmemory", 0),
                 "maxmemory_human": memory_info.get("maxmemory_human", "0B"),
-
                 # Performance and cache metrics
                 "instantaneous_ops_per_sec": stats_info.get(
                     "instantaneous_ops_per_sec", 0
@@ -795,11 +798,9 @@ async def check_cache_health() -> ComponentStatus:
                 "hit_rate_percent": hit_rate,
                 "evicted_keys": stats_info.get("evicted_keys", 0),
                 "expired_keys": stats_info.get("expired_keys", 0),
-
                 # Keyspace statistics
                 "total_keys": total_keys,
                 "keys_with_expiry": keys_with_expiry,
-
                 # Additional useful stats
                 "total_commands_processed": stats_info.get(
                     "total_commands_processed", 0
@@ -808,7 +809,6 @@ async def check_cache_health() -> ComponentStatus:
                     "total_connections_received", 0
                 ),
                 "rejected_connections": stats_info.get("rejected_connections", 0),
-
                 # Slow queries and client connections
                 "slowlog_entries": slowlog_entries,
                 "active_clients": active_clients,
@@ -836,7 +836,7 @@ async def check_cache_health() -> ComponentStatus:
                 "implementation": "redis",
                 "url": (
                     settings.redis_url_effective
-                    if hasattr(settings, 'redis_url_effective')
+                    if hasattr(settings, "redis_url_effective")
                     else settings.REDIS_URL
                 ),
                 "db": settings.REDIS_DB,
@@ -852,6 +852,7 @@ async def check_cache_health() -> ComponentStatus:
                 "expired_keys": 0,
             },
         )
+
 
 async def check_worker_health() -> ComponentStatus:
     """
@@ -869,14 +870,14 @@ async def check_worker_health() -> ComponentStatus:
         # Create Redis connection with auto-detection for local vs Docker
         # Step 1: Call untyped function with explicit ignore
         redis_connection = aioredis.from_url(  # type: ignore[no-untyped-call]
-            settings.redis_url_effective,
-            db=settings.REDIS_DB
+            settings.redis_url_effective, db=settings.REDIS_DB
         )
         # Step 2: Cast the result to proper type
         redis_client: aioredis.Redis = cast(aioredis.Redis, redis_connection)
 
         # Get queue metadata from WorkerSettings classes via dynamic discovery
         from app.components.worker.registry import get_all_queue_metadata
+
         functional_queues = get_all_queue_metadata()
 
         # Check each queue and create sub-components
@@ -894,7 +895,7 @@ async def check_worker_health() -> ComponentStatus:
             try:
                 # Get queue length (actual queued jobs) - arq uses sorted sets
                 queue_length_result = redis_client.zcard(queue_name)
-                if hasattr(queue_length_result, '__await__'):
+                if hasattr(queue_length_result, "__await__"):
                     queue_length = await queue_length_result
                 else:
                     queue_length = queue_length_result
@@ -1133,7 +1134,6 @@ async def check_worker_health() -> ComponentStatus:
         queue_statuses = [queue.status for queue in queue_sub_components.values()]
         queues_status = propagate_status(queue_statuses)
 
-
         queues_message = f"{len(functional_queues)} functional queues configured"
         if active_workers < len(functional_queues):
             queues_message += f" ({active_workers} active)"
@@ -1207,6 +1207,7 @@ async def check_worker_health() -> ComponentStatus:
             sub_components={},
         )
 
+
 async def check_ingress_health() -> ComponentStatus:
     """
     Check Traefik reverse proxy health and configuration.
@@ -1245,9 +1246,7 @@ async def check_ingress_health() -> ComponentStatus:
 
             # Get Traefik version and overview
             try:
-                version_response = await client.get(
-                    f"{traefik_api_url}/api/version"
-                )
+                version_response = await client.get(f"{traefik_api_url}/api/version")
                 if version_response.status_code == 200:
                     version_data = version_response.json()
                 else:
@@ -1316,13 +1315,15 @@ async def check_ingress_health() -> ComponentStatus:
             # Extract router info (limited to first 10 for metadata)
             router_info = []
             for router in enabled_routers[:10]:
-                router_info.append({
-                    "name": router.get("name", "unknown"),
-                    "rule": router.get("rule", ""),
-                    "service": router.get("service", ""),
-                    "entryPoints": router.get("entryPoints", []),
-                    "tls": router.get("tls") is not None,
-                })
+                router_info.append(
+                    {
+                        "name": router.get("name", "unknown"),
+                        "rule": router.get("rule", ""),
+                        "service": router.get("service", ""),
+                        "entryPoints": router.get("entryPoints", []),
+                        "tls": router.get("tls") is not None,
+                    }
+                )
 
             return ComponentStatus(
                 name="ingress",
@@ -1360,4 +1361,3 @@ async def check_ingress_health() -> ComponentStatus:
             response_time_ms=None,
             metadata={"error": str(e)},
         )
-

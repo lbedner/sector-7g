@@ -76,12 +76,11 @@ async def check_auth_service_health() -> ComponentStatus:
         user_count_display = "0"
         if database_available:
             try:
+                from sqlalchemy import func
                 from sqlmodel import select
 
                 from app.core.db import db_session
                 from app.models.user import User
-                from sqlalchemy import func
-                from sqlmodel import select
 
                 with db_session() as session:
                     # Single COUNT query instead of loading up to 101 User objects

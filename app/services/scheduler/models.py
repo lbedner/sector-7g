@@ -13,6 +13,7 @@ from sqlmodel import SQLModel
 # DATABASE MODELS (SQLModel)
 # ============================================================================
 
+
 class APSchedulerJob(SQLModel, table=True):
     """
     Mirror of APScheduler's job persistence table.
@@ -21,18 +22,15 @@ class APSchedulerJob(SQLModel, table=True):
     Note: APScheduler creates this table, we only read from it.
     The table structure matches APScheduler 3.x exactly.
     """
+
     __tablename__ = "apscheduler_jobs"
 
     # Use SA Column types for exact compatibility with APScheduler's table structure
-    id: str = SQLField(
-        sa_column=Column(String(191), primary_key=True)
-    )
+    id: str = SQLField(sa_column=Column(String(191), primary_key=True))
     next_run_time: float | None = SQLField(
         sa_column=Column(Float(25), nullable=True, index=True)
     )
-    job_state: bytes = SQLField(
-        sa_column=Column(LargeBinary, nullable=False)
-    )
+    job_state: bytes = SQLField(sa_column=Column(LargeBinary, nullable=False))
 
     def get_job_data(self) -> dict[str, Any]:
         """
@@ -52,11 +50,13 @@ class APSchedulerJob(SQLModel, table=True):
 # SERVICE LAYER MODELS (Pydantic)
 # ============================================================================
 
+
 class ScheduledTask(BaseModel):
     """
     Represents a scheduled task with all relevant information.
     This is the clean data model used by CLI/API consumers.
     """
+
     job_id: str = Field(..., description="Unique task identifier")
     name: str = Field(..., description="Human-readable task name")
     function: str = Field(..., description="Function reference (module:function)")
@@ -67,15 +67,9 @@ class ScheduledTask(BaseModel):
     next_run_time: datetime | None = Field(
         None, description="Next scheduled execution time"
     )
-    status: Literal["active", "paused"] = Field(
-        ..., description="Current task status"
-    )
-    max_instances: int = Field(
-        1, description="Maximum concurrent instances allowed"
-    )
-    coalesce: bool = Field(
-        True, description="Whether to coalesce missed runs"
-    )
+    status: Literal["active", "paused"] = Field(..., description="Current task status")
+    max_instances: int = Field(1, description="Maximum concurrent instances allowed")
+    coalesce: bool = Field(True, description="Whether to coalesce missed runs")
 
     @property
     def is_active(self) -> bool:
@@ -85,20 +79,20 @@ class ScheduledTask(BaseModel):
 
 class TaskStatistics(BaseModel):
     """Statistics about scheduled tasks in the system."""
+
     total_tasks: int = Field(0, description="Total number of scheduled tasks")
     active_tasks: int = Field(0, description="Number of active tasks")
     paused_tasks: int = Field(0, description="Number of paused tasks")
-
-
-
 
 
 # ============================================================================
 # HEALTH MONITORING MODELS (Available for all scheduler modes)
 # ============================================================================
 
+
 class UpcomingTask(BaseModel):
     """Information about an upcoming scheduled task."""
+
     job_id: str = Field(..., description="Task identifier")
     name: str = Field(..., description="Human-readable task name")
     next_run: str = Field(..., description="ISO datetime string of next execution")
@@ -109,6 +103,7 @@ class UpcomingTask(BaseModel):
 
 class SchedulerHealthMetadata(BaseModel):
     """Health metadata for scheduler components."""
+
     total_tasks: int = Field(0, description="Total number of scheduled tasks")
     active_tasks: int = Field(0, description="Number of active tasks")
     paused_tasks: int = Field(0, description="Number of paused tasks")

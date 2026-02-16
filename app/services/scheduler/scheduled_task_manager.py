@@ -1,4 +1,3 @@
-
 """Async scheduled task manager using SQLModel for database abstraction."""
 
 from datetime import datetime
@@ -21,6 +20,7 @@ class ScheduledTaskManager:
     Only available when scheduler persistence is enabled - reads from
     apscheduler_jobs table.
     """
+
     async def has_persistence(self) -> bool:
         """Check if apscheduler_jobs table exists."""
         try:
@@ -33,6 +33,7 @@ class ScheduledTaskManager:
         except Exception as e:
             logger.error(f"Error checking persistence: {e}")
             return False
+
     async def list_tasks(self) -> list[ScheduledTask]:
         """
         List all scheduled tasks from the database.
@@ -70,7 +71,8 @@ class ScheduledTaskManager:
                         trigger_type=self._get_trigger_type(job_data.get("trigger")),
                         next_run_time=(
                             datetime.fromtimestamp(job.next_run_time)
-                            if job.next_run_time else None
+                            if job.next_run_time
+                            else None
                         ),
                         status="active" if job.next_run_time else "paused",
                         max_instances=job_data.get("max_instances", 1),
@@ -112,7 +114,8 @@ class ScheduledTaskManager:
                     trigger_type=self._get_trigger_type(job_data.get("trigger")),
                     next_run_time=(
                         datetime.fromtimestamp(job.next_run_time)
-                        if job.next_run_time else None
+                        if job.next_run_time
+                        else None
                     ),
                     status="active" if job.next_run_time else "paused",
                     max_instances=job_data.get("max_instances", 1),

@@ -78,7 +78,8 @@ class FastAPIRouteInspector:
     def _extract_path_params(self, path: str) -> list[str]:
         """Extract path parameters from route path."""
         import re
-        return re.findall(r'\{([^}]+)\}', path)
+
+        return re.findall(r"\{([^}]+)\}", path)
 
     def _extract_dependency_names(self, route: APIRoute) -> list[str]:
         """Extract dependency names from router and parameter dependencies."""

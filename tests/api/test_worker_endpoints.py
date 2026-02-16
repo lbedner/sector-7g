@@ -1,4 +1,3 @@
-
 """
 Tests for worker API endpoints.
 
@@ -26,13 +25,12 @@ class TestWorkerEndpoints:
 
         # Manually trigger startup for health check registration
         from app.components.backend.hooks import backend_hooks
+
         await backend_hooks.discover_lifespan_hooks()
         await backend_hooks.execute_startup_hooks()
 
         transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
 
     @patch("app.components.worker.pools.create_pool")
@@ -40,6 +38,7 @@ class TestWorkerEndpoints:
         """Test task enqueueing with task_kwargs field."""
         # Clear cache to ensure fresh mock
         from app.components.worker.pools import clear_pool_cache
+
         await clear_pool_cache()
 
         # Mock pool and job
@@ -56,18 +55,12 @@ class TestWorkerEndpoints:
             "task_name": "eat_donut_task",
             "queue_type": "inanimate_rod",
             "args": ["arg1", "arg2"],
-            "task_kwargs": {
-                "keyword_arg": "value",
-                "another_kwarg": 123
-            },
-            "delay_seconds": None
+            "task_kwargs": {"keyword_arg": "value", "another_kwarg": 123},
+            "delay_seconds": None,
         }
 
         # Make the API call
-        response = await async_client.post(
-            "/api/v1/tasks/enqueue",
-            json=task_request
-        )
+        response = await async_client.post("/api/v1/tasks/enqueue", json=task_request)
 
         # Verify response
         assert response.status_code == 200
@@ -84,7 +77,7 @@ class TestWorkerEndpoints:
             _queue_name="arq:queue:inanimate_rod",
             _defer_by=None,
             keyword_arg="value",
-            another_kwarg=123
+            another_kwarg=123,
         )
 
     @patch("app.components.worker.pools.create_pool")
@@ -92,6 +85,7 @@ class TestWorkerEndpoints:
         """Test task enqueueing without task_kwargs (empty dict)."""
         # Clear cache to ensure fresh mock
         from app.components.worker.pools import clear_pool_cache
+
         await clear_pool_cache()
 
         # Mock pool and job
@@ -109,10 +103,7 @@ class TestWorkerEndpoints:
         }
 
         # Make the API call
-        response = await async_client.post(
-            "/api/v1/tasks/enqueue",
-            json=task_request
-        )
+        response = await async_client.post("/api/v1/tasks/enqueue", json=task_request)
 
         # Verify response
         assert response.status_code == 200
@@ -123,7 +114,7 @@ class TestWorkerEndpoints:
         mock_pool.enqueue_job.assert_called_once_with(
             "run_diagnostics_task",
             _queue_name="arq:queue:inanimate_rod",
-            _defer_by=None
+            _defer_by=None,
         )
 
     async def test_enqueue_task_invalid_queue_type(self, async_client):
@@ -132,13 +123,10 @@ class TestWorkerEndpoints:
             "task_name": "eat_donut_task",
             "queue_type": "invalid_queue",
             "args": [],
-            "task_kwargs": {}
+            "task_kwargs": {},
         }
 
-        response = await async_client.post(
-            "/api/v1/tasks/enqueue",
-            json=task_request
-        )
+        response = await async_client.post("/api/v1/tasks/enqueue", json=task_request)
 
         # Should return 400 for invalid queue type
         assert response.status_code == 400
@@ -149,15 +137,10 @@ class TestWorkerEndpoints:
     async def test_task_request_model_validation(self, async_client):
         """Test TaskRequest model validation."""
         # Missing required task_name field
-        invalid_request = {
-            "queue_type": "inanimate_rod",
-            "args": [],
-            "task_kwargs": {}
-        }
+        invalid_request = {"queue_type": "inanimate_rod", "args": [], "task_kwargs": {}}
 
         response = await async_client.post(
-            "/api/v1/tasks/enqueue",
-            json=invalid_request
+            "/api/v1/tasks/enqueue", json=invalid_request
         )
 
         # Should return 422 for validation error

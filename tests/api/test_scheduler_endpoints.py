@@ -1,4 +1,3 @@
-
 """
 Tests for scheduler API endpoints.
 
@@ -26,13 +25,12 @@ class TestSchedulerEndpoints:
 
         # Manually trigger startup for component registration
         from app.components.backend.hooks import backend_hooks
+
         await backend_hooks.discover_lifespan_hooks()
         await backend_hooks.execute_startup_hooks()
 
         transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
 
         # Clean up after test
@@ -66,9 +64,7 @@ class TestSchedulerEndpoints:
             assert "internal_error" in data["detail"].get("error", "")
 
     @pytest.mark.asyncio
-    async def test_get_scheduled_job_not_found(
-        self, async_client: AsyncClient
-    ) -> None:
+    async def test_get_scheduled_job_not_found(self, async_client: AsyncClient) -> None:
         """Test /api/v1/scheduler/jobs/{job_id} returns 404 for non-existent job."""
         response = await async_client.get("/api/v1/scheduler/jobs/non_existent_job")
 
@@ -124,7 +120,7 @@ class TestSchedulerEndpoints:
         endpoints = [
             "/api/v1/scheduler/jobs",
             "/api/v1/scheduler/jobs/test_job",
-            "/api/v1/scheduler/statistics"
+            "/api/v1/scheduler/statistics",
         ]
 
         for endpoint in endpoints:
@@ -190,7 +186,7 @@ class TestSchedulerEndpoints:
                 trigger_type="interval",
                 status="active",
                 max_instances=1,
-                coalesce=True
+                coalesce=True,
             )
         ]
 

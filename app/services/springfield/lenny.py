@@ -26,8 +26,11 @@ async def run_diagnostics() -> dict[str, Any]:
         }
 
     systems = [
-        "coolant_flow", "pressure_vessel", "control_rods",
-        "steam_generator", "turbine",
+        "coolant_flow",
+        "pressure_vessel",
+        "control_rods",
+        "steam_generator",
+        "turbine",
     ]
     results = await asyncio.gather(*[check_system(s) for s in systems])
 
@@ -56,10 +59,14 @@ async def file_report() -> dict[str, Any]:
         "character": "lenny",
         "status": "completed",
         "message": "Report filed. Unlike Homer, Lenny actually reads the forms.",
-        "report_type": random.choice([
-            "daily operations", "safety compliance", "maintenance log",
-            "incident report (Homer-related)",
-        ]),
+        "report_type": random.choice(
+            [
+                "daily operations",
+                "safety compliance",
+                "maintenance log",
+                "incident report (Homer-related)",
+            ]
+        ),
         "pages": random.randint(2, 8),
         "duration_ms": round(duration_ms, 2),
     }
@@ -102,11 +109,13 @@ async def morning_inspection() -> dict[str, Any]:
     checks = []
     for area in ["reactor_floor", "control_room", "turbine_hall", "waste_storage"]:
         await asyncio.sleep(random.uniform(0.05, 0.1))
-        checks.append({
-            "area": area,
-            "status": "clear",
-            "homer_spotted": area == "control_room" and random.random() < 0.5,
-        })
+        checks.append(
+            {
+                "area": area,
+                "status": "clear",
+                "homer_spotted": area == "control_room" and random.random() < 0.5,
+            }
+        )
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     homer_sighting = any(c["homer_spotted"] for c in checks)

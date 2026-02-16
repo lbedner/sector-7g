@@ -101,19 +101,23 @@ def _discover_lifecycle_hooks() -> dict[str, Any]:
                     doc = hook_func.__doc__ or ""
                     description = doc.strip() if doc else f"{hook_file.stem} hook"
 
-                    hooks.append({
-                        "name": hook_file.stem,
-                        "description": description,
-                        "module": module_name,
-                    })
+                    hooks.append(
+                        {
+                            "name": hook_file.stem,
+                            "description": description,
+                            "module": module_name,
+                        }
+                    )
             except Exception as e:
                 logger.debug(f"Could not load hook module {module_name}: {e}")
                 # Still include it as discovered
-                hooks.append({
-                    "name": hook_file.stem,
-                    "description": f"{hook_file.stem} hook",
-                    "module": module_name,
-                })
+                hooks.append(
+                    {
+                        "name": hook_file.stem,
+                        "description": f"{hook_file.stem} hook",
+                        "module": module_name,
+                    }
+                )
 
         return hooks
 
@@ -155,6 +159,7 @@ async def _backend_component_health() -> ComponentStatus:
     Includes comprehensive route and middleware metadata for dashboard display.
     """
     import os
+
     global _cached_route_metadata
     global _cached_middleware_metadata
     global _cached_lifecycle_metadata
@@ -163,7 +168,6 @@ async def _backend_component_health() -> ComponentStatus:
     if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in os.getenv("_", ""):
         # Even in test mode, try to get route and middleware information if possible
         try:
-
             # Initialize cache if not already done (might happen in tests)
             if _cached_route_metadata is None or _cached_middleware_metadata is None:
                 _initialize_route_metadata_cache()
@@ -198,8 +202,7 @@ async def _backend_component_health() -> ComponentStatus:
                 name="backend",
                 status=ComponentStatusType.HEALTHY,
                 message=(
-                    f"FastAPI backend available (test mode): "
-                    f"{', '.join(message_parts)}"
+                    f"FastAPI backend available (test mode): {', '.join(message_parts)}"
                 ),
                 response_time_ms=None,
                 metadata={
@@ -246,9 +249,7 @@ async def _backend_component_health() -> ComponentStatus:
             return ComponentStatus(
                 name="backend",
                 status=ComponentStatusType.HEALTHY,
-                message=(
-                    "FastAPI backend active (introspection unavailable)"
-                ),
+                message=("FastAPI backend active (introspection unavailable)"),
                 response_time_ms=None,
                 metadata={
                     "type": "internal_component_check",
@@ -266,10 +267,9 @@ async def _backend_component_health() -> ComponentStatus:
         security_count = middleware_metadata.security_count
 
         # Format method summary (e.g., "12 GET, 5 POST")
-        method_summary = ", ".join([
-            f"{count} {method}"
-            for method, count in sorted(method_counts.items())
-        ])
+        method_summary = ", ".join(
+            [f"{count} {method}" for method, count in sorted(method_counts.items())]
+        )
 
         message_parts = [f"{total_routes} routes"]
         if total_endpoints != total_routes:
@@ -298,9 +298,7 @@ async def _backend_component_health() -> ComponentStatus:
             response_time_ms=None,
             metadata={
                 "type": "internal_component_check",
-                "note": (
-                    "Backend is running since this health check executed"
-                ),
+                "note": ("Backend is running since this health check executed"),
                 "check_method": "internal_execution",
                 **route_metadata.model_dump_for_metadata(),
                 **middleware_metadata.model_dump_for_metadata(),
@@ -391,6 +389,7 @@ async def _scheduler_component_health() -> ComponentStatus:
 
     try:
         from app.services.scheduler.task_monitor import TaskHealthMonitor
+
         monitor = TaskHealthMonitor()
         # No scheduler instance available in backend
         health_data = await monitor.get_health_metadata(None)
@@ -425,7 +424,6 @@ async def _scheduler_component_health() -> ComponentStatus:
         )
 
 
-
 async def startup_hook() -> None:
     """
     Auto-detect available components and register their health checks.
@@ -450,19 +448,23 @@ async def startup_hook() -> None:
 
     # Register worker health check (shows queue status and job metrics)
     from app.services.system.health import check_worker_health
+
     register_health_check("worker", check_worker_health)
     logger.info("Worker component health check registered")
     # Register cache health check (Redis connectivity and operations)
     from app.services.system.health import check_cache_health
+
     register_health_check("cache", check_cache_health)
     logger.info("Cache component health check registered")
     # Register database health check
     from app.services.system.health_db import check_database_health
+
     register_health_check("database", check_database_health)
     logger.info("Database component health check registered")
 
     # Register ingress health check (Traefik reverse proxy)
     from app.services.system.health import check_ingress_health
+
     register_health_check("ingress", check_ingress_health)
     logger.info("Ingress component health check registered")
 
@@ -477,6 +479,7 @@ async def startup_hook() -> None:
     logger.info("Registering service health checks...")
     # Register auth service health check
     from app.services.auth.health import check_auth_service_health
+
     register_service_health_check("auth", check_auth_service_health)
     logger.info("Auth service health check registered")
 

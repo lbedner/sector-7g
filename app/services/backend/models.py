@@ -42,7 +42,7 @@ class RouteMetadata(BaseModel):
 
     def model_dump_for_metadata(self) -> dict[str, Any]:
         """Convert to dict format suitable for ComponentStatus metadata."""
-        return self.model_dump(mode='json')
+        return self.model_dump(mode="json")
 
 
 class MiddlewareInfo(BaseModel):
@@ -68,4 +68,4 @@ class MiddlewareMetadata(BaseModel):
 
     def model_dump_for_metadata(self) -> dict[str, Any]:
         """Convert to dict format suitable for ComponentStatus metadata."""
-        return self.model_dump(mode='json')
+        return self.model_dump(mode="json")

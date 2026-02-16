@@ -21,11 +21,13 @@ async def monitor_gauges() -> dict[str, Any]:
     gauges = []
     for gauge in ["pressure", "temperature", "flow_rate", "coolant_level"]:
         await asyncio.sleep(random.uniform(0.05, 0.15))
-        gauges.append({
-            "gauge": gauge,
-            "reading": round(random.uniform(90, 100), 1),
-            "status": "normal",
-        })
+        gauges.append(
+            {
+                "gauge": gauge,
+                "reading": round(random.uniform(90, 100), 1),
+                "status": "normal",
+            }
+        )
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     return {
@@ -89,11 +91,13 @@ async def check_emergency_exits() -> dict[str, Any]:
     for exit_id in range(1, 7):
         await asyncio.sleep(random.uniform(0.03, 0.08))
         blocked = exit_id == 3 and random.random() < 0.3
-        exits.append({
-            "exit": f"E-{exit_id}",
-            "clear": not blocked,
-            "blocked_by": "Homer's car" if blocked else None,
-        })
+        exits.append(
+            {
+                "exit": f"E-{exit_id}",
+                "clear": not blocked,
+                "blocked_by": "Homer's car" if blocked else None,
+            }
+        )
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     all_clear = all(e["clear"] for e in exits)

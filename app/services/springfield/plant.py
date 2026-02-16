@@ -26,8 +26,12 @@ async def night_maintenance() -> dict[str, Any]:
         }
 
     systems = [
-        "cooling_pumps", "control_rod_actuators", "steam_turbines",
-        "emergency_generators", "containment_sensors", "waste_processing",
+        "cooling_pumps",
+        "control_rod_actuators",
+        "steam_turbines",
+        "emergency_generators",
+        "containment_sensors",
+        "waste_processing",
     ]
     results = await asyncio.gather(*[maintain_system(s) for s in systems])
 
