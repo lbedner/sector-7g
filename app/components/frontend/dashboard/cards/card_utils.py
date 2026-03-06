@@ -432,8 +432,6 @@ def create_progress_indicator(
         padding=ft.padding.symmetric(horizontal=12, vertical=8),
         expand=True,
     )
-
-
 def create_modal_for_component(
     component_name: str, component_data: ComponentStatus, page: ft.Page
 ) -> ft.Container | None:
@@ -475,6 +473,24 @@ def create_modal_for_component(
         return modal_class(component_data, page)
 
     return None
+def _open_modal(
+    component_name: str, component_data: ComponentStatus, page: ft.Page
+) -> None:
+    """Open a component detail modal, using cache for subsequent opens."""
+    modal_cache: dict[str, ft.Container] = page.data.setdefault("_modal_cache", {})
+    popup = modal_cache.get(component_name)
+    if popup is None:
+        popup = create_modal_for_component(component_name, component_data, page)
+        if popup:
+            modal_cache[component_name] = popup
+            page.overlay.append(popup)
+    else:
+        # Refresh cached modal with latest health check data
+        if hasattr(popup, "update_data"):
+            popup.update_data(component_data)
+    if popup:
+        popup.show()
+        page.update()
 
 
 def create_card_click_handler(
@@ -495,13 +511,7 @@ def create_card_click_handler(
         """Handle card click by opening detail popup."""
         if not e.page:
             return
-
-        popup = create_modal_for_component(component_name, component_data, e.page)
-        if popup:
-            # Add to page overlay and show
-            e.page.overlay.append(popup)
-            popup.show()
-            e.page.update()
+        _open_modal(component_name, component_data, e.page)
 
     return handle_click
 

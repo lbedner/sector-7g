@@ -18,7 +18,7 @@ async def run_diagnostics() -> dict[str, Any]:
     logger.info("Lenny: Running reactor diagnostics...")
 
     async def check_system(name: str) -> dict[str, Any]:
-        await asyncio.sleep(random.uniform(0.05, 0.15))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         return {
             "system": name,
             "status": "nominal",
@@ -51,7 +51,7 @@ async def file_report() -> dict[str, Any]:
     start = datetime.now(UTC)
     logger.info("Lenny: Filing daily report...")
 
-    await asyncio.sleep(random.uniform(0.1, 0.3))
+    await asyncio.sleep(random.uniform(0.5, 1.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     return {
@@ -78,7 +78,7 @@ async def check_cooling_tower() -> dict[str, Any]:
     logger.info("Lenny: Checking cooling tower sensors...")
 
     async def read_sensor(sensor_id: int) -> dict[str, Any]:
-        await asyncio.sleep(random.uniform(0.02, 0.08))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         return {
             "sensor_id": sensor_id,
             "temp_celsius": round(random.uniform(35, 45), 1),
@@ -108,7 +108,7 @@ async def morning_inspection() -> dict[str, Any]:
 
     checks = []
     for area in ["reactor_floor", "control_room", "turbine_hall", "waste_storage"]:
-        await asyncio.sleep(random.uniform(0.05, 0.1))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         checks.append(
             {
                 "area": area,
@@ -167,10 +167,10 @@ async def lenny_simulation(activity: str) -> dict[str, Any]:
 
     # Concurrent async pattern — Lenny is efficient
     async def _check() -> None:
-        await asyncio.sleep(random.uniform(0.05, 0.15))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
 
     await asyncio.gather(*[_check() for _ in range(3)])
-    await asyncio.sleep(random.uniform(0.3, 1.0))
+    await asyncio.sleep(random.uniform(0.6, 2.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
 

@@ -45,7 +45,7 @@ async def grimey_simulation(activity: str) -> dict[str, Any]:
     logger.info(f"Grimey (sim): {activity}")
 
     # Grimey is thorough — he takes his time
-    await asyncio.sleep(random.uniform(10.0, 20.0))
+    await asyncio.sleep(random.uniform(20.0, 40.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
 

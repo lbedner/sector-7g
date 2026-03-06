@@ -104,8 +104,6 @@ def list_available_tasks() -> list[str]:
 
 def get_queue_functions(queue_type: str) -> list[Callable[..., Any]]:
     """Get task functions specific to a queue type."""
-    from typing import cast
-
     queue_function_map: dict[str, list[Callable[..., Any]]] = {
         "homer": [
             eat_donut_task,
@@ -150,7 +148,7 @@ def get_queue_functions(queue_type: str) -> list[Callable[..., Any]]:
         ],
     }
 
-    return cast(list[Callable[..., Any]], queue_function_map.get(queue_type, []))
+    return queue_function_map.get(queue_type, [])
 
 
 def get_queue_for_task(task_name: str) -> str:

@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # Docs authentication (HTTP Basic Auth for /docs, /redoc, /openapi.json)
+    DOCS_AUTH_ENABLED: bool = False
+    DOCS_USERNAME: str = "admin"
+    DOCS_PASSWORD: str = "changeme"
+
     # Redis settings for arq background tasks
     REDIS_URL: str = "redis://redis:6379"  # Docker service name by default
     REDIS_URL_LOCAL: str | None = None  # Override for local CLI usage
@@ -141,6 +146,14 @@ class Settings(BaseSettings):
                 return urlunparse(parsed._replace(netloc=netloc))
 
         return self.DATABASE_URL
+
+
+
+
+
+
+
+
 
     # Scheduler settings
     SCHEDULER_FORCE_UPDATE: bool = False  # Force update jobs from code on restart

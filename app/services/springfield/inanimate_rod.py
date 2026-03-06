@@ -44,7 +44,7 @@ async def rod_simulation(activity: str) -> dict[str, Any]:
     start = datetime.now(UTC)
     logger.info(f"Rod (sim): {activity}")
 
-    await asyncio.sleep(random.uniform(0.5, 2.0))
+    await asyncio.sleep(random.uniform(1.0, 4.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
 

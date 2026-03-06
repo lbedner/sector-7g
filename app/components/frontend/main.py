@@ -2,10 +2,12 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
+import json
 from typing import Any
 
 import flet as ft
 from flet import PageDisconnectedException
+import httpx
 
 from app.core.log import logger
 from app.services.system.models import ComponentStatus, ComponentStatusType
@@ -35,6 +37,55 @@ SERVICE_PREFIX = "service_"
 # Use simple filenames - Flet should auto-resolve from assets_dir
 DEFAULT_LOGO_PATH = "aegis-manifesto.png"
 DEFAULT_DARK_LOGO_PATH = "aegis-manifesto-dark.png"
+
+
+def _convert_component(comp_data: dict[str, Any]) -> ComponentStatus:
+    """Recursively convert API component data to ComponentStatus."""
+    try:
+        sub_components = {}
+        if "sub_components" in comp_data:
+            for sub_name, sub_data in comp_data[
+                "sub_components"
+            ].items():
+                sub_components[sub_name] = _convert_component(sub_data)
+
+        # Parse status from API response
+        status_str = comp_data.get("status", "unhealthy")
+        try:
+            status = ComponentStatusType(status_str)
+        except ValueError:
+            logger.warning(
+                f"Unknown status: {status_str}, default UNHEALTHY"
+            )
+            status = ComponentStatusType.UNHEALTHY
+
+        return ComponentStatus(
+            name=comp_data.get("name", "Unknown"),
+            status=status,
+            message=comp_data.get("message", "No message"),
+            response_time_ms=comp_data.get("response_time_ms"),
+            metadata=comp_data.get("metadata", {}),
+            sub_components=sub_components,
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to convert component data: {e}",
+            exc_info=True,
+            extra={
+                "error_type": type(e).__name__,
+                "function": "_convert_component",
+                "comp_data": comp_data
+            }
+        )
+        # Return a fallback ComponentStatus
+        return ComponentStatus(
+            name=comp_data.get("name", "Unknown"),
+            status=ComponentStatusType.UNHEALTHY,
+            message=f"Error converting component: {e}",
+            response_time_ms=None,
+            metadata={},
+            sub_components={},
+        )
 
 
 class SystemDashboard:
@@ -109,7 +160,7 @@ class SystemDashboard:
 
             # Attempt to access Flet's private connection attribute
             # This may break with future Flet versions, but will fail safely
-            if not hasattr(self._page, "_Page__conn"):
+            if not hasattr(self._page, '_Page__conn'):
                 logger.debug(
                     "Flet page connection attribute not found - assuming disconnected"
                 )
@@ -157,7 +208,7 @@ class SystemDashboard:
                     "function": "update_health_status",
                     "healthy_count": healthy_count,
                     "total_count": total_count,
-                },
+                }
             )
 
     async def update_component_cards(
@@ -207,7 +258,7 @@ class SystemDashboard:
                     "error_type": type(e).__name__,
                     "function": "update_component_cards",
                     "component_count": len(components),
-                },
+                }
             )
 
     async def update_status_overview(
@@ -242,10 +293,12 @@ class SystemDashboard:
                     "error_type": type(e).__name__,
                     "function": "update_status_overview",
                     "component_count": len(components),
-                },
+                }
             )
 
-    async def update_diagram_view(self, components: dict[str, ComponentStatus]) -> None:
+    async def update_diagram_view(
+        self, components: dict[str, ComponentStatus]
+    ) -> None:
         """Safely update the diagram view."""
         if not self._is_page_connected():
             logger.debug("Page disconnected, skipping diagram view update")
@@ -270,7 +323,7 @@ class SystemDashboard:
                     "error_type": type(e).__name__,
                     "function": "update_diagram_view",
                     "component_count": len(components),
-                },
+                }
             )
 
     async def show_error_status(self) -> None:
@@ -301,7 +354,7 @@ class SystemDashboard:
                 extra={
                     "error_type": type(e).__name__,
                     "function": "show_error_status",
-                },
+                }
             )
 
 
@@ -386,9 +439,9 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                         "error_type": type(e).__name__,
                         "function": "update_logo",
                         "is_dark_mode": getattr(
-                            theme_manager, "is_dark_mode", "unknown"
-                        ),
-                    },
+                            theme_manager, 'is_dark_mode', 'unknown'
+                        )
+                    }
                 )
 
         async def toggle_theme(_: Any) -> None:
@@ -417,7 +470,10 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 logger.error(
                     f"Theme toggle failed: {e}",
                     exc_info=True,
-                    extra={"error_type": type(e).__name__, "function": "toggle_theme"},
+                    extra={
+                        "error_type": type(e).__name__,
+                        "function": "toggle_theme"
+                    }
                 )
 
         theme_button.on_click = toggle_theme
@@ -555,7 +611,10 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 logger.error(
                     f"View toggle failed: {e}",
                     exc_info=True,
-                    extra={"error_type": type(e).__name__, "function": "toggle_view"},
+                    extra={
+                        "error_type": type(e).__name__,
+                        "function": "toggle_view"
+                    }
                 )
 
         view_toggle_button.on_click = toggle_view
@@ -582,9 +641,9 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
             ft.Container(
                 content=ft.Column(
                     [
-                        stack_view_container,  # Stack + Activity view (default)
-                        cards_view_container,  # Cards view
-                        diagram_view_container,  # Diagram view
+                        stack_view_container,   # Stack + Activity view (default)
+                        cards_view_container,   # Cards view
+                        diagram_view_container, # Diagram view
                     ],
                     spacing=20,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -594,6 +653,9 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 expand=True,
             ),
         )
+
+        # Persistent HTTP client - reused across refresh cycles, closed on exit
+        http_client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
 
         def create_component_card(
             component_name: str, component_data: Any
@@ -614,25 +676,35 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 elif component_name == "worker":
                     return WorkerCard(component_data).build()
 
+
                 elif component_name == "cache":
                     return RedisCard(component_data).build()
+
 
                 elif component_name == "database":
                     return DatabaseCard(component_data).build()
 
+
                 elif component_name == "ingress":
                     return IngressCard(component_data).build()
 
+
+
+
                 elif component_name == "scheduler":
                     return SchedulerCard(component_data).build()
+
 
                 elif component_name == "services":
                     return ServicesCard(component_data).build()
 
                 # Service cards - specific checks BEFORE generic fallback
 
+
                 elif component_name == "service_auth":
                     return AuthCard(component_data).build()
+
+
 
                 elif component_name.startswith("service_"):
                     # For other services, use generic ServicesCard for now
@@ -658,8 +730,8 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                         "error_type": type(e).__name__,
                         "function": "create_component_card",
                         "component_name": component_name,
-                        "component_data": component_data,
-                    },
+                        "component_data": component_data
+                    }
                 )
                 # Return fallback card on error
                 return ft.Container(
@@ -676,11 +748,8 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
             """Refresh the stunning marketing-grade dashboard."""
             try:
                 # Use the single /health/ endpoint for all health data
-                import httpx
-
-                async with httpx.AsyncClient() as client:
-                    response = await client.get("http://localhost:8000/health/")
-                    data = response.json()
+                response = await http_client.get("http://localhost:8000/health/")
+                data = response.json()
 
                 # Extract components from health API response (navigate structure)
                 if "components" in data and "aegis" in data["components"]:
@@ -692,74 +761,25 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 else:
                     api_components = {}
 
-                # Convert API data back to ComponentStatus objects for the cards
-                def convert_component(comp_data: dict[str, Any]) -> ComponentStatus:
-                    """Recursively convert API component data to ComponentStatus."""
-                    try:
-                        sub_components = {}
-                        if "sub_components" in comp_data:
-                            for sub_name, sub_data in comp_data[
-                                "sub_components"
-                            ].items():
-                                sub_components[sub_name] = convert_component(sub_data)
-
-                        # Parse status from API response
-                        status_str = comp_data.get("status", "unhealthy")
-                        try:
-                            status = ComponentStatusType(status_str)
-                        except ValueError:
-                            logger.warning(
-                                f"Unknown status: {status_str}, default UNHEALTHY"
-                            )
-                            status = ComponentStatusType.UNHEALTHY
-
-                        return ComponentStatus(
-                            name=comp_data.get("name", "Unknown"),
-                            status=status,
-                            message=comp_data.get("message", "No message"),
-                            response_time_ms=comp_data.get("response_time_ms"),
-                            metadata=comp_data.get("metadata", {}),
-                            sub_components=sub_components,
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to convert component data: {e}",
-                            exc_info=True,
-                            extra={
-                                "error_type": type(e).__name__,
-                                "function": "convert_component",
-                                "comp_data": comp_data,
-                            },
-                        )
-                        # Return a fallback ComponentStatus
-                        return ComponentStatus(
-                            name=comp_data.get("name", "Unknown"),
-                            status=ComponentStatusType.UNHEALTHY,
-                            message=f"Error converting component: {e}",
-                            response_time_ms=None,
-                            metadata={},
-                            sub_components={},
-                        )
-
                 components = {}
                 for name, comp_data in api_components.items():
                     # Special handling for "components" grouping - expand it
                     if name == COMPONENTS_GROUP_KEY and "sub_components" in comp_data:
                         # Add all individual components from the grouping
                         for sub_name, sub_data in comp_data["sub_components"].items():
-                            components[sub_name] = convert_component(sub_data)
+                            components[sub_name] = _convert_component(sub_data)
                     # Special handling for "services" grouping - expand services
                     elif name == SERVICES_GROUP_KEY and "sub_components" in comp_data:
                         # Add all individual services from the grouping
                         for service_name, service_data in comp_data[
                             "sub_components"
                         ].items():
-                            components[f"{SERVICE_PREFIX}{service_name}"] = (
-                                convert_component(service_data)
-                            )
+                            components[
+                                f"{SERVICE_PREFIX}{service_name}"
+                            ] = _convert_component(service_data)
                     else:
                         # For other groupings, add as-is
-                        components[name] = convert_component(comp_data)
+                        components[name] = _convert_component(comp_data)
 
                 total_components = len(components)
                 healthy_components = len([c for c in components.values() if c.healthy])
@@ -789,6 +809,10 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                     components, create_component_card
                 )
 
+                # Keep worker modal cached permanently so SSE counters
+                # survive close/reopen cycles without resetting.
+                # Other modals can be pruned when closed.
+
                 # Safe page update - check connection first
                 if dashboard._is_page_connected():
                     try:
@@ -804,14 +828,17 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 # Instead, propagate this exception so the auto_refresh loop can handle
                 # the disconnection gracefully and stop further updates.
                 raise
+            except httpx.TimeoutException:
+                # Health endpoint slow (e.g. during load tests) — skip this cycle
+                logger.warning("Dashboard refresh skipped: health endpoint timed out")
             except Exception as e:
                 logger.error(
                     f"Dashboard refresh failed: {e}",
                     exc_info=True,
                     extra={
                         "error_type": type(e).__name__,
-                        "function": "refresh_dashboard",
-                    },
+                        "function": "refresh_dashboard"
+                    }
                 )
                 # Show error indicator using safe dashboard method
                 await dashboard.show_error_status()
@@ -819,24 +846,163 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
         # Register refresh function on page.data for access by any component
         if page.data is None:
             page.data = {}
-        page.data["refresh_dashboard"] = refresh_dashboard
+        data: dict = page.data
+        data["refresh_dashboard"] = refresh_dashboard
+
+        # Consecutive disconnect checks before declaring page truly dead.
+        # Flet sessions reconnect within a few seconds — this grace period
+        # prevents background tasks from exiting during transient blips.
+        disconnect_grace_checks = 30  # ~30s at 1s per check
+        _consecutive_disconnects = 0
+
+        def _is_alive() -> bool:
+            """Check if the page is still alive.
+
+            Tolerates transient WebSocket disconnects (Flet session reconnects)
+            by requiring multiple consecutive failures before returning False.
+            """
+            nonlocal _consecutive_disconnects
+            if dashboard._is_page_connected():
+                _consecutive_disconnects = 0
+                return True
+            _consecutive_disconnects += 1
+            if _consecutive_disconnects >= disconnect_grace_checks:
+                logger.debug("Page permanently disconnected after grace period")
+                return False
+            return True  # Still within grace period
 
         async def auto_refresh() -> None:
-            """Simple auto-refresh loop that stops when page disconnects."""
-            while dashboard._is_page_connected():
+            """Auto-refresh loop. Exits on page disconnect to allow clean shutdown.
+
+            On hot-reload, uvicorn kills the process and starts fresh —
+            flet_main runs again with a new http_client and new tasks.
+            """
+            while _is_alive():
                 try:
                     await refresh_dashboard()
                     await asyncio.sleep(30)
                 except PageDisconnectedException:
-                    logger.debug("Page disconnected, stopping auto-refresh loop")
-                    break
+                    # Transient disconnect — skip this cycle, loop will retry
+                    logger.debug("Page disconnected during refresh, retrying")
+                    await asyncio.sleep(5)
                 except Exception as e:
                     logger.error(f"Error in auto-refresh loop: {e}", exc_info=True)
-                    # Continue the loop even if refresh fails
                     await asyncio.sleep(30)
+
+
+        # How often the frontend pushes UI updates to the browser (seconds).
+        # Events are received and counted immediately; only rendering is throttled.
+        ui_flush_interval = 0.1
+
+        async def flush_worker_modal() -> None:
+            """Periodically flush dirty worker modal UI updates.
+
+            Runs independently of the SSE listener so that the final batch
+            of events is always rendered — even when the stream goes quiet
+            and aiter_lines() blocks waiting for the next event.
+            """
+            while _is_alive():
+                await asyncio.sleep(ui_flush_interval)
+                worker_popup = page.data.get(
+                    "_modal_cache", {}
+                ).get("worker")
+                if worker_popup and worker_popup.visible:
+                    try:
+                        worker_popup.flush()
+                    except PageDisconnectedException:
+                        # Transient disconnect — skip this flush, loop will retry
+                        pass
+                    except Exception as e:
+                        logger.debug(f"Worker modal flush failed: {e}")
+
+        async def listen_for_worker_events() -> None:
+            """
+            Listen to SSE worker events and update the worker modal directly.
+
+            On connect, receives a "totals" event with absolute counters
+            (baseline). Then receives individual job events as deltas.
+            On reconnect, a new baseline is sent automatically.
+
+            UI updates are flushed by a separate periodic task, not inline,
+            so the last batch always renders even when the stream goes quiet.
+
+            Survives transient page disconnects (Flet session reconnects).
+            Only exits when _is_alive() returns False after the grace period.
+            """
+            logger.info("SSE: starting worker event listener")
+            while _is_alive():
+                try:
+                    logger.info("SSE: connecting to /events/worker/stream")
+                    async with http_client.stream(
+                        "GET", "http://localhost:8000/events/worker/stream",
+                        timeout=httpx.Timeout(
+                            connect=5.0, read=15.0, write=5.0, pool=5.0,
+                        ),
+                    ) as response:
+                        logger.info(
+                            f"SSE: connected, status={response.status_code}"
+                        )
+                        async for line in response.aiter_lines():
+                            if not _is_alive():
+                                return
+                            if not line.startswith("data: "):
+                                continue
+
+                            try:
+                                event = json.loads(line[6:])
+                            except (json.JSONDecodeError, ValueError):
+                                continue
+
+                            event_type = event.get("type", "")
+                            queue = event.get("queue", "")
+
+                            worker_popup = page.data.get(
+                                "_modal_cache", {}
+                            ).get("worker")
+                            if not worker_popup:
+                                continue
+
+                            try:
+                                # Absolute baseline (sent once on connect)
+                                if event_type == "totals":
+                                    worker_popup.set_totals(
+                                        event.get("queues", {})
+                                    )
+                                # Individual deltas
+                                elif event_type == "job.enqueued" and queue:
+                                    worker_popup.increment_queued(queue)
+                                elif event_type == "job.started" and queue:
+                                    worker_popup.increment_ongoing(queue)
+                                    worker_popup.decrement_queued(queue)
+                                elif event_type == "job.completed" and queue:
+                                    worker_popup.increment_completed(queue)
+                                elif event_type == "job.failed" and queue:
+                                    worker_popup.increment_failed(queue)
+                            except PageDisconnectedException:
+                                # Transient disconnect — break inner loop,
+                                # outer loop will reconnect after sleep
+                                break
+                            except Exception as e:
+                                logger.debug(
+                                    f"SSE modal update failed: {e}"
+                                )
+
+                except PageDisconnectedException:
+                    # Transient disconnect — sleep and retry
+                    logger.debug("SSE: page disconnected, retrying in 5s")
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    logger.info(f"SSE: connection error: {e}, reconnecting in 5s")
+                    await asyncio.sleep(5)
+            logger.info("SSE: listener exiting (page permanently disconnected)")
+
 
         # Initial load and start refresh
         await refresh_dashboard()
+
+        asyncio.create_task(listen_for_worker_events())
+        asyncio.create_task(flush_worker_modal())
+
         asyncio.create_task(auto_refresh())
 
     return flet_main

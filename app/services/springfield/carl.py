@@ -19,14 +19,14 @@ async def handle_inspector() -> dict[str, Any]:
 
     # Prepare documentation
     async def prep_document(doc: str) -> dict[str, str]:
-        await asyncio.sleep(random.uniform(0.05, 0.15))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         return {"document": doc, "status": "prepared"}
 
     docs = ["safety_logs", "maintenance_records", "training_certs", "incident_reports"]
     prepared = await asyncio.gather(*[prep_document(d) for d in docs])
 
     # Distract from Sector 7G
-    await asyncio.sleep(random.uniform(0.1, 0.2))
+    await asyncio.sleep(random.uniform(0.5, 1.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     return {
@@ -48,7 +48,7 @@ async def file_afternoon_reports() -> dict[str, Any]:
 
     reports = []
     for report in ["operations_summary", "safety_metrics", "personnel_log"]:
-        await asyncio.sleep(random.uniform(0.05, 0.1))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         reports.append({"report": report, "filed": True})
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
@@ -77,7 +77,7 @@ async def shift_handoff() -> dict[str, Any]:
     ]
     completed = []
     for item in checklist:
-        await asyncio.sleep(random.uniform(0.03, 0.08))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
         completed.append({"item": item, "checked": True})
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
@@ -128,9 +128,9 @@ async def carl_simulation(activity: str) -> dict[str, Any]:
 
     # Sequential brief I/O — Carl is methodical
     for _ in range(2):
-        await asyncio.sleep(random.uniform(0.1, 0.3))
+        await asyncio.sleep(random.uniform(0.5, 1.0))
 
-    await asyncio.sleep(random.uniform(0.3, 1.0))
+    await asyncio.sleep(random.uniform(0.6, 2.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
 

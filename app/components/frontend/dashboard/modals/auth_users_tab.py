@@ -61,8 +61,8 @@ class UsersTableSection(ft.Container):
     def __init__(
         self,
         users: list[dict[str, Any]],
-        on_toggle: Any,
-        on_delete: Any,
+        _on_toggle: Any,
+        _on_delete: Any,
     ) -> None:
         super().__init__()
 
@@ -88,16 +88,22 @@ class UsersTableSection(ft.Container):
                     ft.IconButton(
                         icon=ft.Icons.BLOCK if is_active else ft.Icons.CHECK_CIRCLE,
                         icon_size=18,
-                        icon_color=ft.Colors.ON_SURFACE_VARIANT,
-                        tooltip="Disable" if is_active else "Enable",
-                        on_click=lambda e, u=user: on_toggle(u),
+                        icon_color=ft.Colors.with_opacity(
+                            0.3, ft.Colors.ON_SURFACE_VARIANT
+                        ),
+                        tooltip="Toggle disabled (read-only mode)",
+                        on_click=None,
+                        disabled=True,
                     ),
                     ft.IconButton(
                         icon=ft.Icons.DELETE_OUTLINE,
                         icon_size=18,
-                        icon_color=ft.Colors.ON_SURFACE_VARIANT,
-                        tooltip="Delete",
-                        on_click=lambda e, u=user: on_delete(u),
+                        icon_color=ft.Colors.with_opacity(
+                            0.3, ft.Colors.ON_SURFACE_VARIANT
+                        ),
+                        tooltip="Delete disabled (read-only mode)",
+                        on_click=None,
+                        disabled=True,
                     ),
                 ],
                 spacing=0,
@@ -117,6 +123,7 @@ class UsersTableSection(ft.Container):
             columns=columns,
             rows=rows,
             empty_message="No users found",
+            scroll_height=400,
         )
 
         self.content = table
@@ -204,8 +211,8 @@ class AuthUsersTab(ft.Container):
             refresh_row,
             UsersTableSection(
                 users,
-                on_toggle=self._on_toggle_user,
-                on_delete=self._on_delete_user,
+                _on_toggle=self._on_toggle_user,
+                _on_delete=self._on_delete_user,
             ),
         ]
         self._content_column.scroll = ft.ScrollMode.AUTO

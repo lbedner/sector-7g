@@ -73,8 +73,13 @@ class FastAPIMiddlewareInspector:
             middleware_type = middleware_cls.__name__
             middleware_module = middleware_cls.__module__
 
-            # Use kwargs as configuration
-            config = dict(middleware_kwargs)
+            # Use kwargs as configuration, filtering non-serializable values
+            config = {
+                k: v
+                if isinstance(v, str | int | float | bool | list | dict | None)
+                else f"<{type(v).__name__}>"
+                for k, v in middleware_kwargs.items()
+            }
 
             # Determine if this is security-related middleware
             is_security = self._is_security_middleware(
