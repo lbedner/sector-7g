@@ -100,11 +100,14 @@ known-first-party = ["app"]
 unresolved-import = "ignore"              # Missing third-party type stubs (unavoidable)
 unresolved-attribute = "ignore"           # Some dynamic attribute access in Flet is unavoidable
 invalid-argument-type = "ignore"          # Flet dynamic attributes and colors
-non-subscriptable = "ignore"             # Flet page.controls access patterns
+not-subscriptable = "ignore"             # Flet page.controls access patterns
 unsupported-operator = "ignore"          # Flet value comparisons with None
 possibly-missing-attribute = "ignore"    # Flet dynamic component properties
 call-non-callable = "ignore"             # Dynamic middleware registration patterns
 invalid-return-type = "ignore"           # Flet component return type flexibility
+invalid-type-form = "ignore"            # Mock patch type annotations in tests
+deprecated = "ignore"                    # SQLModel flags session.execute(text()) but exec() doesn't support raw SQL
+invalid-assignment = "ignore"           # Flet uses custom __set__ descriptors ty can't resolve
 
 
 [tool.pytest.ini_options]

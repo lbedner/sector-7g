@@ -20,7 +20,7 @@ async def monitor_gauges() -> dict[str, Any]:
 
     gauges = []
     for gauge in ["pressure", "temperature", "flow_rate", "coolant_level"]:
-        await asyncio.sleep(random.uniform(0.05, 0.15))
+        await asyncio.sleep(random.uniform(0.7, 1.5))
         gauges.append(
             {
                 "gauge": gauge,
@@ -48,7 +48,7 @@ async def restock_break_room() -> dict[str, Any]:
     items = ["coffee", "donuts", "paper towels", "creamer", "sugar"]
     restocked = []
     for item in items:
-        await asyncio.sleep(random.uniform(0.05, 0.1))
+        await asyncio.sleep(random.uniform(0.7, 1.5))
         restocked.append(item)
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
@@ -68,7 +68,7 @@ async def log_shift_notes() -> dict[str, Any]:
     start = datetime.now(UTC)
     logger.info("Charlie: Writing up shift notes...")
 
-    await asyncio.sleep(random.uniform(0.1, 0.3))
+    await asyncio.sleep(random.uniform(0.7, 1.5))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     return {
@@ -89,7 +89,7 @@ async def check_emergency_exits() -> dict[str, Any]:
 
     exits = []
     for exit_id in range(1, 7):
-        await asyncio.sleep(random.uniform(0.03, 0.08))
+        await asyncio.sleep(random.uniform(0.7, 1.5))
         blocked = exit_id == 3 and random.random() < 0.3
         exits.append(
             {
@@ -150,7 +150,7 @@ async def charlie_simulation(activity: str) -> dict[str, Any]:
     logger.info(f"Charlie (sim): {activity}")
 
     # Charlie works at a steady, reliable pace
-    await asyncio.sleep(random.uniform(0.5, 2.0))
+    await asyncio.sleep(random.uniform(1.0, 3.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
 

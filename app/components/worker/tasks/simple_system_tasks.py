@@ -24,7 +24,7 @@ async def cleanup_temp_files(ctx: dict[str, Any]) -> dict[str, str]:
     logger.info("Running temp file cleanup task")
 
     # Placeholder for actual cleanup logic
-    await asyncio.sleep(0.1)  # Simulate some work
+    await asyncio.sleep(0.2)  # Simulate some work
 
     return {
         "status": "completed",

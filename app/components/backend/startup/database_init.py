@@ -96,7 +96,9 @@ def _check_and_fix_stale_revision() -> None:
         # Check current database revision
         with db_session(autocommit=False) as session:
             try:
-                result = session.exec(text("SELECT version_num FROM alembic_version"))
+                result = session.execute(
+                    text("SELECT version_num FROM alembic_version")
+                )
                 db_revisions = [row[0] for row in result.fetchall()]
             except Exception:
                 # Table doesn't exist or other error - let migrations handle it
@@ -112,7 +114,7 @@ def _check_and_fix_stale_revision() -> None:
             )
             # Clear alembic_version and stamp to head
             with db_session(autocommit=True) as session:
-                session.exec(text("DELETE FROM alembic_version"))
+                session.execute(text("DELETE FROM alembic_version"))
 
             # Stamp to head (marks DB as up-to-date without running migrations)
             command.stamp(alembic_cfg, "head")
@@ -149,22 +151,28 @@ def _run_migrations() -> bool:
         return False
 
 
+
 async def startup_database_init() -> None:
     """
     Initialize database and run migrations.
 
     This hook runs when the backend starts to:
     1. Verify database connectivity
+
     2. Run Alembic migrations (idempotent - safe to run multiple times)
     3. Verify database schema is ready
     """
     try:
+
+
+
         # Run Alembic migrations (idempotent)
         migrations_ok = _run_migrations()
 
         if not migrations_ok:
             logger.warning("Migrations failed - database may not be fully initialized")
             # Continue anyway to allow debugging
+
 
         # Verify database connectivity
         try:
@@ -175,16 +183,18 @@ async def startup_database_init() -> None:
 
             with db_session(autocommit=False) as session:
                 # Basic connectivity check
-                session.exec(text("SELECT 1"))
+                session.execute(text("SELECT 1"))
 
-                # Verify alembic_version table exists
                 inspector = inspect(session.connection())
                 table_names = inspector.get_table_names()
 
+
+                # Verify alembic_version table exists
                 if "alembic_version" in table_names:
                     logger.info(f"Database ready with {len(table_names)} tables")
                 else:
                     logger.warning("alembic_version table missing after migrations")
+
 
         except Exception as e:
             logger.warning(f"Database verification failed: {e}")
@@ -197,3 +207,4 @@ async def startup_database_init() -> None:
 
 # Export the startup hook function
 startup_hook = startup_database_init
+

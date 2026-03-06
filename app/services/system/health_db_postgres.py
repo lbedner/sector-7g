@@ -16,8 +16,10 @@ from app.core.log import logger
 from app.services.system.health import format_bytes
 from app.services.system.models import ComponentStatus, ComponentStatusType
 
-# Cache parsed migration files (they don't change at runtime)
+# Cache static data that doesn't change at runtime
 _migration_cache: list[dict[str, Any]] | None = None
+_pg_settings_cache: dict[str, Any] | None = None
+_schema_cache: dict[str, Any] | None = None
 
 
 async def check_database_health() -> ComponentStatus:
@@ -27,10 +29,12 @@ async def check_database_health() -> ComponentStatus:
     Returns:
         ComponentStatus indicating database health
     """
+    global _migration_cache, _pg_settings_cache, _schema_cache
+
     try:
         from sqlalchemy import text
 
-        from app.core.db import db_session
+        from app.core.db import get_async_session
 
         # Use effective URL which handles Docker vs local hostname translation
         db_url = settings.database_url_effective
@@ -44,13 +48,13 @@ async def check_database_health() -> ComponentStatus:
         }
 
         # Test database connection and collect PostgreSQL-specific info
-        with db_session(autocommit=False) as session:
+        async with get_async_session() as session:
             # Execute a simple query to test connectivity
-            session.execute(text("SELECT 1"))
+            await session.execute(text("SELECT 1"))
 
             # Get PostgreSQL version
             try:
-                result = session.execute(text("SELECT version()")).fetchone()
+                result = (await session.execute(text("SELECT version()"))).fetchone()
                 if result:
                     enhanced_metadata["version"] = result[0]
                     # Extract just the version number for display
@@ -62,9 +66,9 @@ async def check_database_health() -> ComponentStatus:
 
             # Get database size
             try:
-                result = session.execute(
+                result = (await session.execute(
                     text("SELECT pg_database_size(current_database())")
-                ).fetchone()
+                )).fetchone()
                 if result:
                     db_size = result[0]
                     enhanced_metadata["database_size_bytes"] = db_size
@@ -74,12 +78,12 @@ async def check_database_health() -> ComponentStatus:
 
             # Get active connection count
             try:
-                result = session.execute(
+                result = (await session.execute(
                     text(
                         "SELECT count(*) FROM pg_stat_activity "
                         "WHERE datname = current_database()"
                     )
-                ).fetchone()
+                )).fetchone()
                 if result:
                     enhanced_metadata["active_connections"] = result[0]
             except Exception:
@@ -87,36 +91,40 @@ async def check_database_health() -> ComponentStatus:
 
             # Get connection pool information
             try:
-                from app.core.db import engine
-
-                if hasattr(engine.pool, "size"):
-                    enhanced_metadata["connection_pool_size"] = engine.pool.size()
-                if hasattr(engine.pool, "checkedin"):
-                    enhanced_metadata["pool_checked_in"] = engine.pool.checkedin()
-                if hasattr(engine.pool, "checkedout"):
-                    enhanced_metadata["pool_checked_out"] = engine.pool.checkedout()
+                from app.core.db import async_engine
+                pool = async_engine.pool
+                if hasattr(pool, 'size'):
+                    enhanced_metadata["connection_pool_size"] = pool.size()
+                if hasattr(pool, 'checkedin'):
+                    enhanced_metadata["pool_checked_in"] = pool.checkedin()
+                if hasattr(pool, 'checkedout'):
+                    enhanced_metadata["pool_checked_out"] = pool.checkedout()
             except Exception:
                 logger.debug("Failed to get pool information", exc_info=True)
 
-            # Get PostgreSQL settings (single query instead of 6 SHOW queries)
-            try:
-                pg_settings: dict[str, Any] = {}
+            # Cached: PostgreSQL settings (don't change at runtime)
+            if _pg_settings_cache is not None:
+                enhanced_metadata["pg_settings"] = _pg_settings_cache
+            else:
+                try:
+                    pg_settings: dict[str, Any] = {}
 
-                rows = session.execute(
-                    text(
+                    rows = (await session.execute(text(
                         "SELECT name, setting FROM pg_settings "
                         "WHERE name IN ("
                         "'max_connections','shared_buffers','work_mem',"
                         "'effective_cache_size','maintenance_work_mem','wal_level')"
+                    ))).fetchall()
+                    for row in rows:
+                        pg_settings[row[0]] = row[1]
+
+                    _pg_settings_cache = pg_settings
+                    enhanced_metadata["pg_settings"] = pg_settings
+
+                except Exception:
+                    logger.debug(
+                        "Failed to collect PostgreSQL settings", exc_info=True
                     )
-                ).fetchall()
-                for row in rows:
-                    pg_settings[row[0]] = row[1]
-
-                enhanced_metadata["pg_settings"] = pg_settings
-
-            except Exception:
-                logger.debug("Failed to collect PostgreSQL settings", exc_info=True)
 
             # Collect table row counts using pg_stat_user_tables
             # (single query instead of N individual COUNT(*) queries)
@@ -124,15 +132,16 @@ async def check_database_health() -> ComponentStatus:
             # perfect for monitoring
             table_info: list[dict[str, Any]] = []
             try:
-                rows = session.execute(
-                    text(
-                        "SELECT relname, n_live_tup FROM pg_stat_user_tables "
-                        "ORDER BY relname"
-                    )
-                ).fetchall()
+                rows = (await session.execute(text(
+                    "SELECT relname, n_live_tup FROM pg_stat_user_tables "
+                    "ORDER BY relname"
+                ))).fetchall()
 
                 for row in rows:
-                    table_info.append({"name": row[0], "rows": row[1]})
+                    table_info.append({
+                        "name": row[0],
+                        "rows": row[1]
+                    })
 
                 enhanced_metadata["tables"] = table_info
                 enhanced_metadata["table_count"] = len(table_info)
@@ -142,31 +151,52 @@ async def check_database_health() -> ComponentStatus:
                 enhanced_metadata["tables"] = []
                 enhanced_metadata["table_count"] = 0
 
-            # Collect table schema details using batch information_schema
-            # queries (4 queries instead of N*4 inspector calls)
+            # Cached: table schema details (columns, indexes, foreign keys)
             if table_info:
-                try:
-                    table_schemas: list[dict[str, Any]] = []
-                    total_indexes = 0
-                    total_foreign_keys = 0
+                # Invalidate schema cache if table list changed
+                cached_tables = (
+                    {s["name"] for s in _schema_cache["table_schemas"]}
+                    if _schema_cache is not None
+                    else set()
+                )
+                current_tables = {t["name"] for t in table_info}
 
-                    # Build per-table lookup from row counts
-                    row_count_map = {t["name"]: t["rows"] for t in table_info}
+                if _schema_cache is not None and cached_tables == current_tables:
+                    # Update row counts in cached schemas (rows are live)
+                    row_map = {t["name"]: t["rows"] for t in table_info}
+                    table_schemas = []
+                    for schema in _schema_cache["table_schemas"]:
+                        table_schemas.append({
+                            **schema,
+                            "rows": row_map.get(schema["name"], 0),
+                        })
+                    enhanced_metadata["table_schemas"] = table_schemas
+                    enhanced_metadata["total_indexes"] = _schema_cache[
+                        "total_indexes"
+                    ]
+                    enhanced_metadata["total_foreign_keys"] = _schema_cache[
+                        "total_foreign_keys"
+                    ]
+                else:
+                    try:
+                        table_schemas_list: list[dict[str, Any]] = []
+                        total_indexes = 0
+                        total_foreign_keys = 0
 
-                    # Batch query 1: All columns with types
-                    columns_rows = session.execute(
-                        text(
+                        # Build per-table lookup from row counts
+                        row_count_map = {t["name"]: t["rows"] for t in table_info}
+
+                        # Batch query 1: All columns with types
+                        columns_rows = (await session.execute(text(
                             "SELECT table_name, column_name, data_type, "
                             "is_nullable, column_default "
                             "FROM information_schema.columns "
                             "WHERE table_schema = 'public' "
                             "ORDER BY table_name, ordinal_position"
-                        )
-                    ).fetchall()
+                        ))).fetchall()
 
-                    # Batch query 2: Primary key columns
-                    pk_rows = session.execute(
-                        text(
+                        # Batch query 2: Primary key columns
+                        pk_rows = (await session.execute(text(
                             "SELECT tc.table_name, kcu.column_name "
                             "FROM information_schema.table_constraints tc "
                             "JOIN information_schema.key_column_usage kcu "
@@ -174,22 +204,18 @@ async def check_database_health() -> ComponentStatus:
                             "AND tc.table_schema = kcu.table_schema "
                             "WHERE tc.constraint_type = 'PRIMARY KEY' "
                             "AND tc.table_schema = 'public'"
-                        )
-                    ).fetchall()
+                        ))).fetchall()
 
-                    # Batch query 3: Indexes
-                    idx_rows = session.execute(
-                        text(
+                        # Batch query 3: Indexes
+                        idx_rows = (await session.execute(text(
                             "SELECT tablename, indexname, "
                             "indexdef LIKE '%UNIQUE%' AS is_unique "
                             "FROM pg_indexes "
                             "WHERE schemaname = 'public'"
-                        )
-                    ).fetchall()
+                        ))).fetchall()
 
-                    # Batch query 4: Foreign keys
-                    fk_rows = session.execute(
-                        text(
+                        # Batch query 4: Foreign keys
+                        fk_rows = (await session.execute(text(
                             "SELECT tc.table_name, tc.constraint_name, "
                             "kcu.column_name, ccu.table_name AS referred_table, "
                             "ccu.column_name AS referred_column "
@@ -202,116 +228,116 @@ async def check_database_health() -> ComponentStatus:
                             "AND tc.table_schema = ccu.table_schema "
                             "WHERE tc.constraint_type = 'FOREIGN KEY' "
                             "AND tc.table_schema = 'public'"
-                        )
-                    ).fetchall()
+                        ))).fetchall()
 
-                    # Group columns by table
-                    columns_by_table: dict[str, list[dict[str, Any]]] = {}
-                    for row in columns_rows:
-                        columns_by_table.setdefault(row[0], []).append(
-                            {
+                        # Group columns by table
+                        columns_by_table: dict[str, list[dict[str, Any]]] = {}
+                        for row in columns_rows:
+                            columns_by_table.setdefault(row[0], []).append({
                                 "name": row[1],
                                 "type": row[2],
                                 "nullable": row[3] == "YES",
                                 "default": str(row[4] or ""),
-                            }
-                        )
+                            })
 
-                    # Group primary keys by table
-                    pk_by_table: dict[str, set[str]] = {}
-                    for row in pk_rows:
-                        pk_by_table.setdefault(row[0], set()).add(row[1])
+                        # Group primary keys by table
+                        pk_by_table: dict[str, set[str]] = {}
+                        for row in pk_rows:
+                            pk_by_table.setdefault(row[0], set()).add(row[1])
 
-                    # Group indexes by table
-                    idx_by_table: dict[str, list[dict[str, Any]]] = {}
-                    for row in idx_rows:
-                        idx_by_table.setdefault(row[0], []).append(
-                            {
+                        # Group indexes by table
+                        idx_by_table: dict[str, list[dict[str, Any]]] = {}
+                        for row in idx_rows:
+                            idx_by_table.setdefault(row[0], []).append({
                                 "name": row[1],
                                 "unique": bool(row[2]),
-                                "columns": [],  # pg_indexes doesn't split columns easily
-                            }
-                        )
+                                "columns": [],
+                            })
 
-                    # Group foreign keys by table
-                    fk_by_table: dict[str, dict[str, dict[str, Any]]] = {}
-                    for row in fk_rows:
-                        table_name = row[0]
-                        constraint_name = row[1]
-                        fk_by_table.setdefault(table_name, {})
-                        if constraint_name not in fk_by_table[table_name]:
-                            fk_by_table[table_name][constraint_name] = {
-                                "name": constraint_name,
-                                "referred_table": row[3],
-                                "constrained_columns": [],
-                                "referred_columns": [],
-                            }
-                        fk_by_table[table_name][constraint_name][
-                            "constrained_columns"
-                        ].append(row[2])
-                        fk_by_table[table_name][constraint_name][
-                            "referred_columns"
-                        ].append(row[4])
+                        # Group foreign keys by table
+                        fk_by_table: dict[str, dict[str, dict[str, Any]]] = {}
+                        for row in fk_rows:
+                            table_name = row[0]
+                            constraint_name = row[1]
+                            fk_by_table.setdefault(table_name, {})
+                            if constraint_name not in fk_by_table[table_name]:
+                                fk_by_table[table_name][constraint_name] = {
+                                    "name": constraint_name,
+                                    "referred_table": row[3],
+                                    "constrained_columns": [],
+                                    "referred_columns": [],
+                                }
+                            fk_by_table[table_name][constraint_name][
+                                "constrained_columns"
+                            ].append(row[2])
+                            fk_by_table[table_name][constraint_name][
+                                "referred_columns"
+                            ].append(row[4])
 
-                    # Assemble per-table schema info
-                    for table in table_info:
-                        tname = table["name"]
-                        pk_cols = pk_by_table.get(tname, set())
+                        # Assemble per-table schema info
+                        for table in table_info:
+                            tname = table["name"]
+                            pk_cols = pk_by_table.get(tname, set())
 
-                        cols = columns_by_table.get(tname, [])
-                        for col in cols:
-                            col["primary_key"] = col["name"] in pk_cols
+                            cols = columns_by_table.get(tname, [])
+                            for col in cols:
+                                col["primary_key"] = col["name"] in pk_cols
 
-                        indexes = idx_by_table.get(tname, [])
-                        total_indexes += len(indexes)
+                            indexes = idx_by_table.get(tname, [])
+                            total_indexes += len(indexes)
 
-                        fks = list(fk_by_table.get(tname, {}).values())
-                        total_foreign_keys += len(fks)
+                            fks = list(fk_by_table.get(tname, {}).values())
+                            total_foreign_keys += len(fks)
 
-                        table_schemas.append(
-                            {
+                            table_schemas_list.append({
                                 "name": tname,
                                 "rows": row_count_map.get(tname, 0),
                                 "columns": cols,
                                 "indexes": indexes,
                                 "foreign_keys": fks,
-                            }
+                            })
+
+                        _schema_cache = {
+                            "table_schemas": table_schemas_list,
+                            "total_indexes": total_indexes,
+                            "total_foreign_keys": total_foreign_keys,
+                        }
+
+                        enhanced_metadata["table_schemas"] = table_schemas_list
+                        enhanced_metadata["total_indexes"] = total_indexes
+                        enhanced_metadata["total_foreign_keys"] = (
+                            total_foreign_keys
                         )
 
-                    enhanced_metadata["table_schemas"] = table_schemas
-                    enhanced_metadata["total_indexes"] = total_indexes
-                    enhanced_metadata["total_foreign_keys"] = total_foreign_keys
+                    except Exception:
+                        logger.debug(
+                            "Failed to collect table schema details",
+                            exc_info=True,
+                        )
 
-                    if table_info:
-                        total_rows = sum(t["rows"] for t in table_info)
-                        largest_table = max(table_info, key=lambda t: t["rows"])
-                        enhanced_metadata["total_rows"] = total_rows
-                        enhanced_metadata["largest_table"] = largest_table
-
-                except Exception:
-                    logger.debug(
-                        "Failed to collect table schema details", exc_info=True
-                    )
+                if table_info:
+                    total_rows = sum(t["rows"] for t in table_info)
+                    largest_table = max(table_info, key=lambda t: t["rows"])
+                    enhanced_metadata["total_rows"] = total_rows
+                    enhanced_metadata["largest_table"] = largest_table
 
             # Collect migration history from Alembic
             # Migration files are cached since they don't change at runtime
             try:
-                global _migration_cache
-
-                result = session.execute(
+                result = (await session.execute(
                     text(
                         "SELECT EXISTS ("
                         "SELECT FROM information_schema.tables "
                         "WHERE table_name = 'alembic_version'"
                         ")"
                     )
-                ).fetchone()
+                )).fetchone()
 
                 if result and result[0]:
                     # Always query current HEAD live
-                    version_result = session.execute(
+                    version_result = (await session.execute(
                         text("SELECT version_num FROM alembic_version")
-                    ).fetchone()
+                    )).fetchone()
                     current_version = version_result[0] if version_result else None
                     enhanced_metadata["current_migration"] = current_version
 
@@ -335,7 +361,9 @@ async def check_database_health() -> ComponentStatus:
                                     create_date = None
 
                                     doc_pat = r'"""(.+?)"""'
-                                    doc_match = re.search(doc_pat, content, re.DOTALL)
+                                    doc_match = re.search(
+                                        doc_pat, content, re.DOTALL
+                                    )
                                     if doc_match:
                                         description = doc_match.group(1).strip()
 
@@ -344,29 +372,30 @@ async def check_database_health() -> ComponentStatus:
                                     if revision_match:
                                         revision_id = revision_match.group(1)
 
-                                    down_pat = r'down_revision\s*=\s*[\'"](.+?)[\'"]'
+                                    down_pat = (
+                                        r'down_revision\s*=\s*[\'"](.+?)[\'"]'
+                                    )
                                     down_match = re.search(down_pat, content)
                                     if down_match:
                                         down_revision = down_match.group(1)
 
-                                    date_pat = r"create_date\s*=\s*.+?datetime\((.+?)\)"
+                                    date_pat = (
+                                        r'create_date\s*=\s*.+?datetime\((.+?)\)'
+                                    )
                                     date_match = re.search(date_pat, content)
                                     if date_match:
                                         create_date = date_match.group(0)
 
                                     file_mtime = os.path.getmtime(migration_file)
 
-                                    _migration_cache.append(
-                                        {
-                                            "revision": revision_id,
-                                            "down_revision": down_revision,
-                                            "description": description,
-                                            "file_mtime": file_mtime,
-                                            "create_date": create_date,
-                                            "file_path": str(migration_file),
-                                            "content": content,
-                                        }
-                                    )
+                                    _migration_cache.append({
+                                        "revision": revision_id,
+                                        "down_revision": down_revision,
+                                        "description": description,
+                                        "file_mtime": file_mtime,
+                                        "create_date": create_date,
+                                        "file_path": str(migration_file),
+                                    })
 
                                 except Exception as e:
                                     logger.debug(
@@ -464,3 +493,4 @@ async def check_database_health() -> ComponentStatus:
                 "error": str(e),
             },
         )
+

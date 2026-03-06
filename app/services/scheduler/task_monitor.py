@@ -20,7 +20,9 @@ class TaskHealthMonitor:
     """
 
     def __init__(self) -> None:
+
         self.task_manager = ScheduledTaskManager()
+
 
     async def get_health_metadata(
         self, scheduler: AsyncIOScheduler | None
@@ -36,8 +38,10 @@ class TaskHealthMonitor:
         """
         try:
             # First, try to get enhanced data if persistence is available
+
             if await self.task_manager.has_persistence():
                 return await self._get_persistent_metadata()
+
 
             # If no persistence, we need a scheduler instance for direct inspection
             if scheduler is None:
@@ -46,7 +50,7 @@ class TaskHealthMonitor:
                     active_tasks=0,
                     paused_tasks=0,
                     upcoming_tasks=[],
-                    scheduler_state="not_initialized",
+                    scheduler_state="not_initialized"
                 )
 
             # Fallback to direct scheduler inspection
@@ -63,8 +67,9 @@ class TaskHealthMonitor:
                     active_tasks=0,
                     paused_tasks=0,
                     upcoming_tasks=[],
-                    scheduler_state="error",
+                    scheduler_state="error"
                 )
+
 
     async def _get_persistent_metadata(self) -> SchedulerHealthMetadata:
         """Get detailed metadata using ScheduledTaskManager (persistent mode)."""
@@ -82,16 +87,14 @@ class TaskHealthMonitor:
                 if task.next_run_time and task.status == "active":
                     # Try to get docstring from function reference
                     description = self._get_docstring_from_func_ref(task.function)
-                    upcoming_tasks.append(
-                        UpcomingTask(
-                            job_id=task.job_id,
-                            name=task.name,
-                            next_run=task.next_run_time.isoformat(),
-                            schedule=task.schedule,
-                            function=task.function,
-                            description=description,
-                        )
-                    )
+                    upcoming_tasks.append(UpcomingTask(
+                        job_id=task.job_id,
+                        name=task.name,
+                        next_run=task.next_run_time.isoformat(),
+                        schedule=task.schedule,
+                        function=task.function,
+                        description=description,
+                    ))
 
             # Sort by next run time
             upcoming_tasks.sort(key=lambda x: x.next_run)
@@ -101,12 +104,13 @@ class TaskHealthMonitor:
                 active_tasks=active_count,
                 paused_tasks=paused_count,
                 upcoming_tasks=upcoming_tasks,
-                scheduler_state="running_persistent",
+                scheduler_state="running_persistent"
             )
 
         except Exception as e:
             logger.error("Error getting persistent metadata", error=str(e))
             raise
+
 
     async def _get_direct_scheduler_metadata(
         self, scheduler: AsyncIOScheduler
@@ -129,23 +133,21 @@ class TaskHealthMonitor:
                 func_path = self._get_function_path(job)
                 func_doc = self._get_function_docstring(job)
 
-                upcoming_tasks.append(
-                    UpcomingTask(
-                        job_id=job.id,
-                        name=job.name or job.id,
-                        next_run=job.next_run_time.isoformat(),
-                        schedule=self._format_trigger_simple(job.trigger),
-                        function=func_path,
-                        description=func_doc,
-                    )
-                )
+                upcoming_tasks.append(UpcomingTask(
+                    job_id=job.id,
+                    name=job.name or job.id,
+                    next_run=job.next_run_time.isoformat(),
+                    schedule=self._format_trigger_simple(job.trigger),
+                    function=func_path,
+                    description=func_doc,
+                ))
 
             return SchedulerHealthMetadata(
                 total_tasks=total_tasks,
                 active_tasks=active_tasks,
                 paused_tasks=paused_tasks,
                 upcoming_tasks=upcoming_tasks,
-                scheduler_state="running_memory",
+                scheduler_state="running_memory"
             )
 
         except Exception as e:
@@ -155,7 +157,7 @@ class TaskHealthMonitor:
                 active_tasks=0,
                 paused_tasks=0,
                 upcoming_tasks=[],
-                scheduler_state="error",
+                scheduler_state="error"
             )
 
     def _format_trigger_simple(self, trigger: Any) -> str:
@@ -202,8 +204,7 @@ class TaskHealthMonitor:
                 func = job.func
                 module = getattr(func, "__module__", "")
                 name = getattr(
-                    func,
-                    "__qualname__",
+                    func, "__qualname__",
                     getattr(func, "__name__", "unknown"),
                 )
                 if module:

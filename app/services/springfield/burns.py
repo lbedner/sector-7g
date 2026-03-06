@@ -17,7 +17,7 @@ async def open_plant() -> dict[str, Any]:
     start = datetime.now(UTC)
     logger.info("Burns: Excellent...")
 
-    await asyncio.sleep(random.uniform(0.2, 0.5))
+    await asyncio.sleep(random.uniform(0.4, 1.0))
 
     duration_ms = (datetime.now(UTC) - start).total_seconds() * 1000
     return {
@@ -36,7 +36,7 @@ async def make_announcement() -> dict[str, Any]:
     start = datetime.now(UTC)
     logger.info("Burns: Attention all employees...")
 
-    await asyncio.sleep(random.uniform(0.1, 0.3))
+    await asyncio.sleep(random.uniform(0.2, 0.6))
 
     announcement = random.choice(
         [
@@ -68,7 +68,7 @@ async def morning_briefing() -> dict[str, Any]:
 
     # Smithers gathers reports
     async def gather_report(dept: str) -> dict[str, str]:
-        await asyncio.sleep(random.uniform(0.05, 0.1))
+        await asyncio.sleep(random.uniform(0.1, 0.2))
         return {"department": dept, "status": "reported"}
 
     depts = ["operations", "safety", "finance", "legal"]

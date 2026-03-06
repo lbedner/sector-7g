@@ -18,7 +18,7 @@ async def night_maintenance() -> dict[str, Any]:
     logger.info("Plant: Running automated night maintenance...")
 
     async def maintain_system(system: str) -> dict[str, Any]:
-        await asyncio.sleep(random.uniform(0.1, 0.3))
+        await asyncio.sleep(random.uniform(0.2, 0.6))
         return {
             "system": system,
             "status": "maintained",
