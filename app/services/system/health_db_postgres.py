@@ -32,9 +32,8 @@ async def check_database_health() -> ComponentStatus:
     global _migration_cache, _pg_settings_cache, _schema_cache
 
     try:
-        from sqlalchemy import text
-
         from app.core.db import get_async_session
+        from sqlalchemy import text
 
         # Use effective URL which handles Docker vs local hostname translation
         db_url = settings.database_url_effective
@@ -128,8 +127,7 @@ async def check_database_health() -> ComponentStatus:
 
             # Collect table row counts using pg_stat_user_tables
             # (single query instead of N individual COUNT(*) queries)
-            # Note: n_live_tup is an estimate updated by autovacuum,
-            # perfect for monitoring
+            # Note: n_live_tup is an estimate updated by autovacuum, perfect for monitoring
             table_info: list[dict[str, Any]] = []
             try:
                 rows = (await session.execute(text(

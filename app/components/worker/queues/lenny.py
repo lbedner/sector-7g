@@ -81,32 +81,61 @@ class WorkerSettings:
 
     @staticmethod
     async def on_job_start(ctx: dict[str, Any]) -> None:
-        """Publish job.started event when a job begins processing."""
-        if "events_redis" in ctx:
-            await publish_event(
-                ctx["events_redis"],
-                "job.started",
-                ctx.get("worker_queue_name", "lenny"),
-                {"job_id": str(ctx.get("job_id", "unknown"))},
-            )
+        """Publish job.started event and record task history."""
+        if "events_redis" not in ctx:
+            return
+        job_id = str(ctx.get("job_id", "unknown"))
+        await publish_event(
+            ctx["events_redis"],
+            "job.started",
+            ctx.get("worker_queue_name", "lenny"),
+            {"job_id": job_id},
+        )
+        from app.components.worker.task_history import (
+            record_task_started,
+            resolve_arq_task_name,
+        )
+
+        task_name = await resolve_arq_task_name(ctx["events_redis"], job_id)
+        await record_task_started(
+            ctx["events_redis"],
+            job_id,
+            task_name=task_name,
+            queue_name="lenny",
+        )
 
     @staticmethod
     async def after_job_end(ctx: dict[str, Any]) -> None:
-        """Publish job.completed or job.failed event after each job."""
+        """Publish job result event and record task history."""
         if "events_redis" not in ctx:
             return
         job_id = str(ctx.get("job_id", "unknown"))
         queue = ctx.get("worker_queue_name", "lenny")
         success = True
+        error_msg: str | None = None
+        task_name: str | None = None
         try:
             raw = await ctx["events_redis"].get(result_key_prefix + job_id)
             if raw:
                 result = deserialize_result(raw)
                 success = result.success
+                task_name = getattr(result, "function", None)
+                if not success:
+                    error_msg = str(getattr(result, "result", ""))[:2000]
         except Exception:
             pass
         event_type = "job.completed" if success else "job.failed"
         await publish_event(
             ctx["events_redis"], event_type, queue,
             {"job_id": job_id, "status": "success" if success else "failed"},
+        )
+        from app.components.worker.task_history import record_task_finished
+
+        await record_task_finished(
+            ctx["events_redis"],
+            job_id,
+            success=success,
+            error=error_msg,
+            task_name=task_name,
+            queue_name=queue,
         )

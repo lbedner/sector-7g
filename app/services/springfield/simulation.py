@@ -24,18 +24,15 @@ async def generate_homer_work() -> None:
     from app.components.worker.pools import get_queue_pool
 
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        depth = await _get_queue_depth(pool, queue_name)
-        if depth > 500:
-            logger.debug(f"Homer queue at {depth}, skipping batch (cap: 500)")
-            return
+    depth = await _get_queue_depth(pool, queue_name)
+    if depth > 500:
+        logger.debug(f"Homer queue at {depth}, skipping batch (cap: 500)")
+        return
 
-        count = random.randint(3, 5)
-        for _ in range(count):
-            await pool.enqueue_job("homer_sim_task", _queue_name=queue_name)
-        logger.info(f"Simulation: enqueued {count} Homer tasks (depth: {depth})")
-    finally:
-        await pool.aclose()
+    count = random.randint(3, 5)
+    for _ in range(count):
+        await pool.enqueue_job("homer_sim_task", _queue_name=queue_name)
+    logger.info(f"Simulation: enqueued {count} Homer tasks (depth: {depth})")
 
 
 async def generate_lenny_work() -> None:
@@ -43,18 +40,15 @@ async def generate_lenny_work() -> None:
     from app.components.worker.pools import get_queue_pool
 
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        depth = await _get_queue_depth(pool, queue_name)
-        if depth > 100:
-            logger.debug(f"Lenny queue at {depth}, skipping batch (cap: 100)")
-            return
+    depth = await _get_queue_depth(pool, queue_name)
+    if depth > 100:
+        logger.debug(f"Lenny queue at {depth}, skipping batch (cap: 100)")
+        return
 
-        count = random.randint(4, 6)
-        for _ in range(count):
-            await pool.enqueue_job("lenny_sim_task", _queue_name=queue_name)
-        logger.info(f"Simulation: enqueued {count} Lenny tasks (depth: {depth})")
-    finally:
-        await pool.aclose()
+    count = random.randint(4, 6)
+    for _ in range(count):
+        await pool.enqueue_job("lenny_sim_task", _queue_name=queue_name)
+    logger.info(f"Simulation: enqueued {count} Lenny tasks (depth: {depth})")
 
 
 async def generate_carl_work() -> None:
@@ -62,18 +56,15 @@ async def generate_carl_work() -> None:
     from app.components.worker.pools import get_queue_pool
 
     pool, queue_name = await get_queue_pool("carl")
-    try:
-        depth = await _get_queue_depth(pool, queue_name)
-        if depth > 100:
-            logger.debug(f"Carl queue at {depth}, skipping batch (cap: 100)")
-            return
+    depth = await _get_queue_depth(pool, queue_name)
+    if depth > 100:
+        logger.debug(f"Carl queue at {depth}, skipping batch (cap: 100)")
+        return
 
-        count = random.randint(4, 6)
-        for _ in range(count):
-            await pool.enqueue_job("carl_sim_task", _queue_name=queue_name)
-        logger.info(f"Simulation: enqueued {count} Carl tasks (depth: {depth})")
-    finally:
-        await pool.aclose()
+    count = random.randint(4, 6)
+    for _ in range(count):
+        await pool.enqueue_job("carl_sim_task", _queue_name=queue_name)
+    logger.info(f"Simulation: enqueued {count} Carl tasks (depth: {depth})")
 
 
 async def generate_inanimate_rod_work() -> None:
@@ -81,20 +72,17 @@ async def generate_inanimate_rod_work() -> None:
     from app.components.worker.pools import get_queue_pool
 
     pool, queue_name = await get_queue_pool("inanimate_rod")
-    try:
-        depth = await _get_queue_depth(pool, queue_name)
-        if depth > 50:
-            logger.debug(f"Inanimate Rod queue at {depth}, skipping batch (cap: 50)")
-            return
+    depth = await _get_queue_depth(pool, queue_name)
+    if depth > 50:
+        logger.debug(f"Inanimate Rod queue at {depth}, skipping batch (cap: 50)")
+        return
 
-        count = random.randint(2, 3)
-        for _ in range(count):
-            await pool.enqueue_job("inanimate_rod_sim_task", _queue_name=queue_name)
-        logger.info(
-            f"Simulation: enqueued {count} Inanimate Rod tasks (depth: {depth})"
-        )
-    finally:
-        await pool.aclose()
+    count = random.randint(2, 3)
+    for _ in range(count):
+        await pool.enqueue_job("inanimate_rod_sim_task", _queue_name=queue_name)
+    logger.info(
+        f"Simulation: enqueued {count} Inanimate Rod tasks (depth: {depth})"
+    )
 
 
 async def generate_charlie_work() -> None:
@@ -102,18 +90,15 @@ async def generate_charlie_work() -> None:
     from app.components.worker.pools import get_queue_pool
 
     pool, queue_name = await get_queue_pool("charlie")
-    try:
-        depth = await _get_queue_depth(pool, queue_name)
-        if depth > 100:
-            logger.debug(f"Charlie queue at {depth}, skipping batch (cap: 100)")
-            return
+    depth = await _get_queue_depth(pool, queue_name)
+    if depth > 100:
+        logger.debug(f"Charlie queue at {depth}, skipping batch (cap: 100)")
+        return
 
-        count = random.randint(4, 6)
-        for _ in range(count):
-            await pool.enqueue_job("charlie_sim_task", _queue_name=queue_name)
-        logger.info(f"Simulation: enqueued {count} Charlie tasks (depth: {depth})")
-    finally:
-        await pool.aclose()
+    count = random.randint(4, 6)
+    for _ in range(count):
+        await pool.enqueue_job("charlie_sim_task", _queue_name=queue_name)
+    logger.info(f"Simulation: enqueued {count} Charlie tasks (depth: {depth})")
 
 
 async def generate_grimey_work() -> None:
@@ -121,13 +106,10 @@ async def generate_grimey_work() -> None:
     from app.components.worker.pools import get_queue_pool
 
     pool, queue_name = await get_queue_pool("grimey")
-    try:
-        depth = await _get_queue_depth(pool, queue_name)
-        if depth > 5:
-            logger.debug(f"Grimey queue at {depth}, skipping batch (cap: 5)")
-            return
+    depth = await _get_queue_depth(pool, queue_name)
+    if depth > 5:
+        logger.debug(f"Grimey queue at {depth}, skipping batch (cap: 5)")
+        return
 
-        await pool.enqueue_job("grimey_sim_task", _queue_name=queue_name)
-        logger.info(f"Simulation: enqueued 1 Grimey task (depth: {depth})")
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("grimey_sim_task", _queue_name=queue_name)
+    logger.info(f"Simulation: enqueued 1 Grimey task (depth: {depth})")

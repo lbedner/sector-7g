@@ -1,14 +1,19 @@
 """
 Database initialization startup hook.
 
-Runs Alembic migrations and verifies connectivity
+Creates tables and verifies connectivity
 when the backend starts up (only when database component is included).
 """
 
+
+
 from app.core.log import logger
+
 
 # Import models to register them with SQLModel metadata
 from app.models.user import User  # noqa: F401
+
+
 
 
 def _check_and_stamp_existing_tables() -> None:
@@ -23,12 +28,12 @@ def _check_and_stamp_existing_tables() -> None:
     Fix: If signature table for a migration exists, stamp it as complete.
     """
     try:
-        from sqlalchemy import inspect
-
         from alembic import command
         from alembic.config import Config
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
+        from sqlalchemy import inspect
+
         from app.core.db import db_session
 
         alembic_cfg = Config("alembic/alembic.ini")
@@ -44,7 +49,7 @@ def _check_and_stamp_existing_tables() -> None:
 
         # Signature table for each migration (first table created by that migration)
         signature_tables = {
-            "001": "user",  # auth migration
+            "001": "user",        # auth migration
             "002": "llm_vendor",  # ai migration
         }
 
@@ -80,11 +85,11 @@ def _check_and_fix_stale_revision() -> None:
     and stamp to head (tables already exist, just need version sync).
     """
     try:
-        from sqlmodel import text
-
         from alembic import command
         from alembic.config import Config
         from alembic.script import ScriptDirectory
+        from sqlmodel import text
+
         from app.core.db import db_session
 
         alembic_cfg = Config("alembic/alembic.ini")
@@ -96,7 +101,7 @@ def _check_and_fix_stale_revision() -> None:
         # Check current database revision
         with db_session(autocommit=False) as session:
             try:
-                result = session.execute(
+                result = session.exec(
                     text("SELECT version_num FROM alembic_version")
                 )
                 db_revisions = [row[0] for row in result.fetchall()]
@@ -114,7 +119,7 @@ def _check_and_fix_stale_revision() -> None:
             )
             # Clear alembic_version and stamp to head
             with db_session(autocommit=True) as session:
-                session.execute(text("DELETE FROM alembic_version"))
+                session.exec(text("DELETE FROM alembic_version"))
 
             # Stamp to head (marks DB as up-to-date without running migrations)
             command.stamp(alembic_cfg, "head")
@@ -174,6 +179,8 @@ async def startup_database_init() -> None:
             # Continue anyway to allow debugging
 
 
+
+
         # Verify database connectivity
         try:
             from sqlalchemy import inspect
@@ -183,7 +190,7 @@ async def startup_database_init() -> None:
 
             with db_session(autocommit=False) as session:
                 # Basic connectivity check
-                session.execute(text("SELECT 1"))
+                session.exec(text("SELECT 1"))
 
                 inspector = inspect(session.connection())
                 table_names = inspector.get_table_names()
@@ -199,6 +206,8 @@ async def startup_database_init() -> None:
         except Exception as e:
             logger.warning(f"Database verification failed: {e}")
             # Don't fail startup - let the app run and show clear errors
+
+
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

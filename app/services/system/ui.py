@@ -40,6 +40,21 @@ def get_status_color_name(status: ComponentStatusType) -> str:
     return "white"
 
 
+def get_component_title(component_name: str) -> str:
+    """Map component keys to category/title names for modal headers."""
+    mapping = {
+        "backend": "Server",
+        "frontend": "Frontend",
+        "database": "Database",
+        "cache": "Cache",
+        "worker": "Worker",
+        "scheduler": "Scheduler",
+        "service_auth": "Auth Service",
+        "ingress": "Ingress",
+    }
+    return mapping.get(component_name, component_name.replace("_", " ").title())
+
+
 def get_component_label(component_name: str) -> str:
     """Map component keys to user-facing labels (brand or friendly name)."""
     mapping = {
@@ -53,3 +68,19 @@ def get_component_label(component_name: str) -> str:
         "ingress": "Traefik",
     }
     return mapping.get(component_name, component_name.replace("_", " ").title())
+
+
+def get_component_subtitle(
+    component_name: str, metadata: dict[str, object] | None = None
+) -> str:
+    """Get a versioned subtitle for a component (e.g. 'Dramatiq 1.17.0').
+
+    Uses the base label from ``get_component_label`` and appends the version
+    from health-check metadata when available.
+    """
+    label = get_component_label(component_name)
+    if metadata:
+        version = metadata.get("version", "")
+        if version and version != "unknown":
+            return f"{label} {version}"
+    return label

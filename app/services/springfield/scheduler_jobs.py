@@ -14,10 +14,7 @@ async def burns_opens_plant() -> None:
 
     logger.info("Scheduler: Burns opens plant")
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        await pool.enqueue_job("open_plant_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("open_plant_task", _queue_name=queue_name)
 
 
 async def smithers_morning_briefing() -> None:
@@ -26,10 +23,7 @@ async def smithers_morning_briefing() -> None:
 
     logger.info("Scheduler: Smithers morning briefing")
     pool, queue_name = await get_queue_pool("carl")
-    try:
-        await pool.enqueue_job("morning_briefing_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("morning_briefing_task", _queue_name=queue_name)
 
 
 async def lenny_carl_arrive() -> None:
@@ -38,11 +32,8 @@ async def lenny_carl_arrive() -> None:
 
     logger.info("Scheduler: Lenny & Carl arrive")
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        await pool.enqueue_job("morning_inspection_task", _queue_name=queue_name)
-        await pool.enqueue_job("run_diagnostics_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("morning_inspection_task", _queue_name=queue_name)
+    await pool.enqueue_job("run_diagnostics_task", _queue_name=queue_name)
 
 
 async def homer_alarm_snooze() -> None:
@@ -51,10 +42,7 @@ async def homer_alarm_snooze() -> None:
 
     logger.info("Scheduler: Homer's alarm (he snoozes)")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("nap_at_console_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("nap_at_console_task", _queue_name=queue_name)
 
 
 async def homer_clocks_in() -> None:
@@ -63,10 +51,7 @@ async def homer_clocks_in() -> None:
 
     logger.info("Scheduler: Homer clocks in (late)")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("clock_in_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("clock_in_task", _queue_name=queue_name)
 
 
 async def morning_donut_run() -> None:
@@ -75,10 +60,7 @@ async def morning_donut_run() -> None:
 
     logger.info("Scheduler: Morning donut run")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("eat_donut_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("eat_donut_task", _queue_name=queue_name)
 
 
 async def sector_7g_inspection() -> None:
@@ -87,11 +69,8 @@ async def sector_7g_inspection() -> None:
 
     logger.info("Scheduler: Sector 7G inspection (Lenny)")
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        await pool.enqueue_job("morning_inspection_task", _queue_name=queue_name)
-        await pool.enqueue_job("file_report_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("morning_inspection_task", _queue_name=queue_name)
+    await pool.enqueue_job("file_report_task", _queue_name=queue_name)
 
 
 async def homer_descends_to_7g() -> None:
@@ -100,10 +79,7 @@ async def homer_descends_to_7g() -> None:
 
     logger.info("Scheduler: Homer descends to Sector 7G")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("eat_donut_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("eat_donut_task", _queue_name=queue_name)
 
 
 async def health_inspector_visit() -> None:
@@ -112,10 +88,7 @@ async def health_inspector_visit() -> None:
 
     logger.info("Scheduler: NRC inspector visit")
     pool, queue_name = await get_queue_pool("carl")
-    try:
-        await pool.enqueue_job("handle_inspector_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("handle_inspector_task", _queue_name=queue_name)
 
 
 async def homer_nap_attempt() -> None:
@@ -124,10 +97,7 @@ async def homer_nap_attempt() -> None:
 
     logger.info("Scheduler: Homer nap attempt")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("nap_at_console_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("nap_at_console_task", _queue_name=queue_name)
 
 
 async def burns_announcement() -> None:
@@ -136,10 +106,7 @@ async def burns_announcement() -> None:
 
     logger.info("Scheduler: Burns announcement")
     pool, queue_name = await get_queue_pool("carl")
-    try:
-        await pool.enqueue_job("make_announcement_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("make_announcement_task", _queue_name=queue_name)
 
 
 async def lunch_at_moes() -> None:
@@ -148,10 +115,7 @@ async def lunch_at_moes() -> None:
 
     logger.info("Scheduler: Homer goes to Moe's")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("go_to_moes_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("go_to_moes_task", _queue_name=queue_name)
 
 
 async def afternoon_diagnostics() -> None:
@@ -160,11 +124,8 @@ async def afternoon_diagnostics() -> None:
 
     logger.info("Scheduler: Afternoon diagnostics (Lenny)")
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        await pool.enqueue_job("run_diagnostics_task", _queue_name=queue_name)
-        await pool.enqueue_job("file_report_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("run_diagnostics_task", _queue_name=queue_name)
+    await pool.enqueue_job("file_report_task", _queue_name=queue_name)
 
 
 async def homer_safety_check() -> None:
@@ -173,10 +134,7 @@ async def homer_safety_check() -> None:
 
     logger.info("Scheduler: Homer safety check")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("attempt_safety_check_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("attempt_safety_check_task", _queue_name=queue_name)
 
 
 async def carl_files_reports() -> None:
@@ -185,10 +143,7 @@ async def carl_files_reports() -> None:
 
     logger.info("Scheduler: Carl files reports")
     pool, queue_name = await get_queue_pool("carl")
-    try:
-        await pool.enqueue_job("file_afternoon_reports_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("file_afternoon_reports_task", _queue_name=queue_name)
 
 
 async def cooling_tower_check() -> None:
@@ -197,10 +152,7 @@ async def cooling_tower_check() -> None:
 
     logger.info("Scheduler: Cooling tower check (Lenny)")
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        await pool.enqueue_job("check_cooling_tower_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("check_cooling_tower_task", _queue_name=queue_name)
 
 
 async def homer_another_donut() -> None:
@@ -209,10 +161,7 @@ async def homer_another_donut() -> None:
 
     logger.info("Scheduler: Homer afternoon donut")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("eat_donut_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("eat_donut_task", _queue_name=queue_name)
 
 
 async def end_of_shift() -> None:
@@ -221,10 +170,7 @@ async def end_of_shift() -> None:
 
     logger.info("Scheduler: End of shift — Homer OUT")
     pool, queue_name = await get_queue_pool("homer")
-    try:
-        await pool.enqueue_job("rush_out_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("rush_out_task", _queue_name=queue_name)
 
 
 async def evening_handoff() -> None:
@@ -233,10 +179,7 @@ async def evening_handoff() -> None:
 
     logger.info("Scheduler: Evening shift handoff")
     pool, queue_name = await get_queue_pool("carl")
-    try:
-        await pool.enqueue_job("shift_handoff_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("shift_handoff_task", _queue_name=queue_name)
 
 
 async def night_maintenance_job() -> None:
@@ -245,7 +188,4 @@ async def night_maintenance_job() -> None:
 
     logger.info("Scheduler: Night maintenance")
     pool, queue_name = await get_queue_pool("lenny")
-    try:
-        await pool.enqueue_job("night_maintenance_task", _queue_name=queue_name)
-    finally:
-        await pool.aclose()
+    await pool.enqueue_job("night_maintenance_task", _queue_name=queue_name)

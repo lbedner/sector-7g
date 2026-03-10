@@ -11,6 +11,9 @@ ping:
 entryPoints:
   web:
     address: ":80"
+    transport:
+      respondingTimeouts:
+        readTimeout: "0s"
     http:
       redirections:
         entryPoint:
@@ -18,8 +21,16 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+    transport:
+      respondingTimeouts:
+        readTimeout: "0s"
   traefik:
     address: ":8080"
+
+serversTransport:
+  forwardingTimeouts:
+    dialTimeout: "5s"
+    responseHeaderTimeout: "0s"
 
 providers:
   docker:

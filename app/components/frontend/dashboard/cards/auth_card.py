@@ -7,6 +7,7 @@ Shows auth-specific metrics with a clean, functional layout.
 
 import flet as ft
 
+
 from app.services.system.models import ComponentStatus
 
 from .card_container import CardContainer

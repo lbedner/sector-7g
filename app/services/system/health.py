@@ -637,6 +637,32 @@ async def _check_cpu_usage() -> ComponentStatus:
             message=f"Failed to check CPU usage: {e}",
             response_time_ms=None,
         )
+
+
+def _decode_slowlog_arg(arg: Any) -> str:
+    """Decode a single SLOWLOG command argument to a readable string."""
+    if isinstance(arg, bytes):
+        return arg.decode("utf-8", errors="replace")
+    if isinstance(arg, str):
+        return arg
+    if isinstance(arg, (list, tuple)):
+        # redis-py can return args as list of ints (ASCII byte values)
+        try:
+            return bytes(arg).decode("utf-8", errors="replace")
+        except (ValueError, TypeError):
+            return str(arg)
+    return str(arg)
+
+
+def _decode_slowlog_command(command: Any) -> str:
+    """Decode a SLOWLOG command entry to a human-readable string."""
+    if isinstance(command, (list, tuple)):
+        return " ".join(_decode_slowlog_arg(arg) for arg in command)
+    if isinstance(command, bytes):
+        return command.decode("utf-8", errors="replace")
+    return str(command)
+
+
 async def check_cache_health() -> ComponentStatus:
     """
     Check cache connectivity and basic functionality.
@@ -701,14 +727,7 @@ async def check_cache_health() -> ComponentStatus:
                     "timestamp": entry["start_time"],
                     # Convert microseconds to ms
                     "duration_ms": round(entry["duration"] / 1000, 2),
-                    "command": " ".join(
-                        str(
-                            arg.decode("utf-8", errors="replace")
-                            if isinstance(arg, bytes)
-                            else arg
-                        )
-                        for arg in entry["command"]
-                    ),
+                    "command": _decode_slowlog_command(entry["command"]),
                 }
                 for entry in slowlog
             ]
@@ -1157,6 +1176,16 @@ async def check_worker_health() -> ComponentStatus:
         # Determine worker status from queue statuses (let propagate_status handle it)
         worker_status = propagate_status([queues_status])
 
+        # Get arq version for display
+        try:
+            import arq
+
+            arq_version = getattr(arq, "VERSION", "")
+            if isinstance(arq_version, tuple):
+                arq_version = ".".join(str(v) for v in arq_version)
+        except ImportError:
+            arq_version = ""
+
         return ComponentStatus(
             name="worker",
             status=worker_status,
@@ -1176,6 +1205,7 @@ async def check_worker_health() -> ComponentStatus:
                     else 0
                 ),
                 "redis_url": settings.REDIS_URL,
+                "version": arq_version,
                 "queue_configuration": {
                     queue_type: {
                         "description": config["description"],

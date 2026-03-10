@@ -6,8 +6,8 @@ worker started/stopped) to a Redis Stream. These events are consumed by the SSE
 endpoint to provide real-time dashboard updates.
 """
 
-from datetime import UTC, datetime
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.log import logger
@@ -26,8 +26,7 @@ async def publish_event(
     Publish a worker event to the Redis Stream.
 
     Args:
-        redis_client: Any Redis client that supports xadd
-            (redis.asyncio.Redis or ArqRedis).
+        redis_client: Any Redis client that supports xadd (redis.asyncio.Redis or ArqRedis).
         event_type: Event type (job.enqueued, job.started, job.ended,
                     job.completed, job.failed, worker.started, worker.stopped).
         queue_name: Name of the worker queue (e.g., "system", "load_test").

@@ -124,6 +124,7 @@ class TaskHealthMonitor:
             active_tasks = sum(1 for job in jobs if job.next_run_time is not None)
             paused_tasks = total_tasks - active_tasks
 
+
             upcoming_tasks = []
             active_jobs = [job for job in jobs if job.next_run_time is not None]
             active_jobs.sort(key=lambda x: x.next_run_time)

@@ -160,6 +160,7 @@ async def _backend_component_health() -> ComponentStatus:
     """
     import os
 
+
     global _cached_route_metadata
     global _cached_middleware_metadata
     global _cached_lifecycle_metadata
