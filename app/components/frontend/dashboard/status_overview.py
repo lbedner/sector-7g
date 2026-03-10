@@ -9,7 +9,7 @@ import flet as ft
 
 from app.components.frontend.controls import DataTable, DataTableColumn
 from app.services.system.models import ComponentStatus
-from app.services.system.ui import get_component_label
+from app.services.system.ui import get_component_subtitle
 
 from .cards.card_utils import (
     _open_modal,
@@ -76,7 +76,7 @@ def get_component_display_info(
         return ("Database", subtitle)
 
     elif component_name == "worker":
-        return ("Worker", get_component_label("worker"))
+        return ("Worker", get_component_subtitle("worker", metadata))
 
     elif component_name == "cache":
         return ("Cache", "Redis")

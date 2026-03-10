@@ -9,6 +9,8 @@ services:
   webserver:
     volumes:
       - .:/code
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
     labels:
       # Dev router (HTTP, localhost — no TLS)
       - "traefik.http.routers.webserver-dev.rule=Host(`localhost`) || Host(`127.0.0.1`)"

@@ -14,20 +14,37 @@ from app.services.system.models import ComponentStatus, ComponentStatusType
 
 from .dashboard.activity_feed import ActivityFeed
 from .dashboard.cards import (
+
+
     AuthCard,
+
+
+
     DatabaseCard,
+
+
     IngressCard,
+
+
+
+
     RedisCard,
+
+
     SchedulerCard,
+
     ServerCard,
+
     ServicesCard,
+
+
     WorkerCard,
+
 )
 from .dashboard.cards.card_utils import create_health_status_indicator
 from .dashboard.diagram import DiagramView
 from .dashboard.status_overview import StatusOverviewPanel
-from .theme import AegisTheme as Theme
-from .theme import ThemeManager
+from .theme import AegisTheme as Theme, ThemeManager
 
 # Constants for health system grouping
 COMPONENTS_GROUP_KEY = "components"
@@ -846,13 +863,12 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
         # Register refresh function on page.data for access by any component
         if page.data is None:
             page.data = {}
-        data: dict = page.data
-        data["refresh_dashboard"] = refresh_dashboard
+        page.data["refresh_dashboard"] = refresh_dashboard
 
         # Consecutive disconnect checks before declaring page truly dead.
         # Flet sessions reconnect within a few seconds — this grace period
         # prevents background tasks from exiting during transient blips.
-        disconnect_grace_checks = 30  # ~30s at 1s per check
+        _DISCONNECT_GRACE_CHECKS = 30  # ~30s at 1s per check
         _consecutive_disconnects = 0
 
         def _is_alive() -> bool:
@@ -866,7 +882,7 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
                 _consecutive_disconnects = 0
                 return True
             _consecutive_disconnects += 1
-            if _consecutive_disconnects >= disconnect_grace_checks:
+            if _consecutive_disconnects >= _DISCONNECT_GRACE_CHECKS:
                 logger.debug("Page permanently disconnected after grace period")
                 return False
             return True  # Still within grace period
@@ -892,7 +908,7 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
 
         # How often the frontend pushes UI updates to the browser (seconds).
         # Events are received and counted immediately; only rendering is throttled.
-        ui_flush_interval = 0.1
+        _UI_FLUSH_INTERVAL = 0.1
 
         async def flush_worker_modal() -> None:
             """Periodically flush dirty worker modal UI updates.
@@ -902,7 +918,7 @@ def create_frontend_app() -> Callable[[ft.Page], Awaitable[None]]:
             and aiter_lines() blocks waiting for the next event.
             """
             while _is_alive():
-                await asyncio.sleep(ui_flush_interval)
+                await asyncio.sleep(_UI_FLUSH_INTERVAL)
                 worker_popup = page.data.get(
                     "_modal_cache", {}
                 ).get("worker")

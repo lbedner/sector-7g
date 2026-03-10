@@ -5,12 +5,11 @@ Shows recent system activity and events with inline severity filtering.
 Groups consecutive alerts from the same component to keep the feed scannable.
 """
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime
-import threading
 
 import flet as ft
-
 from app.components.frontend.controls import (
     DataTableColumn,
     PrimaryText,
@@ -352,8 +351,7 @@ class ActivityFeed(ft.Container):
             animate_opacity=_anim,
         )
 
-        # Colored indicator dot
-        # (visible when a non-"All" filter is active and pills collapsed)
+        # Colored indicator dot (visible when a non-"All" filter is active and pills collapsed)
         self._filter_dot = ft.Container(
             width=6,
             height=6,

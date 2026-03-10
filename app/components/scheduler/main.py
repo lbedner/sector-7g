@@ -9,15 +9,63 @@ import asyncio
 from typing import Any
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from app.core.config import settings
-from app.core.db import db_session, engine, init_database
-from app.core.log import logger
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from app.core.db import engine, init_database, db_session
 from app.services.scheduler.models import APSchedulerJob
-from app.services.system import activity
 from app.services.system.backup import backup_database_job
+
+
+
+from app.core.config import settings
+from app.core.log import logger
+from app.services.system import activity
+
+
+
+def _cleanup_stale_jobs() -> None:
+    """Remove persisted jobs whose func_ref can no longer be imported.
+
+    This handles Docker volumes persisting jobs from a previous project
+    configuration (e.g., AI service was enabled before but isn't now).
+    """
+    import pickle
+
+    from sqlmodel import text
+
+    try:
+        with db_session() as session:
+            rows = session.exec(
+                text("SELECT id, job_state FROM apscheduler_jobs")
+            ).fetchall()
+
+        stale_ids: list[str] = []
+        for job_id, job_state_bytes in rows:
+            try:
+                state = pickle.loads(job_state_bytes)
+                func_ref = state.get("func", "")
+                if ":" in func_ref:
+                    module_name = func_ref.split(":")[0]
+                    __import__(module_name)
+            except (ImportError, ModuleNotFoundError):
+                stale_ids.append(job_id)
+            except Exception:
+                pass
+
+        if stale_ids:
+            with db_session(autocommit=True) as session:
+                for job_id in stale_ids:
+                    session.exec(
+                        text("DELETE FROM apscheduler_jobs WHERE id = :id"),
+                        params={"id": job_id},
+                    )
+            logger.warning(
+                f"Removed {len(stale_ids)} stale scheduled job(s) "
+                f"from persistent store: {stale_ids}"
+            )
+    except Exception as e:
+        logger.debug(f"Stale job cleanup skipped: {e}")
 
 
 def _job_exists_in_database(job_id: str) -> bool:
@@ -46,6 +94,10 @@ def create_scheduler() -> AsyncIOScheduler:
 
     # Ensure database is initialized before creating jobstore
     init_database()
+
+    # Clean up stale jobs from persistent store before loading
+    # (handles Docker volume persisting jobs from a previous project config)
+    _cleanup_stale_jobs()
 
     # Configure SQLAlchemy jobstore for persistence
     jobstore = SQLAlchemyJobStore(engine=engine, tablename='apscheduler_jobs')
