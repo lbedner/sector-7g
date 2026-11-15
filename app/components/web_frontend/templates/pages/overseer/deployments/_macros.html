@@ -1,0 +1,189 @@
+{# Overseer > Deployments' pieces (overseer_deploy_actions): one recipe
+   for a control that asks ``aegis deploy-agent`` (a write, answered by its
+   job, which swaps into the card's job panel); the destroy form that the
+   server and a failed provision both offer, and that provision's resume
+   (``stopped``); a step on the way to a
+   server; why the agent cannot be asked; the job panel; where something
+   runs (``place``: a provider's mark and name); a fragment's reload while
+   it waits on the agent; a part of the new-server form (``panel``: waiting
+   on the agent, why it failed, or what it found); a picker of providers
+   by their logos, and a terminal way folded under it (``picker``,
+   ``by_hand``); and ``note``, the muted paragraph's classes. #}
+{% from "components/macros/form.html" import action, field, text_input %}
+{% from "components/macros/icons.html" import icon %}
+{% from "components/macros/layout.html" import avatar, badge, card, command, dropdown, fold, menu_item, progress %}
+{% macro note() %}text-sm text-aegis-muted space-y-2{% endmacro %}
+
+{# ``reload`` (overseer_deploy_actions: url, trigger) as the hx attributes
+   a fragment asks again with, or nothing once it is ready. #}
+{% macro reloads(reload) %}{% if reload %} hx-get="{{ reload.url }}" hx-trigger="{{ reload.trigger }}"{% endif %}{% endmacro %}
+
+{# What a part of the new-server form waits on the agent for, over a
+   moving bar. #}
+{% macro waiting(said) %}
+<div data-waiting class="space-y-2">
+  <p class="text-xs text-aegis-muted">{{ said }}</p>
+  {{ progress(none, label=said) }}
+</div>
+{% endmacro %}
+
+{# Why a part of the new-server form could not be had (``f.error``, after
+   ``said``), and asking for it again (``f.retry``) in its place. #}
+{% macro failed(said, f) %}
+<p data-error class="text-xs text-error">{{ said }}{{ f.error }}</p>
+{{ action("Try again", 'data-retry hx-get="' ~ f.retry ~ '" hx-target="closest [data-part]" hx-swap="outerHTML"') }}
+{% endmacro %}
+
+{# A part the agent is asked for (``f``, from overseer_deploy_form: the
+   new-server form's PANELS, the card's rollback and live build): waiting
+   on the agent, why it could not be had, or what it found (the caller's
+   body). ``name`` is its data attribute; ``boxed`` frames it. #}
+{% macro panel(name, f, said_waiting, said_failed, boxed=True) %}
+<div data-{{ name }} data-part hx-target="this" hx-swap="outerHTML" class="space-y-3{{ ' rounded border border-aegis-border p-3' if boxed }}"{{ reloads(f.reload) }}>
+  {% if f.state == "loading" %}
+  {{ waiting(said_waiting) }}
+  {% elif f.state == "failed" %}
+  {{ failed(said_failed, f) }}
+  {% else %}
+  {{ caller() }}
+  {# When the agent looked (kept until a refresh, or a command changes
+     it), and asking it again. #}
+  {% if f.refresh %}<p data-checked class="flex items-center gap-1.5 text-xs text-aegis-muted">{% if f.checked %}Checked {{ f.checked }}{% endif %}<button type="button" data-refresh hx-get="{{ f.refresh }}" aria-label="Check again" title="Check again" class="hover:text-aegis-text transition-colors">{{ icon("replay", "w-3.5 h-3.5") }}</button></p>{% endif %}
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro place(where) %}
+<div class="flex items-center gap-3">
+  {{ avatar(where.name, where.logo, "lg") }}
+  <span class="text-sm font-semibold text-aegis-text">{{ where.name }}</span>
+  {% if where.console %}<a href="{{ where.console }}" target="_blank" rel="noopener" class="ml-auto text-xs text-aegis-muted hover:text-aegis-teal">Open console</a>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro asks(url) %}data-write hx-post="{{ url }}" hx-target="#deploy-job" hx-swap="innerHTML"{% endmacro %}
+
+{% macro ask_attrs(partials, verb) %}{{ asks(partials ~ "/" ~ verb) }} data-ask="{{ verb }}"{% endmacro %}
+
+{% macro ask(label, partials, verb, tone="default") %}
+{{ action(label, ask_attrs(partials, verb), tone) }}
+{% endmacro %}
+
+{# ``ask`` as a row of a dropdown() menu. #}
+{% macro ask_item(label, partials, verb, hint=None) %}
+{{ menu_item(label, ask_attrs(partials, verb), hint=hint) }}
+{% endmacro %}
+
+{% macro destroy_form(partials, name) %}
+<form data-ask="destroy" {{ asks(partials ~ "/destroy") }} class="flex flex-wrap items-end gap-2">
+  {% call field("Type " ~ name ~ " to delete the server, its firewall, DNS record and SSH key") %}{{ text_input("confirm", required=True, pattern=name|exactly) }}{% endcall %}
+  {{ action("Destroy", "", "danger", type="submit") }}
+</form>
+{% endmacro %}
+
+{# A provision that stopped part way (``name``, the server it made, still
+   billed): resume it, or, folded away, delete what it made. #}
+{% macro stopped(partials, name) %}
+<div data-stopped class="space-y-3">
+  <p class="{{ note() }}">What it created is still in your account, and billed. Resuming carries on from where it stopped.</p>
+  {{ ask("Resume", partials, "resume", tone="primary") }}
+  {% call fold("Delete what it made instead", "data-delete") %}{{ destroy_form(partials, name) }}{% endcall %}
+</div>
+{% endmacro %}
+
+{# A step (``s``: key, title, status, summary, open), numbered ``n``: its
+   answer in a line once done, its body (the caller) while ``open`` (at
+   hand, or optional), and only its name while still to come. #}
+{% macro step(n, s) %}
+{% set tone = {"done": "border-aegis-teal text-aegis-teal", "current": "border-aegis-teal text-aegis-text", "optional": "border-dashed border-aegis-border text-aegis-text"}.get(s.status, "border-aegis-border text-aegis-muted") %}
+<li data-step="{{ s.key }}" data-status="{{ s.status }}" class="flex gap-3">
+  <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs {{ tone }}" aria-hidden="true">
+    {%- if s.status == "done" %}{{ icon("check", "h-3.5 w-3.5", stroke=2.5) }}{% else %}{{ n }}{% endif -%}
+  </span>
+  <div class="min-w-0 flex-1 space-y-3">
+    <p class="text-sm"><span class="font-semibold {{ 'text-aegis-muted' if s.status == 'todo' else 'text-aegis-text' }}">{{ s.title }}</span>{% if s.summary %} <span data-summary class="text-aegis-muted">{{ s.summary }}</span>{% endif %}</p>
+    {% if s.open %}<div data-step-body class="space-y-3">{{ caller() }}</div>{% endif %}
+  </div>
+</li>
+{% endmacro %}
+
+{# Why the deploy agent cannot be asked (``agent``, its state), or, when
+   it can, the checkout it runs in (each worktree or copy runs its own). #}
+{% macro agent_note(agent) %}
+{% if agent.state == "ready" %}
+<p data-deploy-state="ready" class="text-xs text-aegis-muted">Deploy agent: {{ agent.said }}</p>
+{% elif agent.state == "no-redis" %}
+<div data-deploy-state="no-redis" class="{{ note() }}">
+  <p>Deploying from here needs Redis: the Overseer hands each action to <code class="font-mono text-aegis-text">aegis deploy-agent</code> on your machine through the project's Redis, so your SSH key never enters the app.</p>
+  <p class="flex items-center gap-2">{{ command("aegis add redis") }}</p>
+</div>
+{% elif agent.state == "unreachable" %}
+<p data-deploy-state="unreachable" class="{{ note() }}">Redis did not answer: {{ agent.error }}</p>
+{% elif agent.state == "stale" %}
+<p data-deploy-state="stale" class="{{ note() }}">{{ agent.error }} <span data-agent-said>{{ agent.said }}</span></p>
+{% elif agent.state == "no-agent" %}
+<div data-deploy-state="no-agent" class="{{ note() }}">
+  <p class="flex flex-wrap items-center gap-2">No deploy agent is running: <code class="font-mono text-aegis-text">make serve</code> runs it as the stack's <code class="font-mono text-aegis-text">deploy-agent</code> service, whose log (<code class="font-mono text-aegis-text">docker compose logs deploy-agent</code>) says why it stopped, or run {{ command(agent.command) }} in the project directory.</p>
+  <details data-agent-why class="text-xs">
+    <summary class="cursor-pointer hover:text-aegis-text">What is the deploy agent?</summary>
+    <div class="mt-2 space-y-1">
+      <p>A small process on your machine that does what you ask on this page: create a server, deploy, back up, roll back, destroy. <code class="font-mono text-aegis-text">make serve</code> runs it as the stack's <code class="font-mono text-aegis-text">deploy-agent</code> service, on the aegis this project pins.</p>
+      <p>It runs there, not in the app, and signs through your machine's ssh-agent, so your SSH key never leaves it. The cloud token comes from Deployments &gt; Settings (or <code class="font-mono text-aegis-text">.env</code>), or from the agent's own environment.</p>
+    </div>
+  </details>
+</div>
+{% endif %}
+{% endmacro %}
+
+{# A provider as the picker shows it: its logo and name. #}
+{% macro mark(d) %}<span class="inline-flex items-center gap-2">{{ avatar(d.name, d.logo) }}{{ d.name }}</span>{% endmacro %}
+
+{# A picker of providers, each by its logo and name (the Domain and Server
+   steps): ``model`` is the Alpine field it sets, ``chosen`` the one it
+   opens on (marked until another is picked), ``nothing`` the label of
+   picking none, if allowed. #}
+{% macro picker(label, model, providers, chosen, nothing=None) %}
+{% set items = ([{"key": "", "name": nothing}] if nothing else []) + providers %}
+{% set current %}{% for d in items %}<span x-show="{{ model }} === '{{ d.key }}'">{{ mark(d) if d.key else d.name }}</span>{% endfor %}{% endset %}
+<div data-picker="{{ model }}" class="space-y-1">
+  <p class="text-xs text-aegis-muted">{{ label }}</p>
+  {% call dropdown(current, align="left") %}
+  {% for d in items %}
+  {{ menu_item(mark(d) if d.key else d.name, 'data-value="' ~ d.key ~ '" x-on:click="' ~ model ~ ' = \'' ~ d.key ~ '\'" x-bind:aria-current="' ~ model ~ ' === \'' ~ d.key ~ '\' ? \'true\' : null"' ~ (' aria-current="true"' if d.key == chosen else '')) }}
+  {% endfor %}
+  {% endcall %}
+</div>
+{% endmacro %}
+
+{# A terminal way (``way``; ``entries``: name, command, what it reads from
+   the environment), folded in a note until opened. Under a picker
+   (``model``), an entry with a ``key`` shows only while it is picked,
+   and the note only while something is. #}
+{% macro by_hand(entries, way, model=None, title="Prefer the terminal?") %}
+<details data-by-hand="{{ way }}" {% if model %}x-show="{{ model }}" {% endif %}class="rounded-lg border border-aegis-teal/30 bg-aegis-teal/10 px-3 py-2 text-xs text-aegis-muted">
+  <summary class="cursor-pointer font-medium text-aegis-teal">{{ title }}</summary>
+  <ul class="mt-2 space-y-2">
+    {% for e in entries %}
+    <li {% if e.key %}x-show="{{ model }} === '{{ e.key }}'" {% endif %}class="space-y-1"><span class="text-aegis-text">{{ e.name }}</span>{% if e.reads %}, reading {% for r in e.reads %}<code class="font-mono">{{ r }}</code>{{ ", " if not loop.last }}{% endfor %} from your environment{% endif %}<p class="flex items-center gap-2">{{ command(e.command) }}</p></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endmacro %}
+
+{# A deployed server's card: deploys come from the dev Overseer, or CI. #}
+{% macro deployed_card(actions) %}
+{% call card("Deploys", id="card-deploy") %}
+<div data-deploy-state="deployed" class="{{ note() }}">
+  <p>This is a deployed server. Redeploys come from the dev Overseer, or from CI:</p>
+  <p class="flex items-center gap-2">{{ command(actions.command) }}</p>
+</div>
+{% endcall %}
+{% endmacro %}
+
+{# A deploy job (_job.html), streamed from ``actions.events`` while the
+   page is open; one that has ended, without it, streams nothing. #}
+{% macro job_panel(actions) %}
+<div{% if actions.events %} hx-ext="sse" sse-connect="{{ actions.events }}"{% endif %} x-data="{ output: false }">
+  <div id="deploy-job" sse-swap="{{ actions.event }}" hx-target="this">{% with job=actions.job %}{% include "pages/overseer/deployments/_job.html" %}{% endwith %}</div>
+</div>
+{% endmacro %}

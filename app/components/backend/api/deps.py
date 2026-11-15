@@ -1,59 +1,21 @@
-"""FastAPI dependencies for the backend API."""
+"""FastAPI dependencies for the backend API.
 
-from collections.abc import AsyncGenerator, Generator
+Thin re-export shim. The actual definitions live next to the things
+they depend on:
 
-from sqlmodel import Session
-from sqlmodel.ext.asyncio.session import AsyncSession
+* ``get_db`` / ``get_async_db`` — ``app.core.db`` (next to the engine
+  factories and ``SessionLocal`` / ``AsyncSessionLocal``).
+* ``get_audit`` — ``app.core.audit`` (next to the singleton
+  ``audit_emitter``).
+* Per-service ``get_<svc>_service`` providers — ``app.services.<svc>.deps``
+  (each service owns its own deps file).
 
-from app.core.db import AsyncSessionLocal, SessionLocal
+Re-exporting here keeps ``from app.components.backend.api.deps import X``
+working for any code that still uses the api-namespace import path.
+In-tree code now imports directly from the source modules; this shim
+exists for plugin authors and any external code that prefers the
+single canonical "all deps" import surface.
+"""
 
-
-def get_db() -> Generator[Session]:
-    """
-    Database dependency that provides a database session.
-
-    This dependency is used in FastAPI route functions to get access to
-    the database. It automatically handles session lifecycle - creating,
-    yielding, and closing the session properly.
-
-    Usage:
-        @router.get("/example")
-        def example_endpoint(db: Session = Depends(get_db)):
-            # Use db for database operations
-            pass
-
-    Yields:
-        Session: SQLModel database session
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-async def get_async_db() -> AsyncGenerator[AsyncSession]:
-    """
-    Async database dependency that provides an async database session.
-
-    This dependency is used in async FastAPI route functions to get access to
-    the database with non-blocking I/O operations. It automatically handles
-    session lifecycle - creating, yielding, committing and closing the session properly.
-
-    Usage:
-        @router.get("/example")
-        async def example_endpoint(db: AsyncSession = Depends(get_async_db)):
-            # Use db for async database operations with await
-            result = await db.exec(select(MyModel))
-            return result.first()
-
-    Yields:
-        AsyncSession: SQLModel async database session
-    """
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+from app.core.audit import get_audit
+from app.core.db import get_async_db, get_db

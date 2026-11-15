@@ -5,23 +5,28 @@ Provides a single source of truth for mapping ComponentStatusType to
 icons and semantic colors, so CLI and dashboard remain consistent.
 """
 
+from app.core.constants import ComponentName
+
 from .models import ComponentStatusType
+from .topology import QUEUE
 
 
 def get_status_icon(status: ComponentStatusType) -> str:
-    """Return the display icon for a given status.
+    """Return the display glyph for a given status.
 
-    Note: INFO icon intentionally includes a trailing space for terminal alignment.
+    Text glyphs (no emoji): they align to the monospace grid and render the
+    same in every terminal. Color carries the state (applied by the caller);
+    the glyph itself is monochrome.
     """
     if status == ComponentStatusType.HEALTHY:
-        return "✅"
+        return "✓"
     if status == ComponentStatusType.INFO:
-        return "ℹ️ "
+        return "ℹ"
     if status == ComponentStatusType.WARNING:
-        return "⚠️ "
+        return "⚠"
     if status == ComponentStatusType.UNHEALTHY:
-        return "❌"
-    return "❓"
+        return "✗"
+    return "?"
 
 
 def get_status_color_name(status: ComponentStatusType) -> str:
@@ -40,32 +45,68 @@ def get_status_color_name(status: ComponentStatusType) -> str:
     return "white"
 
 
+SERVICE_PREFIX = "service_"  # a service's registry key, before its name
+
+
+def registry_key(group: str, name: str) -> str:
+    """An entry's key in the one name registry: a component's own name, a
+    service's ``service_<name>`` (``get_component_title``)."""
+    return name if group == "components" else f"{SERVICE_PREFIX}{name}"
+
+
+def is_service(key: str) -> bool:
+    """Whether a registry key is a service's (``service_ai``)."""
+    return key.startswith(SERVICE_PREFIX)
+
+
+def registry_entry(key: str) -> tuple[str, str]:
+    """``registry_key`` the other way: ``("services", "ai")`` for
+    ``service_ai``, ``("components", "cache")`` for ``cache``."""
+    if key.startswith(SERVICE_PREFIX):
+        return "services", key.removeprefix(SERVICE_PREFIX)
+    return "components", key
+
+
 def get_component_title(component_name: str) -> str:
-    """Map component keys to category/title names for modal headers."""
+    """The one name for a component or service, on every surface.
+
+    Components are keyed by name, services as ``service_<name>``. Anything
+    unlisted (a plugin) is title-cased from its key.
+    """
     mapping = {
-        "backend": "Server",
-        "frontend": "Frontend",
-        "database": "Database",
-        "cache": "Cache",
-        "worker": "Worker",
-        "scheduler": "Scheduler",
-        "service_auth": "Auth Service",
-        "ingress": "Ingress",
+        ComponentName.BACKEND: "Server",
+        ComponentName.FRONTEND: "Flet Frontend",
+        ComponentName.WEB_FRONTEND: "Web Frontend",
+        ComponentName.DATABASE: "Database",
+        ComponentName.CACHE: "Cache",
+        ComponentName.WORKER: "Worker",
+        # Not a component: the worker's queue, on Overseer's map.
+        QUEUE: "Queue",
+        ComponentName.SCHEDULER: "Scheduler",
+        ComponentName.OBSERVABILITY: "Observability",
+        "service_rag": "RAG",
+        # The job history the scheduler keeps, not the scheduler itself.
+        "service_scheduler": "Scheduler history",
+        ComponentName.INGRESS: "Ingress",
     }
-    return mapping.get(component_name, component_name.replace("_", " ").title())
+    fallback = (
+        component_name.removeprefix(SERVICE_PREFIX).replace("_", " ").replace("-", " ")
+    )
+    return mapping.get(component_name, fallback.title())
 
 
 def get_component_label(component_name: str) -> str:
     """Map component keys to user-facing labels (brand or friendly name)."""
     mapping = {
-        "backend": "FastAPI + Flet",
-        "frontend": "Flet",
-        "database": "PostgreSQL",
-        "cache": "Redis",
-        "worker": "arq",
-        "scheduler": "APScheduler",
-        "service_auth": "JWT Auth",
-        "ingress": "Traefik",
+        ComponentName.BACKEND: "FastAPI + Flet",
+        # Both frontends ship: Flet at /dashboard, htmx pages at /.
+        ComponentName.FRONTEND: "Flet + htmx",
+        ComponentName.WEB_FRONTEND: "Jinja2 + htmx",
+        ComponentName.DATABASE: "PostgreSQL",
+        ComponentName.CACHE: "Redis",
+        ComponentName.WORKER: "taskiq",
+        ComponentName.SCHEDULER: "APScheduler",
+        ComponentName.INGRESS: "Traefik",
     }
     return mapping.get(component_name, component_name.replace("_", " ").title())
 
@@ -75,12 +116,45 @@ def get_component_subtitle(
 ) -> str:
     """Get a versioned subtitle for a component (e.g. 'Dramatiq 1.17.0').
 
-    Uses the base label from ``get_component_label`` and appends the version
-    from health-check metadata when available.
+    The base label is whatever the health metadata declares as
+    ``subtitle`` (how a plugin names itself, being in no registry),
+    otherwise ``get_component_label``. The metadata ``version`` is
+    appended when known. Every dashboard surface routes through here, so
+    the stack view, the cards and the diagram cannot disagree.
     """
-    label = get_component_label(component_name)
-    if metadata:
-        version = metadata.get("version", "")
-        if version and version != "unknown":
-            return f"{label} {version}"
+    if component_name == ComponentName.DATABASE:
+        return get_database_subtitle(metadata)
+
+    # A plugin is in no label registry, so it names itself in its health
+    # metadata; that name wins over the derived one.
+    metadata = metadata or {}
+    declared = metadata.get("subtitle")
+    label = str(declared) if declared else get_component_label(component_name)
+    version = metadata.get("version", "")
+    if version and version != "unknown":
+        return f"{label} {version}"
     return label
+
+
+def get_database_subtitle(metadata: dict[str, object] | None = None) -> str:
+    """Single source of truth for the Database subtitle (card, modal, diagram).
+
+    Renders ``PostgreSQL <version>`` / ``SQLite <version>`` and appends
+    ``(Neon)`` when connected to a Neon host (``is_neon`` in health metadata).
+    """
+    metadata = metadata or {}
+    implementation = metadata.get("implementation", "sqlite")
+    if implementation == "postgresql":
+        version = metadata.get("version_short", "")
+        if not version and "version" in metadata:
+            full_version = metadata["version"]
+            if isinstance(full_version, str) and "PostgreSQL" in full_version:
+                parts = full_version.split()
+                version = parts[1] if len(parts) >= 2 else ""
+        subtitle = f"PostgreSQL {version}" if version else "PostgreSQL"
+        if metadata.get("is_neon"):
+            subtitle += " (Neon)"
+    else:
+        version = metadata.get("version", "")
+        subtitle = f"SQLite {version}" if version else "SQLite"
+    return subtitle

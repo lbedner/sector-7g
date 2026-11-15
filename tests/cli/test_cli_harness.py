@@ -1,0 +1,78 @@
+"""The CLI harness owns the one event loop an async command runs on, so it
+is also where the process-shared cache is closed: after the command, inside
+that loop. Closed any later, the Redis client's pool is torn down by the
+garbage collector after the loop is gone ("RuntimeError: Event loop is
+closed" at exit)."""
+
+import asyncio
+
+import pytest
+
+from app.cli import main as cli_main
+from app.core.cache import get_cache
+
+
+def _closing(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.AbstractEventLoop]:
+    closed_on: list[asyncio.AbstractEventLoop] = []
+
+    async def aclose() -> None:
+        closed_on.append(asyncio.get_running_loop())
+
+    monkeypatch.setattr(get_cache(), "aclose", aclose)
+    return closed_on
+
+
+def test_the_cache_closes_on_the_commands_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    closed_on = _closing(monkeypatch)
+    ran_on: list[asyncio.AbstractEventLoop] = []
+
+    async def command() -> str:
+        ran_on.append(asyncio.get_running_loop())
+        return "synced"
+
+    assert asyncio.run(cli_main.run_command(command())) == "synced"
+    assert closed_on == ran_on
+
+
+def test_a_failing_command_still_closes_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    closed_on = _closing(monkeypatch)
+
+    async def command() -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        asyncio.run(cli_main.run_command(command()))
+    assert len(closed_on) == 1
+
+
+def test_logs_go_to_stderr_so_stdout_is_the_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unconfigured, structlog prints to stdout: a slow-query warning on
+    the server landed among the keys ``storage check`` prints for ``aegis
+    deploy-upload-storage`` to read (2026-10-16)."""
+    import sys
+
+    streams: list[object] = []
+    monkeypatch.setattr(cli_main, "setup_logging", streams.append)
+    monkeypatch.setattr(sys, "argv", ["app", "--help"])
+    cli_main.main()
+    assert streams == [sys.stderr]
+
+
+def test_ctrl_c_in_an_async_command_exits_without_a_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sync command's Ctrl+C is Click's Abort. An async command runs on
+    the loop ``main()`` owns, outside Click, so its interrupt reaches
+    ``main()`` itself and has to end the same way."""
+    _closing(monkeypatch)
+
+    async def command() -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli_main, "setup_logging", lambda _stream: None)
+    monkeypatch.setattr(cli_main, "app", lambda **_kwargs: command())
+    with pytest.raises(SystemExit) as exited:
+        cli_main.main()
+    assert exited.value.code == 1

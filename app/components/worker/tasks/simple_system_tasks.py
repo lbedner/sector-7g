@@ -2,12 +2,11 @@
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any
 
 from app.core.log import logger
 
 
-async def system_health_check(ctx: dict[str, Any]) -> dict[str, str]:
+async def system_health_check() -> dict[str, str]:
     """Verify worker connectivity and responsiveness.
 
     Returns a timestamped health status to confirm the worker process
@@ -24,7 +23,7 @@ async def system_health_check(ctx: dict[str, Any]) -> dict[str, str]:
     }
 
 
-async def cleanup_temp_files(ctx: dict[str, Any]) -> dict[str, str]:
+async def cleanup_temp_files() -> dict[str, str]:
     """Remove stale temporary files from the working directory.
 
     Placeholder for application-specific cleanup logic. Scans for
@@ -33,7 +32,7 @@ async def cleanup_temp_files(ctx: dict[str, Any]) -> dict[str, str]:
     logger.info("Running temp file cleanup task")
 
     # Placeholder for actual cleanup logic
-    await asyncio.sleep(0.2)  # Simulate some work
+    await asyncio.sleep(0.1)  # Simulate some work
 
     return {
         "status": "completed",

@@ -9,10 +9,12 @@ Create Date: 2026-02-10 03:00:00.000000
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "002"
+revision = "002_springfield"
 down_revision = "001"
 branch_labels = None
 depends_on = None
+# Data-only: the seeded row is the proof.
+aegis_stamp_signature = ("row", "user", "email = 'homer@springfield-nuclear.com'")
 
 # Pre-hashed password for "springfield" using bcrypt via app/core/security.py
 HASHED_PASSWORD = "$2b$12$buReOwHLL3AxSdJmpycuU.LlSGggzXTDOHWQQ/iWU7Qp0n5Cd34mC"
@@ -75,15 +77,19 @@ def upgrade() -> None:
         op.execute(
             f"""
             INSERT INTO "user"
-                (email, full_name, is_active, hashed_password, created_at)
-            VALUES (
+                (email, full_name, is_active, is_verified, hashed_password,
+                 failed_login_attempts, created_at)
+            SELECT
                 '{char["email"]}',
                 '{char["full_name"]}',
                 {char["is_active"]},
+                FALSE,
                 '{char["hashed_password"]}',
-                NOW()
+                0,
+                CURRENT_TIMESTAMP
+            WHERE NOT EXISTS (
+                SELECT 1 FROM "user" WHERE email = '{char["email"]}'
             )
-            ON CONFLICT (email) DO NOTHING
             """
         )
 

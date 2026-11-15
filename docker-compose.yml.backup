@@ -1,0 +1,443 @@
+
+x-app: &app
+  image: ${AEGIS_STACK_TAG:-sector-7g:latest}
+  init: true
+  build:
+    context: .
+    args:
+      - AEGIS_STACK_VERSION=${AEGIS_STACK_VERSION:-dev}
+      - PORT=${PORT:-8000}
+      - BUILD_ID=${BUILD_ID:-dev}
+  env_file:
+    - ${AEGIS_STACK_ENV_FILE:-.env}
+  environment:
+    # Docker container marker for entrypoint script. A service that sets
+    # its own environment list REPLACES this one (YAML merge keys do not
+    # join lists), so anything every container must see lives in the
+    # Dockerfile's ENV (PORT, STORAGE_ROOT), not here.
+    - DOCKER_CONTAINER=1
+    - PORT=${PORT:-8000}
+    - WEBSERVER_ENGINE
+    - WEBSERVER_LOOP
+  volumes:
+    # Every process that runs the app shares one object store. Compose
+    # merges volume lists across override files by target path, so the
+    # dev overlay's code mount adds to this rather than replacing it.
+    - storage-data:/data/storage
+    - backup-data:/var/backups/app
+  labels:
+    logging: "aegis-stack"
+
+services:
+  # DEVELOPMENT PROFILE
+
+  webserver:
+    <<: *app
+    command:
+      - webserver
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # Docker container marker
+      - DOCKER_CONTAINER=1
+      - WEBSERVER_ENGINE
+      - WEBSERVER_LOOP
+      # Redis connection for health checks
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # Logfire observability token
+      - LOGFIRE_TOKEN=${LOGFIRE_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8000}/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${WEBSERVER_MEMORY:-768M}
+          cpus: '${WEBSERVER_CPUS:-2.0}'
+    labels:
+      - "traefik.enable=true"
+      # Public router
+      - "traefik.http.routers.webserver.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.webserver.entrypoints=web"
+      - "traefik.http.routers.webserver.middlewares=webserver-retry"
+      - "traefik.http.services.webserver.loadbalancer.server.port=${PORT:-8000}"
+      # Retry middleware — retries WebSocket upgrade during uvicorn hot-reload
+      - "traefik.http.middlewares.webserver-retry.retry.attempts=5"
+      - "traefik.http.middlewares.webserver-retry.retry.initialinterval=2s"
+      # Admin paths - IP restricted (set ADMIN_IP_ALLOWLIST in .env)
+      - "traefik.http.routers.webserver-admin.rule=PathPrefix(`/dashboard`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`)"
+      - "traefik.http.routers.webserver-admin.entrypoints=web"
+      - "traefik.http.routers.webserver-admin.service=webserver"
+      - "traefik.http.routers.webserver-admin.middlewares=admin-ipallowlist,webserver-retry"
+      - "traefik.http.middlewares.admin-ipallowlist.ipallowlist.sourcerange=${ADMIN_IP_ALLOWLIST:-0.0.0.0/0}"
+    profiles:
+      - dev
+      - prod
+  # Scheduler service (runs scheduler tasks independently)
+  scheduler:
+    <<: *app
+    command:
+      - scheduler
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.components.scheduler.heartbeat"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+      webserver:
+        condition: service_healthy
+    environment:
+      # Docker container marker
+      - DOCKER_CONTAINER=1
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    profiles:
+      - dev
+      - prod
+  # Load Test Worker (high-performance load testing tasks)
+  worker-load-test:
+    <<: *app
+    command:
+      - worker
+      - load_test
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      # Docker container marker for entrypoint script
+      - DOCKER_CONTAINER=1
+      # Load test worker configuration
+      - WORKER_QUEUE_TYPE=load_test
+      - WORKER_TIMEOUT_SECONDS=${LOAD_TEST_WORKER_TIMEOUT:-60}
+      - WORKER_MAX_TRIES=${LOAD_TEST_WORKER_MAX_TRIES:-1}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '1.0'
+    profiles:
+      - dev
+      - prod
+
+
+  # System Worker (maintenance and administrative tasks)
+  worker-system:
+    <<: *app
+    command:
+      - worker
+      - system
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      # Docker container marker for entrypoint script
+      - DOCKER_CONTAINER=1
+      # System worker configuration (high reliability)
+      - WORKER_QUEUE_TYPE=system
+      - WORKER_TIMEOUT_SECONDS=${SYSTEM_WORKER_TIMEOUT:-1800}
+      - WORKER_MAX_TRIES=${SYSTEM_WORKER_MAX_TRIES:-5}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          # Maintenance tasks only - health checks and cleanup.
+          memory: ${SYSTEM_WORKER_MEMORY:-256M}
+          cpus: '${SYSTEM_WORKER_CPUS:-0.25}'
+    profiles:
+      - dev
+      - prod
+
+  # Springfield worker: inanimate-rod
+  worker-inanimate-rod:
+    <<: *app
+    healthcheck:
+      disable: true
+    command:
+      - worker
+      - inanimate_rod
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      - DOCKER_CONTAINER=1
+      - WORKER_QUEUE_TYPE=inanimate_rod
+      - WORKER_TIMEOUT_SECONDS=${SYSTEM_WORKER_TIMEOUT:-1800}
+      - WORKER_MAX_TRIES=${SYSTEM_WORKER_MAX_TRIES:-5}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    profiles:
+      - dev
+      - prod
+
+  # Springfield worker: homer
+  worker-homer:
+    <<: *app
+    healthcheck:
+      disable: true
+    command:
+      - worker
+      - homer
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      - DOCKER_CONTAINER=1
+      - WORKER_QUEUE_TYPE=homer
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    profiles:
+      - dev
+      - prod
+
+  # Springfield worker: lenny
+  worker-lenny:
+    <<: *app
+    healthcheck:
+      disable: true
+    command:
+      - worker
+      - lenny
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      - DOCKER_CONTAINER=1
+      - WORKER_QUEUE_TYPE=lenny
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    profiles:
+      - dev
+      - prod
+
+  # Springfield worker: carl
+  worker-carl:
+    <<: *app
+    healthcheck:
+      disable: true
+    command:
+      - worker
+      - carl
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      - DOCKER_CONTAINER=1
+      - WORKER_QUEUE_TYPE=carl
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    profiles:
+      - dev
+      - prod
+
+  # Springfield worker: charlie
+  worker-charlie:
+    <<: *app
+    healthcheck:
+      disable: true
+    command:
+      - worker
+      - charlie
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      - DOCKER_CONTAINER=1
+      - WORKER_QUEUE_TYPE=charlie
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    profiles:
+      - dev
+      - prod
+
+  # Springfield worker: grimey
+  worker-grimey:
+    <<: *app
+    healthcheck:
+      disable: true
+    command:
+      - worker
+      - grimey
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    tty: true
+    environment:
+      - DOCKER_CONTAINER=1
+      - WORKER_QUEUE_TYPE=grimey
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+    profiles:
+      - dev
+      - prod
+
+  # REDIS SERVICE
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    command: redis-server --maxmemory 64mb --maxmemory-policy volatile-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    profiles:
+      - dev
+      - prod
+  # POSTGRESQL SERVICE
+
+  postgres:
+    image: postgres:16-alpine
+    hostname: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sector-7g
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    profiles:
+      - dev
+      - prod
+  # TRAEFIK REVERSE PROXY
+
+  traefik:
+    image: traefik:v3.6
+    hostname: traefik
+    environment:
+      - DOCKER_API_VERSION=1.44
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - traefik-letsencrypt:/letsencrypt
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    profiles:
+      - dev
+      - prod
+
+  # TEST PROFILE
+
+  test_runner:
+    <<: *app
+    command:
+      - test
+    env_file:
+      - ${AEGIS_STACK_ENV_FILE:-.env}
+    profiles:
+      - test
+
+volumes:
+  aegis-data:
+  storage-data:
+  backup-data:
+  postgres-data:
+  traefik-letsencrypt:

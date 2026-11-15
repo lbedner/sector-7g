@@ -26,10 +26,12 @@ theme:
 # Navigation structure
 nav:
   - Home: index.md
+  - What It Is Made Of: stack.md
   - Development: development.md
   - API Reference: api.md
   - Health Monitoring: health.md
   - Components:
+    - API Load Testing: components/api-load-testing.md
     - Scheduler: components/scheduler.md
 
 # Plugins

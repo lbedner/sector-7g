@@ -1,0 +1,215 @@
+"""The background tasks that keep the dashboard current.
+
+The dashboard refresh runs for the life of the page. The worker feed - the
+SSE listener and its flush loop - runs only while the worker modal is open
+(``WorkerStream``): nothing else reads those events, and the stream resends
+an absolute baseline on every connect, so connecting on open loses nothing.
+
+All of them share one rule set, which is what ``SessionLoops`` is: how
+long a disconnect is tolerated, which exceptions are fatal, and the
+fact that a fatal one ends ALL of this page's loops rather than the
+one that happened to notice. Pass it in and the loop needs nothing
+else from the bootstrap.
+"""
+
+import asyncio
+from collections.abc import Awaitable, Callable
+from concurrent.futures import Future
+import json
+from typing import Any
+
+import flet as ft
+from flet import PageDisconnectedException
+import httpx
+
+from app.core.client import APIClient
+from app.core.log import logger
+
+from ..core.session_health import SessionLoops
+
+# How often the frontend pushes UI updates to the browser (seconds).
+# Events are received and counted immediately; only rendering is throttled.
+UI_FLUSH_INTERVAL = 0.1
+
+
+async def auto_refresh(
+    loops: SessionLoops, refresh: Callable[[], Awaitable[None]]
+) -> None:
+    """Auto-refresh loop. Exits on page disconnect or session corruption."""
+    while loops.alive():
+        try:
+            await refresh()
+            await asyncio.sleep(30)
+        except PageDisconnectedException:
+            # Transient disconnect — skip this cycle, loop will retry
+            logger.debug("Page disconnected during refresh, retrying")
+            await asyncio.sleep(5)
+        except Exception as e:
+            if await loops.fatal(e):
+                return
+            logger.error(f"Error in auto-refresh loop: {e}", exc_info=True)
+            await asyncio.sleep(30)
+
+
+async def flush_worker_modal(loops: SessionLoops, page: ft.Page) -> None:
+    """Periodically flush dirty worker modal UI updates.
+
+    Runs independently of the SSE listener so that the final batch
+    of events is always rendered — even when the stream goes quiet
+    and aiter_lines() blocks waiting for the next event.
+    """
+    while loops.alive():
+        await asyncio.sleep(UI_FLUSH_INTERVAL)
+        worker_popup = page.data.get("_modal_cache", {}).get("worker")
+        if worker_popup and worker_popup.visible:
+            try:
+                worker_popup.flush()
+            except PageDisconnectedException:
+                # Transient disconnect — skip this flush, loop will retry
+                pass
+            except Exception as e:
+                if await loops.fatal(e):
+                    return
+                logger.debug(f"Worker modal flush failed: {e}")
+
+
+def _apply_worker_event(worker_popup: Any, event: dict[str, Any]) -> None:
+    """Apply one SSE payload to the worker modal's counters."""
+    event_type = event.get("type", "")
+    queue = event.get("queue", "")
+
+    # Absolute baseline (sent once on connect)
+    if event_type == "totals":
+        worker_popup.set_totals(event.get("queues", {}))
+    # Individual deltas
+    elif event_type == "job.enqueued" and queue:
+        worker_popup.increment_queued(queue)
+    elif event_type == "job.started" and queue:
+        worker_popup.increment_ongoing(queue)
+        worker_popup.decrement_queued(queue)
+    elif event_type == "job.completed" and queue:
+        worker_popup.increment_completed(queue)
+    elif event_type == "job.failed" and queue:
+        worker_popup.increment_failed(queue)
+
+
+async def listen_for_worker_events(
+    loops: SessionLoops, page: ft.Page, api_client: APIClient
+) -> None:
+    """
+    Listen to SSE worker events and update the worker modal directly.
+
+    On connect, receives a "totals" event with absolute counters
+    (baseline). Then receives individual job events as deltas.
+    On reconnect, a new baseline is sent automatically.
+
+    UI updates are flushed by a separate periodic task, not inline,
+    so the last batch always renders even when the stream goes quiet.
+
+    Survives transient page disconnects (Flet session reconnects).
+    Only exits when the session is permanently gone or the modal closes.
+    """
+    # Tagged per session: with several tabs open, untagged lines cannot be
+    # told apart from one tab starting the listener twice.
+    session = page.session_id
+    logger.info("SSE: starting worker event listener", session_id=session)
+    while loops.alive():
+        try:
+            logger.info("SSE: connecting to /events/worker/stream", session_id=session)
+            async with api_client.stream(
+                "GET",
+                "/events/worker/stream",
+                timeout=httpx.Timeout(
+                    connect=5.0,
+                    read=15.0,
+                    write=5.0,
+                    pool=5.0,
+                ),
+            ) as response:
+                logger.info(
+                    "SSE: connected",
+                    status=response.status_code,
+                    session_id=session,
+                )
+                async for line in response.aiter_lines():
+                    if not loops.alive():
+                        return
+                    if not line.startswith("data: "):
+                        continue
+
+                    try:
+                        event = json.loads(line[6:])
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+
+                    worker_popup = page.data.get("_modal_cache", {}).get("worker")
+                    if not worker_popup:
+                        continue
+
+                    try:
+                        _apply_worker_event(worker_popup, event)
+                    except PageDisconnectedException:
+                        # Transient disconnect — break inner loop,
+                        # outer loop will reconnect after sleep
+                        break
+                    except Exception as e:
+                        logger.debug(f"SSE modal update failed: {e}")
+
+        except PageDisconnectedException:
+            # Transient disconnect — sleep and retry
+            logger.debug("SSE: page disconnected, retrying in 5s")
+            await asyncio.sleep(5)
+        except Exception as e:
+            if await loops.fatal(e):
+                return
+            logger.info(
+                "SSE: connection error, reconnecting in 5s",
+                error=str(e),
+                session_id=session,
+            )
+            await asyncio.sleep(5)
+    logger.info(
+        "SSE: listener exiting (page permanently disconnected)", session_id=session
+    )
+
+
+class WorkerStream:
+    """The worker modal's live feed, running only while the modal is open.
+
+    Holds the SSE listener and its flush loop. The modal calls ``start`` on
+    show and ``stop`` on hide; the dashboard view calls ``stop`` on leave.
+    Both loops keep the page's ``SessionLoops`` rules, so a disconnect or a
+    corrupt tree still ends them without anyone calling ``stop``.
+    """
+
+    def __init__(self, loops: SessionLoops, page: ft.Page, api_client: APIClient):
+        self._loops = loops
+        self._page = page
+        self._api_client = api_client
+        self._tasks: list[Future[None]] = []
+
+    @property
+    def running(self) -> bool:
+        return any(not task.done() for task in self._tasks)
+
+    def start(self) -> None:
+        """Connect and start rendering; a second call while running is a no-op.
+
+        Through ``page.run_task``, not ``asyncio.create_task``: the modal
+        opens from a sync click handler, which Flet runs in a thread with
+        no event loop. ``run_task`` hands the loops to the page's own.
+        """
+        if self.running:
+            return
+        self._tasks = [
+            self._page.run_task(
+                listen_for_worker_events, self._loops, self._page, self._api_client
+            ),
+            self._page.run_task(flush_worker_modal, self._loops, self._page),
+        ]
+
+    def stop(self) -> None:
+        """Disconnect: cancel both loops."""
+        for task in self._tasks:
+            task.cancel()
+        self._tasks = []

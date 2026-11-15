@@ -20,7 +20,11 @@ class TestSchedulerEndpoints:
 
     @pytest.fixture
     async def async_client(self) -> AsyncGenerator[AsyncClient]:
-        """Async HTTP client for testing."""
+        """Async HTTP client for testing.
+
+        No auth or no DB in this stack, so no override needed. Addressed
+        to localhost: without auth, run-now is the local dev build's alone.
+        """
         app = create_integrated_app()
 
         # Manually trigger startup for component registration
@@ -30,7 +34,9 @@ class TestSchedulerEndpoints:
         await backend_hooks.execute_startup_hooks()
 
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://localhost"
+        ) as client:
             yield client
 
         # Clean up after test
@@ -38,10 +44,12 @@ class TestSchedulerEndpoints:
 
     @pytest.mark.asyncio
     async def test_list_scheduled_jobs_endpoint_accessible(
-        self, async_client: AsyncClient
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
     ) -> None:
         """Test /api/v1/scheduler/jobs endpoint is accessible."""
-        response = await async_client.get("/api/v1/scheduler/jobs")
+        response = await async_client.get(
+            "/api/v1/scheduler/jobs", headers=auth_headers
+        )
 
         # Should return a valid response (200 for success, 503 for unavailable,
         # 500 for dependency issues)
@@ -64,9 +72,13 @@ class TestSchedulerEndpoints:
             assert "internal_error" in data["detail"].get("error", "")
 
     @pytest.mark.asyncio
-    async def test_get_scheduled_job_not_found(self, async_client: AsyncClient) -> None:
+    async def test_get_scheduled_job_not_found(
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
         """Test /api/v1/scheduler/jobs/{job_id} returns 404 for non-existent job."""
-        response = await async_client.get("/api/v1/scheduler/jobs/non_existent_job")
+        response = await async_client.get(
+            "/api/v1/scheduler/jobs/non_existent_job", headers=auth_headers
+        )
 
         # Should return 404 for non-existent job, 503 if scheduler unavailable,
         # or 500 for dependency issues
@@ -83,10 +95,12 @@ class TestSchedulerEndpoints:
 
     @pytest.mark.asyncio
     async def test_scheduler_statistics_endpoint_accessible(
-        self, async_client: AsyncClient
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
     ) -> None:
         """Test /api/v1/scheduler/statistics endpoint is accessible."""
-        response = await async_client.get("/api/v1/scheduler/statistics")
+        response = await async_client.get(
+            "/api/v1/scheduler/statistics", headers=auth_headers
+        )
 
         # Should return a valid response (200 for success, 503 for unavailable,
         # 500 for dependency issues)
@@ -113,6 +127,99 @@ class TestSchedulerEndpoints:
             assert "internal_error" in data["detail"].get("error", "")
 
     @pytest.mark.asyncio
+    async def test_list_executions_endpoint_accessible(
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        """Test /api/v1/scheduler/executions endpoint is accessible."""
+        response = await async_client.get(
+            "/api/v1/scheduler/executions?limit=10", headers=auth_headers
+        )
+
+        assert response.status_code in [200, 500, 503]
+        data = response.json()
+
+        if response.status_code == 200:
+            # Verify response structure matches ScheduledExecutionListResponse
+            assert "executions" in data
+            assert "total" in data
+            assert isinstance(data["executions"], list)
+            assert isinstance(data["total"], int)
+        else:
+            assert "detail" in data
+
+    @pytest.mark.asyncio
+    async def test_job_execution_stats_endpoint_accessible(
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        """Test /api/v1/scheduler/jobs/{job_id}/stats endpoint is accessible."""
+        response = await async_client.get(
+            "/api/v1/scheduler/jobs/some_job/stats", headers=auth_headers
+        )
+
+        assert response.status_code in [200, 500, 503]
+        data = response.json()
+
+        if response.status_code == 200:
+            # Verify response structure matches JobExecutionStatsResponse
+            for key in (
+                "total_runs",
+                "success_count",
+                "failure_count",
+                "success_rate",
+            ):
+                assert key in data
+            assert isinstance(data["total_runs"], int)
+        else:
+            assert "detail" in data
+
+    @pytest.mark.asyncio
+    async def test_trigger_job_not_found(
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        """POST /api/v1/scheduler/jobs/{id}/run returns 404 for an unknown job."""
+        response = await async_client.post(
+            "/api/v1/scheduler/jobs/nonexistent_job/run", headers=auth_headers
+        )
+
+        assert response.status_code in [404, 500, 503]
+        data = response.json()
+        assert "detail" in data
+
+    @pytest.mark.asyncio
+    async def test_run_now_hands_the_stored_call_over_and_says_where(
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        """ "Run Now" repeats the stored call - with a worker, an enqueue -
+        rather than running the job inside the webserver."""
+        task = ScheduledTask(
+            job_id="database_backup",
+            name="Daily Database Backup",
+            function="app.services.system.backup:backup_database_job",
+            args=["backup_database_job", "system"],
+            schedule="Cron: hour=2",
+            trigger_type="cron",
+            status="active",
+        )
+        api = "app.components.backend.api.scheduler"
+        with (
+            patch(f"{api}.ScheduledTaskManager") as manager_class,
+            patch(f"{api}.run_triggered_job") as run,
+        ):
+            manager = AsyncMock()
+            manager.get_task.return_value = task
+            manager.is_job_running.return_value = False
+            manager_class.return_value = manager
+
+            response = await async_client.post(
+                "/api/v1/scheduler/jobs/database_backup/run", headers=auth_headers
+            )
+
+        assert response.status_code == 202
+        assert response.json()["ran_in"] == "worker"
+        run.assert_called_once()
+        assert list(run.call_args.args[3]) == ["backup_database_job", "system"]
+
+    @pytest.mark.asyncio
     async def test_scheduler_endpoints_return_proper_content_type(
         self, async_client: AsyncClient
     ) -> None:
@@ -121,6 +228,8 @@ class TestSchedulerEndpoints:
             "/api/v1/scheduler/jobs",
             "/api/v1/scheduler/jobs/test_job",
             "/api/v1/scheduler/statistics",
+            "/api/v1/scheduler/executions",
+            "/api/v1/scheduler/jobs/test_job/stats",
         ]
 
         for endpoint in endpoints:
@@ -173,7 +282,7 @@ class TestSchedulerEndpoints:
 
     @pytest.mark.asyncio
     async def test_scheduler_dependency_injection_works(
-        self, async_client: AsyncClient
+        self, async_client: AsyncClient, auth_headers: dict[str, str]
     ) -> None:
         """Test that dependency injection properly provides ScheduledTaskManager."""
         # Mock the service layer to return predictable data
@@ -196,7 +305,9 @@ class TestSchedulerEndpoints:
             mock_manager.list_tasks.return_value = mock_tasks
             mock_manager_class.return_value = mock_manager
 
-            response = await async_client.get("/api/v1/scheduler/jobs")
+            response = await async_client.get(
+                "/api/v1/scheduler/jobs", headers=auth_headers
+            )
 
             # Verify the dependency was called
             mock_manager_class.assert_called_once()

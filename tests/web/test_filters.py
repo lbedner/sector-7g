@@ -1,0 +1,318 @@
+"""Jinja filters: the only place templates format money, dates, percents.
+
+Amounts arrive from the finance service as integer minor units with a
+currency code; ``money`` is the port of the Flet ``_usd`` helper widened
+to honour the code.
+"""
+
+from collections.abc import Callable
+from datetime import date, datetime
+from typing import Any
+
+from fastapi import FastAPI
+import pytest
+
+from app.components.web_frontend import overseer_code
+from app.components.web_frontend.filters import (
+    cents_to_input,
+    exactly,
+    money_to_cents,
+)
+from app.components.web_frontend.rendering import templates
+from app.services.system.models import ComponentStatus
+from tests.web.dom import select, text
+
+
+@pytest.fixture
+def money() -> Callable[..., str]:
+    return templates.env.filters["money"]
+
+
+@pytest.fixture
+def short_date() -> Callable[..., str]:
+    return templates.env.filters["short_date"]
+
+
+@pytest.fixture
+def pct() -> Callable[..., str]:
+    return templates.env.filters["pct"]
+
+
+class TestMoney:
+    @pytest.mark.parametrize(
+        ("cents", "expected"),
+        [
+            (123456, "$1,234.56"),
+            (5, "$0.05"),
+            (-5, "-$0.05"),
+            (-123456, "-$1,234.56"),
+            (0, "$0.00"),
+            (None, "$0.00"),
+        ],
+    )
+    def test_usd_matches_the_flet_register(
+        self, money: Callable[..., str], cents: int | None, expected: str
+    ) -> None:
+        assert money(cents) == expected
+
+    def test_known_currencies_use_their_symbol(self, money: Callable[..., str]) -> None:
+        assert money(100, "EUR") == "€1.00"
+        assert money(100, "GBP") == "£1.00"
+
+    def test_zero_decimal_currencies_have_no_cents(
+        self, money: Callable[..., str]
+    ) -> None:
+        assert money(1500, "JPY") == "¥1,500"
+
+    def test_unknown_currency_falls_back_to_its_code(
+        self, money: Callable[..., str]
+    ) -> None:
+        assert money(100, "CHF") == "CHF 1.00"
+
+
+class TestShortDate:
+    TODAY = date(2026, 9, 7)
+
+    def test_this_year_drops_the_year(self, short_date: Callable[..., str]) -> None:
+        assert short_date(date(2026, 7, 15), today=self.TODAY) == "Jul 15"
+
+    def test_other_years_keep_it(self, short_date: Callable[..., str]) -> None:
+        assert short_date(date(2025, 12, 31), today=self.TODAY) == "Dec 31, 2025"
+
+    def test_accepts_iso_strings_and_datetimes(
+        self, short_date: Callable[..., str]
+    ) -> None:
+        assert short_date("2026-07-15", today=self.TODAY) == "Jul 15"
+        assert short_date(datetime(2026, 7, 15, 13, 5), today=self.TODAY) == "Jul 15"
+
+    def test_blank_stays_blank(self, short_date: Callable[..., str]) -> None:
+        assert short_date(None) == ""
+        assert short_date("") == ""
+
+
+class TestPct:
+    @pytest.mark.parametrize(
+        ("ratio", "digits", "expected"),
+        [(0.153, 0, "15%"), (0.153, 1, "15.3%"), (1.0, 0, "100%"), (0, 0, "0%")],
+    )
+    def test_formats_a_ratio(
+        self, pct: Callable[..., str], ratio: float, digits: int, expected: str
+    ) -> None:
+        assert pct(ratio, digits) == expected
+
+    def test_blank_stays_blank(self, pct: Callable[..., Any]) -> None:
+        assert pct(None) == ""
+
+
+class TestMoneyRoundTrip:
+    def test_money_to_cents_reads_what_people_type(self) -> None:
+        assert money_to_cents("$1,200.50") == 120_050
+        assert money_to_cents(" 12 ") == 1_200
+        assert money_to_cents("") == 0
+        assert money_to_cents("lots") is None
+
+    def test_cents_to_input_is_the_inverse_for_form_values(self) -> None:
+        assert cents_to_input(350_000_00) == "350,000.00"
+        assert cents_to_input(None) == ""
+        assert money_to_cents(cents_to_input(1_250_50)) == 1_250_50
+
+
+class TestMarkdown:
+    """One renderer for anything a model wrote.
+
+    A chat reply, a generated report and a long-form field are all model
+    markdown. Rendering them in the browser instead means a second, weaker
+    implementation that drifts from this one, and the escaping has to be
+    earned again there.
+    """
+
+    @pytest.fixture
+    def markdown(self) -> Callable[..., str]:
+        return templates.env.filters["markdown"]
+
+    def test_the_things_a_model_actually_writes(
+        self, markdown: Callable[..., str]
+    ) -> None:
+        """Headings, tables and fenced code are exactly what a
+        regex-and-replace renderer in the browser gets wrong."""
+        out = markdown(
+            "# Head\n\n"
+            "| a | b |\n|---|---|\n| 1 | 2 |\n\n"
+            "```python\nx = 1\n```\n\n"
+            "- one\n- two\n"
+        )
+
+        assert "<h1>" in out
+        assert "<table>" in out
+        assert "<pre>" in out
+        assert "<ul>" in out
+
+    def test_fenced_code_is_highlighted_by_its_language(
+        self, markdown: Callable[..., str]
+    ) -> None:
+        out = markdown("```python\ndef upgrade():\n    pass\n```")
+        keywords = [text(span) for span in select(out, ".highlight pre span.k")]
+        assert "def" in keywords
+        assert "pass" in keywords
+
+    def test_fence_options_never_reach_the_formatter(
+        self, markdown: Callable[..., str]
+    ) -> None:
+        """marko's stock extension feeds ``key=value`` after the language
+        into Pygments; ``full`` would emit a whole document, ``cssfile``
+        would write to disk. Model markdown must not steer either."""
+        out = markdown('```python full=true,title="x"\nx = 1\n```')
+        assert "<html" not in out and "<style" not in out
+
+    def test_a_line_of_the_apps_code_links_to_it(
+        self, markdown: Callable[..., str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A path the Code page shows, set as code (with its line or not),
+        opens there; one it does not show stays code."""
+        monkeypatch.setattr(overseer_code, "enabled", lambda: True)
+        out = markdown(
+            "At `app/core/cache.py:10`, `app/core/cache.py` and `app/no.py`."
+        )
+        links = select(out, "a")
+        assert [link.get("href") for link in links] == [
+            overseer_code.line_url("app/core/cache.py", 10),
+            overseer_code.Scope().url("app/core/cache.py"),
+        ]
+        assert [text(link) for link in links] == [
+            "app/core/cache.py:10",
+            "app/core/cache.py",
+        ]
+        assert "<code>app/no.py</code>" in out
+
+    def test_code_stays_code_while_the_code_page_is_off(
+        self, markdown: Callable[..., str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(overseer_code, "enabled", lambda: False)
+        assert "<a" not in markdown("`app/core/cache.py:10`")
+
+    def test_code_inside_a_fence_is_escaped(self, markdown: Callable[..., str]) -> None:
+        out = markdown("```html\n<script>alert(1)</script>\n```")
+        assert "<script>" not in out
+
+    def test_raw_html_is_shown_not_run(self, markdown: Callable[..., str]) -> None:
+        """The model can format, never inject. This is why the renderer
+        carries an escaping mixin instead of using marko bare."""
+        out = markdown("<script>alert(1)</script>")
+
+        assert "<script>" not in out
+        assert "&lt;script&gt;" in out
+
+    def test_inline_html_is_escaped_too(self, markdown: Callable[..., str]) -> None:
+        assert "<img" not in markdown("hello <img src=x onerror=alert(1)> there")
+
+    def test_empty_input_is_not_an_error(self, markdown: Callable[..., str]) -> None:
+        assert markdown(None) == ""
+        assert markdown("") == ""
+
+    def test_a_source_on_its_own_is_highlighted_whole(self) -> None:
+        """A traceback is source, not markdown: a fence it quotes does not
+        end it early, and the HTML in it stays text."""
+        highlight: Callable[..., str] = templates.env.filters["highlight"]
+        out = highlight(
+            "Traceback (most recent call last):\n````\n<b>x</b>\nValueError: bad",
+            "pytb",
+        )
+        assert text(select(out, ".highlight .gr")[-1]) == "ValueError"
+        assert "<b>" not in out
+
+    def test_one_set_of_classes_styles_the_output(self) -> None:
+        """A heading that looks different in chat than in a report is a bug
+        nobody files and everybody notices."""
+        from app.components.web_frontend.filters import PROSE_CLASSES
+
+        for element in ("h1", "h2", "h3", "ul", "ol", "li", "pre", "table", "a"):
+            assert f"[&_{element}]" in PROSE_CLASSES, element
+
+
+class TestHealthTone:
+    @pytest.mark.parametrize(
+        ("state", "tone"),
+        [
+            ("healthy", "ok"),
+            ("warning", "warn"),
+            ("unhealthy", "error"),
+            ("info", "muted"),
+        ],
+    )
+    def test_maps_every_status(self, state: str, tone: str) -> None:
+        tone_of: Callable[[str], str] = templates.env.filters["health_tone"]
+        assert tone_of(state) == tone
+
+
+class TestDocstringFacts:
+    """Detail rows show docstrings (middleware, hooks, tasks); their RST
+    ``literals`` read as code, not as doubled backticks."""
+
+    def _render(self, value: object) -> str:
+        macro = templates.env.from_string(
+            '{% from "components/macros/layout.html" import facts %}'
+            "{{ facts([('Description', value)]) }}"
+        )
+        return macro.render(value=value)
+
+    def test_double_backticks_become_code(self) -> None:
+        html = self._render("Pure ASGI (not ``BaseHTTPMiddleware``): fast.")
+        assert "``" not in html
+        assert [text(c) for c in select(html, "dd code")] == ["BaseHTTPMiddleware"]
+
+    def test_markup_values_render_as_given(self) -> None:
+        from markupsafe import Markup
+
+        html = self._render(Markup('<code id="url">sqlite:///x</code>'))
+        assert text(select(html, "dd #url")[0]) == "sqlite:///x"
+
+    def test_the_rest_is_still_escaped(self) -> None:
+        html = self._render("<b>``x``</b>")
+        assert not select(html, "dd b") and "&lt;b&gt;" in html
+
+
+def test_a_message_sets_the_settings_and_secrets_it_names_as_code() -> None:
+    """A health message naming a setting or secret (``BUILD_ID``, ships
+    with every stack) shows it as a docstring shows a literal; an upper-case
+    word nothing declares is left alone, and the rest is escaped."""
+    from app.components.web_frontend.filters import message
+
+    html = f"<p>{message('BUILD_ID not set, OK <now>')}</p>"
+    assert [text(code) for code in select(html, "code")] == ["BUILD_ID"]  # not OK
+    assert "&lt;now&gt;" in html
+
+
+def test_a_message_keeps_its_own_lines() -> None:
+    """A driver's error is several lines (the statement it ran apart): each
+    stays one, wherever the message shows."""
+    from app.components.web_frontend.filters import message
+
+    found = message("database is locked\n[SQL: BEGIN]")
+    html = f"<p>{found}</p>"
+    assert len(select(html, "br")) == 1
+
+
+def test_every_health_message_on_overseer_shows_the_names_it_mentions(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cards, the map and a page's heading go through the one filter."""
+    from fastapi.testclient import TestClient
+
+    from tests.web.overseer import page_html, sign_in, status_with
+
+    named = ComponentStatus(name="observability", message="BUILD_ID is not set")
+    sign_in(app, monkeypatch, status_with(named))
+    for path in (
+        "/overseer?view=cards",
+        "/overseer/components/observability",
+    ):
+        html = page_html(TestClient(app), path)
+        assert "BUILD_ID" in [text(code) for code in select(html, "code")], path
+
+
+def test_exactly_is_a_pattern_for_that_text_alone() -> None:
+    """Regex syntax escaped, nothing else: the browser compiles a pattern
+    with the v flag, where a needless escape (``\\-``) is an error that
+    drops the check."""
+    assert exactly("12.00") == r"12\.00"
+    assert exactly("my-app (1)") == r"my-app \(1\)"

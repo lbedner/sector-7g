@@ -1,0 +1,256 @@
+"""Windows-friendly developer commands with no bash-only shell logic.
+
+Both the Makefile and the ``uv run poe`` tasks call into this module, so
+there is exactly one implementation of anything that used to need bash (the
+``serve``/``serve-bg`` port-resolution + ``eval`` dance, ``serve-prod``'s
+env-file ternary, ``migrate-reset``'s confirmation prompt).
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
+
+from scripts.resolve_ports import docs_port, resolve_ports
+
+_COMPOSE_DEV = [
+    "docker",
+    "compose",
+    "-f",
+    "docker-compose.yml",
+    "-f",
+    "docker-compose.dev.yml",
+]
+_COMPOSE_PROD = [
+    "docker",
+    "compose",
+    "-f",
+    "docker-compose.yml",
+    "-f",
+    "docker-compose.prod.yml",
+]
+
+
+def _aegis_checkout() -> str | None:
+    """The aegis-stack checkout this stack was generated from (``aegis init
+    --dev``), from ``.copier-answers.yml``; None for a released aegis. The
+    agent runs it: the pinned release may predate what its templates use."""
+    answers = Path(".copier-answers.yml")
+    lines = answers.read_text().splitlines() if answers.is_file() else []
+    source = next(
+        (x.partition(":")[2].strip() for x in lines if x.startswith("_src_path:")), ""
+    )
+    folder = Path(source.removeprefix("git+file://"))
+    if source.startswith("git+file://") and (folder / "pyproject.toml").is_file():
+        return str(folder)
+    return None
+
+
+def _deploy_agent_ready(env: dict[str, str]) -> None:
+    """What the ``deploy-agent`` service takes from this machine: the
+    checkout at its own path (``AEGIS_PROJECT_ROOT``), ``known_hosts``
+    (made, as Docker would mount a missing one as a directory), and the
+    ssh-agent holding a key, as the key itself never enters the container
+    (added once per login; ssh-add asks for its passphrase if it has one)."""
+    if os.name != "nt":  # a Windows path is no container path
+        env["AEGIS_PROJECT_ROOT"] = str(Path.cwd())
+        checkout = _aegis_checkout()
+        if checkout and "AEGIS_STACK_SOURCE" not in env:
+            env["AEGIS_STACK_SOURCE"] = checkout
+    known = Path.home() / ".ssh" / "known_hosts"
+    known.parent.mkdir(mode=0o700, exist_ok=True)
+    known.touch()
+    if shutil.which("ssh-add") is None:
+        return
+    held = subprocess.run(["ssh-add", "-l"], capture_output=True, env=env)
+    if held.returncode == 1:  # an agent, holding no key
+        keychain = ["--apple-use-keychain"] if sys.platform == "darwin" else []
+        subprocess.run(["ssh-add", *keychain], env=env)
+
+
+def _host_os() -> tuple[str, str]:
+    """This machine's OS and its home page (for its mark), which the
+    containers cannot see: they run Linux whatever runs Docker. Omarchy
+    keeps Arch's os-release, so its own directory names it."""
+    if sys.platform == "darwin":
+        return "macOS", "https://apple.com"
+    if sys.platform == "win32":
+        return "Windows", "https://microsoft.com"
+    if (Path.home() / ".local/share/omarchy").is_dir():
+        return "Omarchy", "https://omarchy.org"
+    try:
+        release = platform.freedesktop_os_release()
+    except OSError:
+        return "Linux", "https://kernel.org"
+    return release.get("NAME", "Linux"), release.get("HOME_URL", "https://kernel.org")
+
+
+def serve(*, detach: bool = False) -> None:
+    print(
+        "Starting services in background..."
+        if detach
+        else "Starting services... (Press Ctrl+C to stop)"
+    )
+    ports = resolve_ports(
+        ingress=True,
+        postgres=True,
+        redis=True,
+        ollama=False,
+        browser=False,
+        storage=False,
+    )
+    env = {**os.environ, **{key: str(value) for key, value in ports.items()}}
+    # `make serve ENGINE=granian LOOP=rloop`: make exports command-line
+    # variables, so each short name arrives here and becomes the setting
+    # the app reads.
+    for flag, setting in (("ENGINE", "WEBSERVER_ENGINE"), ("LOOP", "WEBSERVER_LOOP")):
+        if value := os.environ.get(flag):
+            env[setting] = value
+    profiles = ["--profile", "dev"]
+    cmd = [*_COMPOSE_DEV, *profiles, "up", "--remove-orphans"]
+    if detach:
+        cmd.append("-d")
+    env["HOST_OS"], env["HOST_OS_URL"] = _host_os()
+    _deploy_agent_ready(env)
+    subprocess.run(cmd, env=env, check=True)
+
+
+def serve_bg() -> None:
+    serve(detach=True)
+
+
+def serve_prod() -> None:
+    env_file = ".env.deploy" if Path(".env.deploy").exists() else ".env"
+    print(f"Starting services (production profile), reading {env_file}...")
+    print(
+        "Set APP_ENV=production and a real SECRET_KEY there before booting outside dev."
+    )
+    env = {**os.environ, "AEGIS_STACK_ENV_FILE": env_file}
+    subprocess.run([*_COMPOSE_PROD, "build", "webserver"], env=env, check=True)
+    subprocess.run(
+        [*_COMPOSE_PROD, "--profile", "prod", "up", "--remove-orphans"],
+        env=env,
+        check=True,
+    )
+
+
+def docs() -> None:
+    """Serve the documentation on a port that is actually free."""
+    port = docs_port()
+    subprocess.run(
+        ["uv", "run", "mkdocs", "serve", "--dev-addr", f"127.0.0.1:{port}"],
+        check=True,
+    )
+
+
+def clean_cache() -> None:
+    """Remove __pycache__ dirs and .pyc files (cross-platform, no find/rm)."""
+    root = Path(".")
+    for pycache in root.rglob("__pycache__"):
+        shutil.rmtree(pycache, ignore_errors=True)
+    for pyc in root.rglob("*.pyc"):
+        pyc.unlink(missing_ok=True)
+
+
+def status() -> None:
+    print("Current system status:")
+    print()
+    print("Docker containers:")
+    try:
+        subprocess.run(["docker", "compose", "ps"], check=True)
+    except FileNotFoundError:
+        print("Docker not installed (or not on PATH)")
+    except subprocess.CalledProcessError:
+        print("No containers running")
+    print()
+    print("Dependencies:")
+    try:
+        result = subprocess.run(
+            ["uv", "pip", "list"], check=True, capture_output=True, text=True
+        )
+        print("\n".join(result.stdout.splitlines()[:20]))
+    except FileNotFoundError:
+        print("uv not installed (or not on PATH)")
+    except subprocess.CalledProcessError:
+        print("Dependencies not installed")
+
+
+def migrate_reset() -> None:
+    print("WARNING: This will destroy all data in the database!")
+    try:
+        answer = input("Are you sure? Type 'yes' to continue: ")
+    except EOFError:
+        answer = ""
+    if answer != "yes":
+        sys.exit(1)
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "webserver",
+            "uv",
+            "run",
+            "alembic",
+            "-c",
+            "alembic/alembic.ini",
+            "downgrade",
+            "base",
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "exec",
+            "webserver",
+            "uv",
+            "run",
+            "alembic",
+            "-c",
+            "alembic/alembic.ini",
+            "upgrade",
+            "head",
+        ],
+        check=True,
+    )
+    print("Database reset complete")
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "action",
+        choices=[
+            "serve",
+            "serve-bg",
+            "serve-prod",
+            "docs",
+            "migrate-reset",
+        ],
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        if args.action == "serve":
+            serve()
+        elif args.action == "serve-bg":
+            serve_bg()
+        elif args.action == "serve-prod":
+            serve_prod()
+        elif args.action == "docs":
+            docs()
+        else:
+            migrate_reset()
+    except subprocess.CalledProcessError as exc:
+        sys.exit(exc.returncode)
+
+
+if __name__ == "__main__":
+    main()

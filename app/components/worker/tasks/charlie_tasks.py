@@ -1,5 +1,5 @@
 """
-Charlie worker tasks for arq.
+Charlie worker tasks.
 
 Thin wrappers around services/springfield/charlie.py functions.
 """
@@ -14,23 +14,21 @@ from app.services.springfield.charlie import (
 )
 
 
-async def monitor_gauges_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def monitor_gauges_task(**kwargs: Any) -> dict[str, Any]:
     """Charlie monitors control room gauges."""
     return await monitor_gauges()
 
 
-async def restock_break_room_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def restock_break_room_task(**kwargs: Any) -> dict[str, Any]:
     """Charlie restocks the break room."""
     return await restock_break_room()
 
 
-async def log_shift_notes_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def log_shift_notes_task(**kwargs: Any) -> dict[str, Any]:
     """Charlie logs shift notes."""
     return await log_shift_notes()
 
 
-async def check_emergency_exits_task(
-    ctx: dict[str, Any], **kwargs: Any
-) -> dict[str, Any]:
+async def check_emergency_exits_task(**kwargs: Any) -> dict[str, Any]:
     """Charlie checks emergency exits."""
     return await check_emergency_exits()

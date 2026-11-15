@@ -9,8 +9,9 @@ import contextlib
 
 import flet as ft
 
-from app.components.frontend.controls import SecondaryText
+from app.components.frontend.controls import SecondaryText, status_dot
 from app.components.frontend.theme import AegisTheme as Theme
+from app.core.constants import ComponentName
 from app.services.system.models import ComponentStatus
 
 from .card_container import CardContainer
@@ -136,15 +137,13 @@ class SchedulerCard:
                 schedule_display = simplify_schedule(schedule)
                 next_run_display = format_next_run_time(next_run)
 
-                # Active jobs have green status
-                status_icon = "🟢"
-
                 row = ft.Container(
                     content=ft.Row(
                         [
                             ft.Container(
-                                content=ft.Text(status_icon, size=12),
+                                content=status_dot(Theme.Colors.SUCCESS),
                                 width=16,
+                                alignment=ft.alignment.center,
                             ),
                             ft.Container(
                                 content=ft.Text(name, style=cell_style),
@@ -192,27 +191,15 @@ class SchedulerCard:
                 )
             )
 
-        scrollable_rows = ft.Column(
-            rows,
-            spacing=0,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True,
-        )
-
         return ft.Container(
             content=ft.Column(
-                [header_row, scrollable_rows],
+                [header_row] + rows,
                 spacing=0,
-                expand=True,
             ),
             bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.GREY),
             border_radius=8,
-            border=ft.border.all(
-                1,
-                ft.Colors.with_opacity(0.15, ft.Colors.GREY),
-            ),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.GREY)),
             padding=ft.padding.all(12),
-            expand=True,
         )
 
     def _create_stats_row(self) -> ft.Container:
@@ -246,7 +233,6 @@ class SchedulerCard:
                     self._create_stats_row(),
                 ],
                 spacing=0,
-                expand=True,
             ),
             padding=ft.padding.all(16),
             expand=True,
@@ -260,5 +246,5 @@ class SchedulerCard:
             content=self._create_card_content(),
             border_color=border_color,
             component_data=self.component_data,
-            component_name="scheduler",
+            component_name=ComponentName.SCHEDULER,
         )

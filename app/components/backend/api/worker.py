@@ -1,6 +1,6 @@
-"""Worker task API endpoints."""
+"""Worker task API endpoints for TaskIQ backend."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 
@@ -11,8 +11,7 @@ from app.components.backend.api.models import (
     TaskResultResponse,
     TaskStatusResponse,
 )
-from app.components.worker.events import publish_event
-from app.components.worker.pools import get_queue_pool
+from app.components.worker.pools import enqueue_task, get_broker
 from app.components.worker.tasks import get_task_by_name, list_available_tasks
 from app.core.config import get_default_queue
 from app.core.log import logger
@@ -44,7 +43,7 @@ async def list_tasks() -> TaskListResponse:
 
 
 @router.post("/enqueue", response_model=TaskResponse)
-async def enqueue_task(task_request: TaskRequest) -> TaskResponse:
+async def enqueue_task_endpoint(task_request: TaskRequest) -> TaskResponse:
     """Enqueue a background task for processing."""
     logger.info(
         f"Enqueueing task: {task_request.task_name} (queue: {task_request.queue_type})"
@@ -75,53 +74,25 @@ async def enqueue_task(task_request: TaskRequest) -> TaskResponse:
         )
 
     try:
-        pool, queue_name = await get_queue_pool(task_request.queue_type)
-
-        job = await pool.enqueue_job(
+        # Use TaskIQ's kiq() method via our wrapper
+        task_handle = await enqueue_task(
             task_request.task_name,
+            task_request.queue_type,
             *task_request.args,
-            _queue_name=queue_name,
-            _defer_by=task_request.delay_seconds,
+            delay_seconds=task_request.delay_seconds,
             **task_request.task_kwargs,
         )
 
         queued_at = datetime.now()
-        estimated_start = None
-        if task_request.delay_seconds:
-            estimated_start = queued_at + timedelta(seconds=task_request.delay_seconds)
 
-        if job is None:
-            await pool.aclose()
-            raise HTTPException(status_code=500, detail="Failed to enqueue task")
-
-        # Publish enqueue event for real-time dashboard updates
-        await publish_event(
-            pool, "job.enqueued", task_request.queue_type,
-            {"job_id": job.job_id, "task": task_request.task_name},
-        )
-
-        # Record task enqueued in history
-        from app.components.worker.task_history import record_task_enqueued
-        from app.core.config import settings as app_settings
-
-        await record_task_enqueued(
-            pool,
-            job.job_id,
-            task_request.task_name,
-            task_request.queue_type,
-            ttl_seconds=app_settings.TASK_HISTORY_TTL_SECONDS,
-        )
-
-        await pool.aclose()
-
-        logger.info(f"Task enqueued: {job.job_id} ({task_request.task_name})")
+        logger.info(f"Task enqueued: {task_handle.task_id} ({task_request.task_name})")
 
         return TaskResponse(
-            task_id=job.job_id,
+            task_id=task_handle.task_id,
             task_name=task_request.task_name,
             queue_type=task_request.queue_type,
             queued_at=queued_at,
-            estimated_start=estimated_start,
+            estimated_start=None,
             message=(
                 f"Task '{task_request.task_name}' enqueued to "
                 f"{task_request.queue_type} queue"
@@ -143,62 +114,47 @@ async def enqueue_task(task_request: TaskRequest) -> TaskResponse:
 async def get_task_status(task_id: str) -> TaskStatusResponse:
     """Get the status of a background task."""
     try:
-        pool, _ = await get_queue_pool(get_default_queue())
+        # TaskIQ result backend access
+        broker = get_broker(get_default_queue())
+        result_backend = broker.result_backend
 
-        job_key = f"arq:job:{task_id}"
-        result_key = f"arq:result:{task_id}"
-
-        job_exists = await pool.exists(job_key)
-        result_exists = await pool.exists(result_key)
-
-        if not job_exists and not result_exists:
-            await pool.aclose()
+        if result_backend is None:
             raise HTTPException(
-                status_code=404,
+                status_code=500,
                 detail={
-                    "error": "task_not_found",
-                    "message": f"Task {task_id} not found",
+                    "error": "no_result_backend",
+                    "message": "Result backend not configured",
                 },
             )
 
-        if result_exists:
-            result_data = await pool.get(result_key)
-            if result_data:
-                try:
-                    import pickle
-
-                    result = pickle.loads(result_data)
-                    if isinstance(result, dict) and result.get("error"):
-                        status = "failed"
-                        error = result.get("error")
-                    else:
-                        status = "complete"
-                        error = None
-                except Exception:
-                    status = "complete"
-                    error = None
+        # Check if result exists
+        try:
+            result = await result_backend.get_result(task_id)
+            if result.is_err:
+                status = "failed"
+                error = str(result.error)
             else:
                 status = "complete"
                 error = None
-        elif job_exists:
+            result_available = True
+        except Exception:
+            # Task might be queued or in progress
             status = "queued"
             error = None
-        else:
-            status = "unknown"
-            error = None
-
-        await pool.aclose()
+            result_available = False
 
         return TaskStatusResponse(
             task_id=task_id,
             status=status,
-            result_available=result_exists,
+            result_available=result_available,
             error=error,
             enqueue_time=None,
             start_time=None,
             finish_time=None,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get task status for {task_id}: {e}")
         raise HTTPException(
@@ -210,90 +166,64 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
 async def get_task_result(task_id: str) -> TaskResultResponse:
     """Get the result of a completed background task."""
     try:
-        pool, _ = await get_queue_pool(get_default_queue())
+        broker = get_broker(get_default_queue())
+        result_backend = broker.result_backend
 
-        result_key = f"arq:result:{task_id}"
-        result_exists = await pool.exists(result_key)
-
-        if not result_exists:
-            job_key = f"arq:job:{task_id}"
-            job_exists = await pool.exists(job_key)
-            await pool.aclose()
-
-            if not job_exists:
-                raise HTTPException(
-                    status_code=404,
-                    detail={
-                        "error": "task_not_found",
-                        "message": f"Task {task_id} not found",
-                    },
-                )
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "error": "task_not_completed",
-                        "message": f"Task {task_id} has not completed yet",
-                        "current_status": "queued or in_progress",
-                    },
-                )
-
-        result_data = await pool.get(result_key)
-        await pool.aclose()
-
-        if not result_data:
+        if result_backend is None:
             raise HTTPException(
                 status_code=500,
                 detail={
-                    "error": "result_data_missing",
-                    "message": "Result data is missing",
+                    "error": "no_result_backend",
+                    "message": "Result backend not configured",
                 },
             )
 
         try:
-            import pickle
+            result = await result_backend.get_result(task_id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "task_not_found",
+                    "message": f"Task {task_id} not found or result expired: {e}",
+                },
+            )
 
-            result = pickle.loads(result_data)
-
-            if isinstance(result, Exception):
-                result_data = {
-                    "error_type": type(result).__name__,
-                    "error_message": str(result),
-                    "task_failed": True,
-                }
-                task_status = "failed"
-            else:
-                try:
-                    import json
-
-                    json.dumps(result)
-                    result_data = result
-                    task_status = "completed"
-                except (TypeError, ValueError):
-                    result_data = {
-                        "result_type": type(result).__name__,
-                        "result_str": str(result),
-                        "note": "Result was not JSON-serializable, converted to string",
-                    }
-                    task_status = "completed"
-
+        if result.is_err:
             return TaskResultResponse(
                 task_id=task_id,
-                status=task_status,
-                result=result_data,
+                status="failed",
+                result={
+                    "error_type": type(result.error).__name__,
+                    "error_message": str(result.error),
+                    "task_failed": True,
+                },
                 enqueue_time=None,
                 start_time=None,
                 finish_time=None,
             )
 
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "error": "result_deserialization_failed",
-                    "message": f"Failed to deserialize result: {str(e)}",
-                },
-            )
+        # Try to serialize result
+        try:
+            import json
+
+            json.dumps(result.return_value)
+            result_data = result.return_value
+        except (TypeError, ValueError):
+            result_data = {
+                "result_type": type(result.return_value).__name__,
+                "result_str": str(result.return_value),
+                "note": "Result was not JSON-serializable, converted to string",
+            }
+
+        return TaskResultResponse(
+            task_id=task_id,
+            status="completed",
+            result=result_data,
+            enqueue_time=None,
+            start_time=None,
+            finish_time=None,
+        )
 
     except HTTPException:
         raise

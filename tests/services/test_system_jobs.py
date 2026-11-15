@@ -1,0 +1,316 @@
+"""Tests for the in-process background job runner."""
+
+import asyncio
+
+import pytest
+
+from app.services.system.jobs import (
+    JobHandle,
+    JobRunner,
+    JobSnapshot,
+    now_iso,
+    progress_of,
+)
+
+
+class TestJobRunner:
+    @pytest.mark.asyncio
+    async def test_a_job_runs_to_done_with_its_result(self) -> None:
+        runner = JobRunner()
+
+        async def work(handle: JobHandle) -> dict:
+            return {"answer": 42}
+
+        job_id = runner.start("answer", work)
+        snapshot = await runner.wait(job_id)
+
+        assert snapshot.status == "done"
+        assert snapshot.result == {"answer": 42}
+        assert snapshot.error is None
+
+    @pytest.mark.asyncio
+    async def test_the_latest_job_of_a_name_is_found_without_waiting(self) -> None:
+        """No await: a caller checks it and starts one as a single step."""
+        runner = JobRunner()
+
+        async def work(handle: JobHandle) -> dict:
+            return {}
+
+        first = runner.start("index:docs", work)
+        await runner.wait(first)
+        second = runner.start("index:docs", work)
+        runner.start("index:code", work)
+
+        assert runner.latest("index:docs").job_id == second  # type: ignore[union-attr]
+        assert runner.latest("index:gone") is None
+        await runner.wait(second)
+
+    @pytest.mark.asyncio
+    async def test_a_raising_job_fails_with_the_real_error(self) -> None:
+        runner = JobRunner()
+
+        async def work(handle: JobHandle) -> dict:
+            raise ValueError("QIF import requires a target account_id.")
+
+        job_id = runner.start("import", work)
+        snapshot = await runner.wait(job_id)
+
+        assert snapshot.status == "failed"
+        assert snapshot.error == "QIF import requires a target account_id."
+
+    @pytest.mark.asyncio
+    async def test_a_job_runs_as_a_run_of_its_own_id(self) -> None:
+        """What the work logs lands under the job's id (``run_log``), and
+        the snapshot says which run to read."""
+        import structlog
+
+        runner = JobRunner()
+        seen: list[str] = []
+
+        async def work(handle: JobHandle) -> dict:
+            seen.append(structlog.contextvars.get_contextvars().get("run_id", ""))
+            return {}
+
+        job_id = runner.start("bound", work)
+        snapshot = await runner.wait(job_id)
+
+        assert seen == [job_id]
+        assert snapshot.run_id == job_id
+        assert "run_id" not in structlog.contextvars.get_contextvars()
+
+    @pytest.mark.asyncio
+    async def test_subscribers_see_labels_then_the_terminal_event(self) -> None:
+        runner = JobRunner()
+        release = asyncio.Event()
+
+        async def work(handle: JobHandle) -> dict:
+            handle.set_label("step two")
+            await release.wait()
+            return {"ok": True}
+
+        job_id = runner.start("stepper", work, label="step one")
+        queue = runner.subscribe(job_id)
+        assert queue is not None
+
+        first = await queue.get()  # primed with the current snapshot
+        release.set()
+        seen = [first]
+        while True:
+            item = await asyncio.wait_for(queue.get(), timeout=2)
+            if item is None:  # closed after the terminal event
+                break
+            seen.append(item)
+
+        labels = [snap["label"] for snap in seen]
+        assert "step two" in labels
+        assert seen[-1]["status"] == "done"
+        assert seen[-1]["result"] == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_a_late_subscriber_still_gets_the_terminal_event(self) -> None:
+        runner = JobRunner()
+
+        async def work(handle: JobHandle) -> dict:
+            return {"late": True}
+
+        job_id = runner.start("quick", work)
+        await runner.wait(job_id)
+
+        queue = runner.subscribe(job_id)
+        assert queue is not None
+        snapshot = await queue.get()
+        assert snapshot["status"] == "done"
+        assert await queue.get() is None
+
+    @pytest.mark.asyncio
+    async def test_unknown_job_id_has_no_state_and_no_stream(self) -> None:
+        runner = JobRunner()
+        assert runner.get("nope") is None
+        assert runner.subscribe("nope") is None
+
+    @pytest.mark.asyncio
+    async def test_finished_jobs_are_evicted_oldest_first(self) -> None:
+        runner = JobRunner(max_finished=2)
+
+        async def work(handle: JobHandle) -> dict:
+            return {}
+
+        ids = [runner.start(f"j{i}", work) for i in range(3)]
+        for job_id in ids:
+            await runner.wait(job_id)
+        runner.start("j3", work)  # trips eviction
+
+        assert runner.get(ids[0]) is None
+        assert runner.get(ids[2]) is not None
+
+
+class TestSubprocessRunsOffTheEventLoop:
+    """pg_dump/psql block for their whole duration; on the loop they
+    freeze every other scheduled job (same disease as the import parse,
+    fixed the same way)."""
+
+    @staticmethod
+    def _fake_run(seen: list):
+        import threading
+
+        def fake_run(cmd, **kwargs):
+            seen.append(threading.current_thread())
+
+            class _Result:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return _Result()
+
+        return fake_run
+
+    @pytest.mark.asyncio
+    async def test_backup_job_dumps_in_a_thread(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        import threading
+
+        from app.services.system import backup as backup_module
+
+        if not hasattr(backup_module, "subprocess"):
+            pytest.skip("sqlite backup copies a file; no subprocess to thread")
+        seen: list[threading.Thread] = []
+        monkeypatch.setattr(backup_module.subprocess, "run", self._fake_run(seen))
+        monkeypatch.chdir(tmp_path)
+        await backup_module.backup_database_job()
+        assert seen
+        assert all(t is not threading.main_thread() for t in seen)
+
+    @pytest.mark.asyncio
+    async def test_restore_runs_in_a_thread(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
+        import threading
+
+        from app.services.system import backup as backup_module
+
+        if not hasattr(backup_module, "subprocess"):
+            pytest.skip("sqlite backup copies a file; no subprocess to thread")
+        seen: list[threading.Thread] = []
+        monkeypatch.setattr(backup_module.subprocess, "run", self._fake_run(seen))
+        monkeypatch.chdir(tmp_path)
+        backups = tmp_path / "backups"
+        backups.mkdir()
+        (backups / "b.sql").write_text("-- dump")
+        ok = await backup_module.restore_database_from_backup("b.sql")
+        assert ok
+        assert seen
+        assert all(t is not threading.main_thread() for t in seen)
+
+
+class _FakeStore:
+    """A job store that can be told to fall over."""
+
+    def __init__(self, snapshot: JobSnapshot | None, *, raises: bool = False) -> None:
+        self.snapshot = snapshot
+        self.raises = raises
+        self.gets = 0
+
+    async def get(self, job_id: str) -> JobSnapshot | None:
+        self.gets += 1
+        if self.raises:
+            raise ConnectionError("redis is gone")
+        return self.snapshot
+
+    async def list_jobs(self) -> list[JobSnapshot]:
+        return [self.snapshot] if self.snapshot else []
+
+
+def _running(job_id: str = "remote") -> JobSnapshot:
+    return JobSnapshot(
+        job_id=job_id,
+        name="documents-extract:1",
+        status="running",
+        label="Queued...",
+        result=None,
+        error=None,
+        started_at=now_iso(),
+    )
+
+
+class TestRemoteJobs:
+    """A job on a worker is watched by polling the shared store."""
+
+    @pytest.mark.asyncio
+    async def test_a_store_that_falls_over_ends_the_stream(self) -> None:
+        """A stream that just stops is a client waiting forever."""
+        store = _FakeStore(_running())
+        runner = JobRunner()
+        runner.attach_remote(store, poll_seconds=0.01)
+
+        queue = await runner.subscribe_any("remote")
+        assert queue is not None
+        assert (await asyncio.wait_for(queue.get(), 1))["status"] == "running"
+
+        store.raises = True
+
+        assert await asyncio.wait_for(queue.get(), 1) is None
+
+    @pytest.mark.asyncio
+    async def test_unsubscribing_stops_the_polling(self) -> None:
+        """Nobody is reading the queue; nothing should still be filling it."""
+        store = _FakeStore(_running())
+        runner = JobRunner()
+        runner.attach_remote(store, poll_seconds=0.01)
+
+        queue = await runner.subscribe_any("remote")
+        assert queue is not None
+        await asyncio.sleep(0.05)
+
+        runner.unsubscribe("remote", queue)
+        await asyncio.sleep(0.05)
+        polls = store.gets
+        await asyncio.sleep(0.05)
+
+        assert store.gets == polls, "the relay kept polling after nobody was left"
+
+
+class TestSharedStore:
+    """The store the webserver and the worker share (``RedisJobStore.shared``)."""
+
+    def test_it_is_where_this_process_reaches_redis(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """On the host the compose hostname in ``REDIS_URL`` resolves to
+        nothing: the store is at ``redis_url_effective``, as every other
+        Redis client is."""
+        from app.core.config import Settings
+        from app.services.system.job_store import RedisJobStore
+
+        asked: list[str] = []
+        monkeypatch.setattr(
+            Settings,
+            "redis_url_effective",
+            property(lambda _: "redis://localhost:6390"),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            RedisJobStore,
+            "from_url",
+            classmethod(lambda cls, url: asked.append(url) or cls(None)),
+        )
+        RedisJobStore.shared()
+        assert asked == ["redis://localhost:6390"]
+
+    def test_the_suite_never_reaches_a_real_redis(self) -> None:
+        from app.services.system.job_store import RedisJobStore
+        from tests._fake_redis import FakeRedis
+
+        # Every store is built through ``from_url``, which the suite holds in
+        # memory; any URL, so a stack without Redis checks the same.
+        assert isinstance(
+            RedisJobStore.from_url("redis://redis:6379")._redis, FakeRedis
+        )
+
+
+def test_how_far_a_job_is_is_read_off_its_label() -> None:
+    """The first "N of M" a label says, whatever the words around it."""
+    assert progress_of("Indexing 50 of 200 files...") == (50, 200)
+    assert progress_of("3 of 12 · reads 1 of 2 pages") == (3, 12)
+    assert progress_of("Reading...") is None

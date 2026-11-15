@@ -1,0 +1,475 @@
+"""The backend's patterns, detected from the running app.
+
+A pattern is one definition: the steps of its diagram, how to find its
+instances, and its rules, each with the reason behind it and what is
+exempt. The Overseer's Patterns page renders a report of it; a test holds
+the enforced rules at zero violations; an agent can read the same report
+before building. Instances are found, never listed by hand, so the
+catalog cannot drift from the code.
+
+Routes are defined here. A component with a pattern of its own defines
+it beside its code (``app.components.worker.patterns``) with the same
+pieces and the function helpers below.
+"""
+
+import ast
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
+import inspect
+from pathlib import Path
+import textwrap
+from types import ModuleType
+import typing
+from typing import Any, NamedTuple, Self, TypeVar
+
+from fastapi.routing import APIRoute
+from pydantic import BaseModel
+from starlette.responses import StreamingResponse
+from starlette.routing import BaseRoute
+
+from app.core import source_index
+from app.core.log import logger
+from app.core.route_auth import route_requires_auth
+from app.core.source_functions import Function
+from app.core.source_index import Module
+
+API_PACKAGE = "app.components.backend.api"
+SERVICE_PACKAGE = "app.services"
+PROJECT_ROOT = source_index.ROOT
+# Past this many statements a handler or task is doing work a service
+# should own. From the shipped routes: audited admin actions take four or
+# five, the token and registration handlers ten or more.
+THIN_STATEMENTS = 5
+
+Check = Callable[[Any], bool]
+
+
+def _never(_target: Any) -> bool:
+    return False
+
+
+def _no_rank(_target: Any) -> tuple[Any, ...]:
+    return ()
+
+
+@dataclass(frozen=True)
+class Rule:
+    key: str
+    title: str
+    why: str
+    check: Check
+    exempt: Check = _never
+    # Enforced rules are held at zero violations by the test suite; the
+    # rest are reported on the page and left to judgement.
+    enforced: bool = False
+    # A gated rule's known debt stands, but a new place breaking it blocks
+    # a change (``patterns check --strict``), as an enforced rule's does.
+    gate: bool = False
+    # The ``path:line``s that show an instance breaks it (where the
+    # instance is, when None), and what to do about it (its title, when "").
+    evidence: Callable[[Any], list[str]] | None = None
+    action: str = ""
+
+
+@dataclass(frozen=True)
+class Step:
+    label: str
+    detail: str
+    # The instances this step is relevant to (all when None), and the
+    # check that one of them follows it. A step with no ``follows`` is
+    # counted but not scored: every protected route has a current user.
+    applies: Check | None = None
+    follows: Check | None = None
+    # An optional step (a router, jobs) is inventory: counted, never missed.
+    expected: bool = True
+
+
+@dataclass(frozen=True)
+class Pattern:
+    key: str
+    title: str
+    summary: str
+    steps: tuple[Step, ...]
+    rules: tuple[Rule, ...]
+    # source -> (label, target) for every instance; the page hands in the
+    # app's routes, which a pattern that finds its own instances ignores.
+    discover: Callable[[Any], list[tuple[str, Any]]]
+    # The function to read for an instance's source.
+    function: Callable[[Any], Any]
+    # Orders clean instances; the highest is the canonical example.
+    rank: Callable[[Any], tuple[Any, ...]] = field(default=_no_rank)
+    # The system model's node an instance's findings are about (its
+    # function's owner, when None).
+    subject: Callable[[Any], str] | None = None
+    # What is exempt by decision, with why: shown beside the rules.
+    exemptions: tuple[tuple[str, str], ...] = ()
+
+
+class SourceText(NamedTuple):
+    """Source already read from disk, for patterns whose instances are not
+    importable objects (services are read with ``ast``)."""
+
+    text: str
+    path: str
+    line: int = 1
+
+    @classmethod
+    def of(cls, function: Function, lines: tuple[str, ...], path: str) -> Self:
+        """``function``'s own lines of its module's ``lines``, at ``path``."""
+        text = "\n".join(lines[function.start - 1 : function.end])
+        return cls(text, path, function.start)
+
+
+Read = TypeVar("Read")
+
+
+def read_functions(
+    source: Any, folder: str, read: Callable[[Function, Module, str], Read | None]
+) -> list[tuple[str, Read]]:
+    """What ``read`` makes of each function under ``folder`` (from the
+    project's root; ``source``, when a ``Path``, is another root: tests),
+    each labelled ``path: qualname`` by its path under ``folder``. Read
+    with ``ast``, never imported: no import side effects."""
+    if isinstance(source, Path):
+        index, prefix = source_index.at(source), ""
+    else:
+        index, prefix = source_index.at(PROJECT_ROOT, folder), f"{folder}/"
+    found = []
+    for name, path in sorted(index.paths.items(), key=lambda item: item[1]):
+        module = index.get(name)
+        if module is None:
+            logger.warning("A pattern skipped an unreadable module", path=path)
+            continue
+        relative = path.removeprefix(prefix)
+        for function in module.functions:
+            if (made := read(function, module, relative)) is not None:
+                found.append((f"{relative}: {function.qualname}", made))
+    return found
+
+
+class Instance(NamedTuple):
+    label: str
+    target: Any
+    findings: list[str]  # the rules it breaks, by key
+    missed: list[str]  # the steps that apply to it it does not follow
+
+
+class RuleReport(NamedTuple):
+    key: str
+    title: str
+    why: str
+    enforced: bool
+    applicable: int
+    violations: list[Instance]
+
+    @property
+    def followed(self) -> int:
+        return self.applicable - len(self.violations)
+
+
+class StepReport(NamedTuple):
+    label: str
+    detail: str
+    applicable: int
+    followed: int | None
+
+
+class Report(NamedTuple):
+    pattern: Pattern
+    instances: list[Instance]
+    rules: list[RuleReport]
+    steps: list[StepReport]
+    canonical: Instance | None
+
+    @property
+    def enforced(self) -> list[RuleReport]:
+        return [rule for rule in self.rules if rule.enforced]
+
+
+# Function helpers, shared by every pattern ---------------------------------
+
+
+def returns(call: Any) -> object:
+    """A callable's return annotation, resolved; None if unreadable."""
+    try:
+        return typing.get_type_hints(call).get("return")
+    except (NameError, TypeError):
+        return None
+
+
+def from_services(obj: object) -> bool:
+    """A service module, function or class; not a schema that lives there."""
+    if isinstance(obj, ModuleType):
+        return obj.__name__.startswith(SERVICE_PACKAGE)
+    if isinstance(obj, type) and issubclass(obj, BaseModel):
+        return False
+    return str(getattr(obj, "__module__", "")).startswith(SERVICE_PACKAGE)
+
+
+def body(func: Any) -> list[ast.stmt] | None:
+    """A function's statements, docstring aside; None if unreadable."""
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    except (OSError, TypeError, SyntaxError):
+        return None
+    function = tree.body[0]
+    if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+        return None
+    statements = function.body
+    first = statements[0] if statements else None
+    if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+        statements = statements[1:]
+    return statements
+
+
+def _logs(statement: ast.stmt) -> bool:
+    """A bare ``logger.<level>(...)`` line: not work."""
+    call = statement.value if isinstance(statement, ast.Expr) else None
+    target = call.func if isinstance(call, ast.Call) else None
+    return (
+        isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == "logger"
+    )
+
+
+def thin(func: Any, uses_service: bool) -> bool:
+    """Hands the work to a service in a few statements, or is one statement
+    (a constant answer, or a single delegation) with no work to hand over.
+    Log lines are not counted."""
+    statements = body(func)
+    if statements is None:
+        return False
+    work = [s for s in statements if not _logs(s)]
+    return len(work) == 1 or (uses_service and len(work) <= THIN_STATEMENTS)
+
+
+def statement_count(func: Any) -> int:
+    return len(body(func) or [])
+
+
+# Routes ---------------------------------------------------------------------
+
+
+def label(route: APIRoute) -> str:
+    methods = ",".join(sorted(m for m in route.methods if m != "HEAD"))
+    return f"{methods} {route.path}"
+
+
+def dependency_names(route: APIRoute) -> set[str]:
+    """Every dependency the route pulls in, however deeply nested."""
+    names: set[str] = set()
+    pending = list(route.dependant.dependencies)
+    while pending:
+        dependant = pending.pop()
+        names.add(getattr(dependant.call, "__name__", ""))
+        pending.extend(dependant.dependencies)
+    return names
+
+
+def _streams(route: APIRoute) -> bool:
+    """True when the route answers with a stream rather than a model."""
+    response_class = getattr(route.response_class, "value", route.response_class)
+    for candidate in (response_class, returns(route.endpoint)):
+        if isinstance(candidate, type) and issubclass(candidate, StreamingResponse):
+            return True
+    return False
+
+
+def _untyped_ok(route: APIRoute) -> bool:
+    """No body to type: 204 No Content, or a stream."""
+    return route.status_code == 204 or _streams(route)
+
+
+def _injects_service(route: APIRoute) -> bool:
+    """A handler dependency hands it a service (which brings the session)."""
+    return any(from_services(returns(d.call)) for d in route.dependant.dependencies)
+
+
+def _uses_service(route: APIRoute) -> bool:
+    """It is handed a service, or its handler's dry path reaches one (a
+    dependency living in a service, auth's current user, is not its own)."""
+    from .dry_path import entry_of, reaches_service  # the walk reads this module
+
+    return _injects_service(route) or reaches_service(
+        entry_of(route.endpoint, label(route))
+    )
+
+
+def _thin_route(route: APIRoute) -> bool:
+    return thin(route.endpoint, _uses_service(route))
+
+
+def routes(source: Iterable[BaseRoute]) -> list[tuple[str, APIRoute]]:
+    """The routes the API publishes: everything in the OpenAPI schema."""
+    return [
+        (label(r), r) for r in source if isinstance(r, APIRoute) and r.include_in_schema
+    ]
+
+
+def _route_rank(route: APIRoute) -> tuple[bool, bool, bool, int, int]:
+    """Protected, handed a service, taking a path parameter, in the fewest
+    statements (shortest path on a tie)."""
+    return (
+        route_requires_auth(route),
+        _injects_service(route),
+        "{" in route.path,
+        -statement_count(route.endpoint),
+        -len(route.path),
+    )
+
+
+ROUTE = Pattern(
+    key="route",
+    title="Route",
+    summary=(
+        "An HTTP endpoint in the API package: a tagged router under a versioned "
+        "path, the current user injected when protected, a service injected that "
+        "brings the session and does the work, and a response model as the contract."
+    ),
+    steps=(
+        Step("Request", "Arrives at /api/v1/..."),
+        Step("Router", "Grouped by tag", follows=lambda r: bool(r.tags)),
+        Step(
+            "Current user", "Injected on protected routes", applies=route_requires_auth
+        ),
+        Step(
+            "Service",
+            "Injected with Depends(get_..._service), which brings the session; "
+            "the handler only calls it",
+            follows=_uses_service,
+        ),
+        Step(
+            "Response model",
+            "The typed contract",
+            applies=lambda r: not _untyped_ok(r),
+            follows=lambda r: r.response_model is not None,
+        ),
+    ),
+    rules=(
+        Rule(
+            "api-package",
+            "Lives in the API package",
+            "The OpenAPI schema is the API's contract. Pages and htmx fragments "
+            "are defined elsewhere and set include_in_schema=False.",
+            lambda r: r.endpoint.__module__.startswith(API_PACKAGE),
+            enforced=True,
+        ),
+        Rule(
+            "versioned",
+            "Versioned path",
+            "Clients pin a version under /api/v1; /health is the one unversioned probe.",
+            lambda r: r.path.startswith(("/api/v1/", "/health")),
+        ),
+        Rule(
+            "tagged",
+            "Tagged",
+            "Tags group the API docs, the Server's route list and this catalog.",
+            lambda r: bool(r.tags),
+        ),
+        Rule(
+            "typed",
+            "Typed response",
+            "A response model is the contract clients generate against. Streams "
+            "and 204 No Content have no body to type.",
+            lambda r: r.response_model is not None,
+            exempt=_untyped_ok,
+        ),
+        Rule(
+            "thin",
+            "Thin handler",
+            "The handler takes the request apart and hands it to a service, so the "
+            "work lives where routes, tasks and jobs can all reach it: at most "
+            f"{THIN_STATEMENTS} statements around a service call, or one statement.",
+            _thin_route,
+        ),
+    ),
+    discover=routes,
+    function=lambda r: r.endpoint,
+    rank=_route_rank,
+)
+
+
+# Reports --------------------------------------------------------------------
+
+
+def _missed(steps: tuple[Step, ...], target: Any) -> list[str]:
+    return [
+        s.label
+        for s in steps
+        if s.follows
+        and s.expected
+        and (s.applies is None or s.applies(target))
+        and not s.follows(target)
+    ]
+
+
+def report(pattern: Pattern, source: Any = ()) -> Report:
+    """Every instance of ``pattern`` found in ``source``, checked against its
+    rules and steps. The canonical example is the highest-ranked instance
+    that follows every rule and every step: an agent copies the example,
+    not the diagram, so the example must be the diagram."""
+    listed = [
+        Instance(
+            name,
+            target,
+            [
+                rule.key
+                for rule in pattern.rules
+                if not rule.exempt(target) and not rule.check(target)
+            ],
+            _missed(pattern.steps, target),
+        )
+        for name, target in pattern.discover(source)
+    ]
+    rules = [
+        RuleReport(
+            rule.key,
+            rule.title,
+            rule.why,
+            rule.enforced,
+            sum(1 for i in listed if not rule.exempt(i.target)),
+            [i for i in listed if rule.key in i.findings],
+        )
+        for rule in pattern.rules
+    ]
+    steps = []
+    for step in pattern.steps:
+        relevant = [
+            i.target for i in listed if step.applies is None or step.applies(i.target)
+        ]
+        followed = None if step.follows is None else sum(map(step.follows, relevant))
+        steps.append(StepReport(step.label, step.detail, len(relevant), followed))
+    clean = [i for i in listed if not i.findings and not i.missed]
+    canonical = max(
+        clean, key=lambda i: (pattern.rank(i.target), i.label), default=None
+    )
+    return Report(pattern, listed, rules, steps, canonical)
+
+
+def source(func: Any) -> tuple[str, str]:
+    """A function's source and its file relative to the project."""
+    if isinstance(func, SourceText):
+        return func.text, func.path
+    path = Path(inspect.getsourcefile(func) or "")
+    try:
+        shown = str(path.resolve().relative_to(PROJECT_ROOT))
+    except ValueError:
+        shown = path.name
+    return inspect.getsource(func), shown
+
+
+def installed_patterns() -> dict[str, Pattern]:
+    """Every pattern this project has: routes, services and their parts,
+    and async functions always, worker tasks when the worker component is
+    installed."""
+    from app.services.system.async_patterns import ASYNC
+    from app.services.system.service_parts import PARTS
+    from app.services.system.service_patterns import SERVICE
+
+    found = {"route": ROUTE, "service": SERVICE, "parts": PARTS, "async": ASYNC}
+    try:
+        from app.components.worker.patterns import TASK
+    except ImportError:  # no worker component in this project
+        return found
+    return found | {"task": TASK}

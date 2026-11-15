@@ -1,0 +1,73 @@
+"""Stamp signatures for revisions that do not carry their own.
+
+A revision generated from the models declares ``aegis_stamp_signature``
+in the file itself, and the startup hook prefers that. This table covers
+revisions written before generation did so - a long-lived project still
+has them on disk - and is not where a new entry belongs.
+
+The startup hook re-adopts a persisted database by checking, per pending
+migration (``NNN_<service>.py``), whether its signature object already
+exists - and stamping instead of replaying DDL. A migration that ships
+WITHOUT an entry opts out of that recovery and re-creates the
+finance_icon incident: alembic_version lags, the upgrade replays, and the
+database logs "already exists" on every boot until someone stamps by
+hand. Guarded by ``tests/test_migration_signatures.py``.
+
+Plugins append their own entries: a ``MigrationSpec`` carrying a
+``stamp_signature`` lands here when the plugin is installed, so a
+plugin's migration gets the same recovery an in-tree service's does.
+
+Forms:
+- ``("table", name)`` - table exists (CREATE TABLE migrations). Names may
+  be schema-qualified; matching tolerates the bare name on engines
+  without schemas (SQLite).
+- ``("column", table, col)`` - column exists (ALTER TABLE migrations).
+- ``("no_column", table, col)`` - the table exists and the column does
+  not (a migration that REMOVES one: its absence is the only proof).
+- ``("foreign_key", table, col)`` - an FK constraint covers the column
+  (FK-only migrations, e.g. payment_auth_link).
+- ``("row", table, where)`` - ``SELECT 1 FROM table WHERE where`` finds a
+  row (data-only migrations, e.g. finance_auth_link's user 0). Schema
+  objects cannot prove a data revision ran; stamping one on a persisted
+  volume would skip its INSERT.
+"""
+
+SERVICE_MIGRATION_SIGNATURES: dict[str, tuple[str, ...]] = {
+    "ai": ("table", "llm_org"),
+    "ai_agents": ("table", "agent"),
+    "agent_code_mode": ("column", "agent", "code_mode"),
+    "ai_sentiment": ("table", "sentiment_analysis"),
+    "ai_evals": ("table", "eval_run"),
+    "ai_voice": ("table", "voice_profile"),
+    "auth": ("table", "user"),
+    "auth_org": ("table", "organization"),
+    "auth_rbac": ("column", "user", "role"),
+    "auth_tokens": ("table", "refresh_token"),
+    "blog": ("table", "blog_post"),
+    "documents": ("table", "document"),
+    # insight_source, not project: the project table only exists in the
+    # per-user shape, insight_source in both.
+    "insights": ("table", "insight_source"),
+    "payment": ("table", "payment_provider"),
+    "payment_auth_link": ("foreign_key", "payment_customer", "user_id"),
+    "finance_subjects": ("table", "finance.finance_subject"),
+    "finance": ("table", "finance.finance_account"),
+    "finance_budget_payee": ("column", "finance.finance_budget_category", "payee_key"),
+    # Data-only since models-derived revisions: the owner FKs are inline in
+    # ``finance``, so the FK proves nothing about this revision. The row it
+    # inserts does.
+    "finance_auth_link": ("row", "user", "id = 0"),
+    "finance_icon": ("table", "finance.finance_icon"),
+    "pending_changes": ("table", "finance.finance_pending_change"),
+    "pending_change_batch": (
+        "column",
+        "finance.finance_pending_change",
+        "batch_id",
+    ),
+    "secured_debt": (
+        "column",
+        "finance.finance_liability_detail",
+        "secured_by_account_id",
+    ),
+    "scheduler": ("table", "scheduler.job_execution"),
+}

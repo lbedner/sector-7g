@@ -1,8 +1,10 @@
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
+from app.components.backend.security.operator_auth import require_operator
 from app.services.system import (
     DetailedHealthResponse,
     HealthResponse,
@@ -15,29 +17,25 @@ router = APIRouter()
 @router.get("/", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """
-    Quick health check endpoint.
+    Liveness probe: constant-time, no component walk.
 
-    Returns basic healthy/unhealthy status for load balancers and monitoring.
+    Returns 200 if the process is alive enough to answer, which is all
+    load balancers and container healthchecks need. Component status
+    lives at /health/detailed.
     """
-    try:
-        system_status = await get_system_status()
-        return HealthResponse(
-            healthy=system_status.overall_healthy,
-            status="healthy" if system_status.overall_healthy else "unhealthy",
-            components=system_status.components,
-            timestamp=system_status.timestamp.isoformat(),
-        )
-    except Exception:
-        # If health checks fail completely, consider unhealthy
-        return HealthResponse(
-            healthy=False,
-            status="unhealthy",
-            components={},
-            timestamp="",
-        )
+    return HealthResponse(
+        healthy=True,
+        status="healthy",
+        components={},
+        timestamp=datetime.now(UTC).isoformat(),
+    )
 
 
-@router.get("/detailed", response_model=DetailedHealthResponse)
+@router.get(
+    "/detailed",
+    response_model=DetailedHealthResponse,
+    dependencies=[Depends(require_operator)],
+)
 async def detailed_health() -> DetailedHealthResponse:
     """
     Detailed health check with component information.
@@ -51,7 +49,7 @@ async def detailed_health() -> DetailedHealthResponse:
         # Always return 200 OK - service is available even if components are unhealthy
         return DetailedHealthResponse(
             healthy=system_status.overall_healthy,
-            status="healthy" if system_status.overall_healthy else "unhealthy",
+            status=system_status.overall_status,
             service="sector-7g",
             version="0.1.0",
             components=system_status.components,
@@ -82,7 +80,7 @@ async def detailed_health() -> DetailedHealthResponse:
         )
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", dependencies=[Depends(require_operator)])
 async def system_dashboard() -> dict[str, Any]:
     """
     System dashboard endpoint optimized for frontend consumption.
@@ -97,7 +95,7 @@ async def system_dashboard() -> dict[str, Any]:
         recent_alerts = 0
 
         return {
-            "status": "healthy" if system_status.overall_healthy else "unhealthy",
+            "status": system_status.overall_status.value,
             "service": "sector-7g",
             "version": "0.1.0",
             "dashboard_data": {

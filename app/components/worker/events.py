@@ -6,14 +6,57 @@ worker started/stopped) to a Redis Stream. These events are consumed by the SSE
 endpoint to provide real-time dashboard updates.
 """
 
-import re
 from datetime import UTC, datetime
 from typing import Any
 
+import redis.asyncio as aioredis
+
+from app.core.config import settings
+from app.core.key_family import KeyFamily
 from app.core.log import logger
 
 # Redis Stream name for worker events
 WORKER_EVENT_STREAM = "aegis:events:worker"
+# Entries kept, roughly (trimmed with MAXLEN ~, which Redis does cheaply
+# in whole blocks). The dashboard's feed tails new entries only.
+WORKER_EVENT_STREAM_MAXLEN = 10_000
+
+# What the worker keeps in Redis, for the keyspace map (``redis_keys``).
+REDIS_KEYS = (
+    KeyFamily(
+        WORKER_EVENT_STREAM,
+        "stream",
+        "Worker events",
+        "Job and worker lifecycle events, fanned out to the browser over SSE",
+        "Worker events",
+        columns=("Entry", "Event"),
+        holds="event",
+    ),
+)
+
+
+_events_redis: "aioredis.Redis | None" = None
+
+
+async def events_redis() -> "aioredis.Redis":
+    """The Redis client this process publishes worker events through.
+
+    One per process, created on first use: every enqueue publishes, and
+    opening a connection per publish is a connection per enqueue.
+    """
+    global _events_redis
+    if _events_redis is None:
+        redis_url = settings.redis_url_effective
+        _events_redis = aioredis.from_url(redis_url)
+    return _events_redis
+
+
+async def close_events_redis() -> None:
+    """Close the shared events client, if one was ever opened."""
+    global _events_redis
+    if _events_redis is not None:
+        await _events_redis.aclose()
+        _events_redis = None
 
 
 async def publish_event(
@@ -26,7 +69,8 @@ async def publish_event(
     Publish a worker event to the Redis Stream.
 
     Args:
-        redis_client: Any Redis client that supports xadd (redis.asyncio.Redis or ArqRedis).
+        redis_client: Any Redis client that supports xadd
+            (redis.asyncio.Redis or ArqRedis).
         event_type: Event type (job.enqueued, job.started, job.ended,
                     job.completed, job.failed, worker.started, worker.stopped).
         queue_name: Name of the worker queue (e.g., "system", "load_test").
@@ -42,7 +86,12 @@ async def publish_event(
             fields[str(k)] = str(v)
 
     try:
-        await redis_client.xadd(WORKER_EVENT_STREAM, fields)
+        await redis_client.xadd(
+            WORKER_EVENT_STREAM,
+            fields,
+            maxlen=WORKER_EVENT_STREAM_MAXLEN,
+            approximate=True,
+        )
     except Exception as e:
         # Never let event publishing failures break worker functionality
         logger.debug(f"Failed to publish worker event: {e}")
@@ -63,37 +112,9 @@ async def read_queue_totals(redis_client: Any) -> dict[str, dict[str, int]]:
     """
     from app.components.worker.registry import get_all_queue_metadata
 
-    queue_names = {
-        qt: meta["queue_name"] for qt, meta in get_all_queue_metadata().items()
+    # TaskIQ doesn't maintain persistent counters in Redis —
+    # real-time counts come from stream events (deltas).
+    return {
+        qt: {"queued": 0, "ongoing": 0, "completed": 0, "failed": 0}
+        for qt in get_all_queue_metadata()
     }
-
-    totals: dict[str, dict[str, int]] = {}
-    for queue_type, queue_name in queue_names.items():
-        queued = ongoing = completed = failed = 0
-        try:
-            queued = await redis_client.zcard(queue_name) or 0
-            health_data = await redis_client.get(f"{queue_name}:health-check")
-            if health_data:
-                raw = (
-                    health_data
-                    if isinstance(health_data, str)
-                    else health_data.decode()
-                )
-                m = re.search(r"j_complete=(\d+)", raw)
-                if m:
-                    completed = int(m.group(1))
-                m = re.search(r"j_failed=(\d+)", raw)
-                if m:
-                    failed = int(m.group(1))
-                m = re.search(r"j_ongoing=(\d+)", raw)
-                if m:
-                    ongoing = int(m.group(1))
-        except Exception:
-            pass  # best-effort; counters stay 0
-        totals[queue_type] = {
-            "queued": queued,
-            "ongoing": ongoing,
-            "completed": completed,
-            "failed": failed,
-        }
-    return totals

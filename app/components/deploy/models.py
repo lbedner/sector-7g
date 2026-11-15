@@ -1,0 +1,73 @@
+"""Deploy history's tables: a row per build that went live, and a row per
+everything else done to the server.
+
+Both live in their own ``deploy`` Postgres schema, apart from service tables.
+"""
+
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import JSON, Column, DateTime, String, Text
+from sqlmodel import Field, SQLModel
+
+from app.core.time import utcnow
+
+
+class Deployment(SQLModel, table=True):
+    """A build that went live (see ``history`` for who writes what)."""
+
+    __tablename__ = "deployment"
+    __table_args__ = {"schema": "deploy"}
+
+    build_id: str = Field(sa_column=Column(String(64), primary_key=True))
+    started_at: datetime = Field(
+        default_factory=utcnow, sa_column=Column(DateTime, nullable=False)
+    )
+    finished_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime, nullable=True)
+    )
+    deployed_by: str | None = Field(
+        default=None, sa_column=Column(String(320), nullable=True)
+    )
+    deployed_from: str | None = Field(
+        default=None, sa_column=Column(String(255), nullable=True)
+    )
+    health: str | None = Field(
+        default=None, sa_column=Column(String(16), nullable=True)
+    )
+    backup: str | None = Field(
+        default=None, sa_column=Column(String(64), nullable=True)
+    )
+    rolled_back_to: str | None = Field(
+        default=None, sa_column=Column(String(64), nullable=True)
+    )
+
+
+class DeployEvent(SQLModel, table=True):
+    """One thing done to the server besides a deploy (a backup, a rollback,
+    an upload, an off-site copy, a restore drill): who, from where, how it
+    went (``outcome``, ok or failed), in a sentence (``summary``) and in
+    full (``detail``)."""
+
+    __tablename__ = "deploy_event"
+    __table_args__ = {"schema": "deploy"}
+
+    id: int | None = Field(default=None, primary_key=True)
+    kind: str = Field(sa_column=Column(String(32), index=True, nullable=False))
+    outcome: str = Field(sa_column=Column(String(16), nullable=False))
+    summary: str = Field(default="", sa_column=Column(Text, nullable=False))
+    started_at: datetime = Field(
+        default_factory=utcnow, sa_column=Column(DateTime, nullable=False)
+    )
+    finished_at: datetime = Field(
+        default_factory=utcnow, sa_column=Column(DateTime, index=True, nullable=False)
+    )
+    actor: str | None = Field(
+        default=None, sa_column=Column(String(320), nullable=True)
+    )
+    origin: str | None = Field(
+        default=None, sa_column=Column(String(255), nullable=True)
+    )
+    detail: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )

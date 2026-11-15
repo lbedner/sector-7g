@@ -1,0 +1,133 @@
+"""Shared setup for the Overseer page tests: a signed-in viewer (with auth;
+without it Overseer is open and nobody signs in) and a health snapshot
+holding exactly the components a test hands in."""
+
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
+import pytest
+
+from app.components.web_frontend import overseer_nav, overseer_sections
+from app.components.web_frontend.overseer_access import overseer_gate
+from app.components.web_frontend.routes import overseer
+from app.core.constants import ComponentName
+from app.services.shared.deps import Actor, get_admin_actor
+from app.services.system.models import ComponentStatus, SystemStatus
+
+PREFIXES = ("/overseer", "/partials/overseer")
+
+
+# The Cache, healthy: a page with containers behind it (Redis).
+CACHE = ComponentStatus(name=ComponentName.CACHE, message="Connected", metadata={})
+# The AI service, up, for a page that offers its sections.
+AI = ComponentStatus(name="ai", message="AI", metadata={"engine": "pydantic-ai"})
+
+
+async def sent_events(stream: AsyncIterator[str]) -> list[str]:
+    """The frames an SSE stream sent, its heartbeats and unchanged marks aside."""
+    return [frame async for frame in stream if frame.startswith("event:")]
+
+
+def frame_html(frame: str) -> str:
+    """A frame's html, as the browser reads it: its data lines joined."""
+    lines = frame.splitlines()
+    return "\n".join(
+        line.removeprefix("data: ") for line in lines if line.startswith("data: ")
+    )
+
+
+def on_session(app: FastAPI, session: Any) -> None:
+    """Every route on ``session``, the test's own: what a route writes is
+    what the test reads."""
+    from app.core.db import get_async_db
+
+    async def same_session() -> AsyncIterator[Any]:
+        yield session
+
+    app.dependency_overrides[get_async_db] = same_session
+
+
+def page_html(client: TestClient, path: str) -> str:
+    """The page at ``path``, which must answer 200."""
+    response = client.get(path)
+    assert response.status_code == 200, response.text
+    return response.text
+
+
+def overseer_calls(app: FastAPI) -> list[tuple[str, str]]:
+    """Every (method, path) under Overseer, path parameters filled in."""
+    calls = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute) or not route.path.startswith(PREFIXES):
+            continue
+        path = route.path
+        for name in route.param_convertors:
+            path = path.replace("{" + name + ":path}", "x").replace(
+                "{" + name + "}", "1"
+            )
+        calls.extend((method, path) for method in sorted(route.methods))
+    return calls
+
+
+def status_with(
+    *components: ComponentStatus,
+    services: tuple[ComponentStatus, ...] | list[ComponentStatus] = (),
+) -> SystemStatus:
+    """A snapshot with ``components`` and ``services`` in the dashboard's groups."""
+
+    def group(
+        name: str, members: tuple[ComponentStatus, ...] | list[ComponentStatus]
+    ) -> ComponentStatus:
+        return ComponentStatus(
+            name=name, message="", sub_components={c.name: c for c in members}
+        )
+
+    aegis = ComponentStatus(
+        name="aegis",
+        message="",
+        sub_components={
+            "components": group("components", components),
+            "services": group("services", services),
+        },
+    )
+    return SystemStatus(
+        components={"aegis": aegis}, overall_healthy=True, timestamp=datetime.now(UTC)
+    )
+
+
+def reported_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The sidebar as the snapshot has it: no entry for a health check
+    another test registered (a Scheduler, a Worker) that this one leaves out,
+    or for a page the app's own service declares (``SERVICE_PAGES``)."""
+    monkeypatch.setattr(
+        overseer_nav,
+        "registered_health_names",
+        lambda: {"components": (), "services": ()},
+    )
+    monkeypatch.setattr(overseer_sections, "SERVICE_PAGES", frozenset())
+
+
+def sign_in(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    status: SystemStatus,
+    *,
+    admin: bool = True,
+) -> None:
+    """Serve Overseer pages from ``status`` to a signed-in user: an admin
+    (on the allowlist, and the admin role under RBAC) unless ``admin`` is
+    False, which signs in an ordinary member the Overseer refuses. Without
+    auth there is nobody to sign in: the viewer is the local dev build's
+    operator, whose writes the gate and ``get_admin_actor`` let through;
+    ``admin=False`` leaves them to the real rule (``operator_refusal``)."""
+    # Every Overseer route module that reads the snapshot sees this one.
+    for module in (overseer, overseer_nav):
+        monkeypatch.setattr(module, "last_system_status", lambda: status)
+    if admin:
+        app.dependency_overrides[get_admin_actor] = Actor
+        app.dependency_overrides[overseer_gate] = lambda: None
+    return None

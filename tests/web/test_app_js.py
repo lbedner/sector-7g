@@ -1,0 +1,820 @@
+"""After a direct API action, app.js reloads the page it was on
+(static/js/app.js, run in node).
+
+An action button with ``data-api-done`` gets JSON back, not HTML, so on
+success the page's main area is re-requested. The page is the whole URL:
+state such as the storage browser's open bucket and folder lives in the
+query string, and dropping it sends the viewer back to the top.
+"""
+
+import json
+from pathlib import Path
+import re
+
+import pytest
+
+from tests.test_formatting import MATCH_CASES
+from tests.web.node import run
+
+APP_JS = Path("app/components/web_frontend/static/js/app.js")
+
+# The browser app.js expects, stubbed once: every listener it adds is kept
+# in ``handlers`` (``fire(name, event)`` runs them), and a harness sets only
+# what it watches (window.dispatchEvent, document.getElementById, htmx.ajax).
+STUBS = """
+const handlers = {};
+const on = (name, fn) => { (handlers[name] ||= []).push(fn); };
+const fire = (name, event) => (handlers[name] || []).forEach((fn) => fn(event));
+global.Event = class { constructor(name) { this.type = name; } };
+global.CustomEvent = class extends global.Event {
+  constructor(name, init) { super(name); this.detail = init && init.detail; } };
+global.window = { location: { origin: 'http://app', pathname: '/', search: '', hash: '' },
+                  addEventListener: on, dispatchEvent: () => {} };
+global.document = { addEventListener: on, getElementById: () => null,
+                    querySelector: () => null, querySelectorAll: () => [],
+                    body: { addEventListener: on, dispatchEvent: () => {} } };
+global.htmx = { ajax: () => {} };
+global.requestAnimationFrame = () => 0;
+global.cancelAnimationFrame = () => {};
+"""
+
+HARNESS = (
+    STUBS
+    + """
+window.location.pathname = '/overseer/components/storage/browse';
+window.location.search = '?bucket=demo-files&prefix=invoices%2F';
+const requested = [];
+htmx.ajax = (verb, url) => requested.push(url);
+require(APP_JS);
+fire('htmx:afterRequest',
+  { detail: { elt: { dataset: { apiDone: 'File deleted' } }, successful: true } });
+console.log(JSON.stringify(requested));
+"""
+)
+
+
+def test_a_finished_action_reloads_the_same_url_query_and_all() -> None:
+    out = run(HARNESS, APP_JS=APP_JS)
+    assert out == [
+        "/overseer/components/storage/browse?bucket=demo-files&prefix=invoices%2F"
+    ]
+
+
+DISMISS_HARNESS = (
+    STUBS
+    + """
+const toasts = [];
+window.dispatchEvent = (e) => toasts.push(e.detail && e.detail.text);
+htmx.ajax = () => Promise.resolve();
+const { outsideClick, dismiss } = require(APP_JS);
+function panel(dirty) {
+  let closed = false;
+  return { open: true, dataset: { param: 'post', ...(dirty ? { dirty: '1' } : {}) },
+           contains: (t) => t.inside === true, close: () => { closed = true; },
+           get closed() { return closed; } };
+}
+const at = (spot) => ({ inside: spot === 'inside',
+  closest: (sel) => (spot === 'row' && sel.includes('[href*="post="]') ? {} : null)
+                    || (spot === 'modal' && sel === 'dialog[open]' ? {} : null) });
+const clean = panel(false), dirty = panel(true);
+const results = {
+  clean_outside: outsideClick(clean, at('outside')),
+  dirty_outside: outsideClick(dirty, at('outside')),
+  clean_row: outsideClick(clean, at('row')),
+  dirty_row: outsideClick(dirty, at('row')),
+  inside: outsideClick(clean, at('inside')),
+  modal: outsideClick(clean, at('modal')),
+};
+dismiss(dirty); results.dirty_closed = dirty.closed; results.toasts = toasts.length;
+dismiss(clean); results.clean_closed = clean.closed;
+console.log(JSON.stringify(results));
+"""
+)
+
+
+def test_clicking_off_closes_unless_something_is_unsaved() -> None:
+    """Light dismiss: a click outside (or Escape) closes a panel, a row
+    click switches to that item, and typed-but-unsaved work holds it open
+    with a toast; the X still closes on purpose."""
+    out = run(DISMISS_HARNESS, APP_JS=APP_JS)
+    assert out == {
+        "clean_outside": "close",
+        "dirty_outside": "hold",
+        "clean_row": "ignore",
+        "dirty_row": "hold",
+        "inside": "ignore",
+        "modal": "ignore",
+        "dirty_closed": False,
+        "toasts": 1,
+        "clean_closed": True,
+    }
+
+
+PLACE_HARNESS = (
+    STUBS
+    + """
+window.innerHeight = 800;
+document.documentElement = { clientWidth: 400 };
+const { placeDropdown } = require(APP_JS);
+// A menu 200px tall under a button whose top is at ``top``.
+function opened(top) {
+  const menu = { style: {}, classList: { contains: (c) => c === 'left-0' },
+    getBoundingClientRect() {
+      const up = this.style.bottom === '100%';
+      const at = up ? top - 200 : top + 30;
+      return { top: at, bottom: at + 200, left: 20, right: 220 };
+    } };
+  return { open: true, lastElementChild: menu,
+           getBoundingClientRect: () => ({ top }) };
+}
+const foot = opened(700), head = opened(100);
+placeDropdown(foot); placeDropdown(head);
+console.log(JSON.stringify({ foot: foot.lastElementChild.style.bottom,
+                             head: head.lastElementChild.style.bottom }));
+"""
+)
+
+
+def test_a_dropdown_at_the_foot_of_the_window_opens_above() -> None:
+    """The Deployments "More" menu ran off the bottom of the window; one
+    that fits below still opens below."""
+    out = run(PLACE_HARNESS, APP_JS=APP_JS)
+    assert out == {"foot": "100%", "head": ""}
+
+
+CLOSE_HARNESS = (
+    STUBS
+    + """
+const { closesDropdown } = require(APP_JS);
+const menu = { contains: (t) => t.inside };
+const at = (spot) => ({ inside: spot !== 'outside',
+  closest: (sel) => (spot === 'entry' && sel.includes('[role="menu"] button') ? {} : null) });
+console.log(JSON.stringify(['outside', 'entry', 'button', 'heading']
+  .map((spot) => closesDropdown(menu, at(spot)))));
+"""
+)
+
+
+def test_a_dropdown_closes_on_a_click_off_it_or_on_an_entry() -> None:
+    """One listener for every menu (a thousand-row table has a menu a
+    row): a click elsewhere or on one of its entries closes it; its own
+    button and a heading in it do not."""
+    assert run(CLOSE_HARNESS, APP_JS=APP_JS) == [True, True, False, False]
+
+
+COPY_START = (
+    STUBS
+    + """
+const toasts = [];
+window.dispatchEvent = (e) => toasts.push(e.detail);
+const written = [];
+// Node ships its own read-only navigator; replace it outright.
+Object.defineProperty(globalThis, 'navigator', {
+  value: { clipboard: { writeText: async (t) => { written.push(t); } } },
+  configurable: true,
+});
+require(APP_JS);
+const press = (button) => fire('click', { target: {
+  closest: (sel) => (sel.split(', ').some((one) => one.slice(1, -1) in button.marks)
+    ? button : null) } });
+"""
+)
+COPY_HARNESS = (
+    COPY_START
+    + """
+press({ marks: { 'data-copy': 1 }, dataset: { copy: 'postgres://db' },
+        querySelector: () => null });
+setTimeout(() => console.log(JSON.stringify({ written, toasts })), 0);
+"""
+)
+
+
+def test_any_copy_button_copies_its_text() -> None:
+    """One copier for the whole app: a ``data-copy`` button's text goes to
+    the clipboard, and a button with no tick of its own says so in a toast."""
+    out = run(COPY_HARNESS, APP_JS=APP_JS)
+    result = out
+    assert result["written"] == ["postgres://db"]
+    assert result["toasts"][-1]["tone"] == "ok"
+
+
+# A transcript on the page: each line's label and its words, one with a
+# button among them, as ``_macros.html``'s ``transcript`` draws them.
+COPY_FROM_HARNESS = (
+    COPY_START
+    + """
+const said = (text, buttons = []) => ({ cloneNode: () => ({
+  querySelectorAll: () => buttons.map((label) => ({ remove: () => {
+    text = text.replace(label, ''); } })),
+  get textContent() { return text; } }) });
+const lines = [
+  { dataset: { copyLine: 'Ada [00:00]' }, querySelector: () => said('Hello. ') },
+  { dataset: { copyLine: 'Leonard [00:01]' },
+    querySelector: () => said('Ship it scheduler', ['scheduler']) },
+];
+document.querySelectorAll = (sel) =>
+  (sel === '#meeting-transcript [data-copy-line]' ? lines : []);
+press({ marks: { 'data-copy-from': 1 }, dataset: { copyFrom: '#meeting-transcript' },
+        querySelector: () => null });
+setTimeout(() => console.log(JSON.stringify(written)), 0);
+"""
+)
+
+
+def test_a_copy_from_the_page_takes_each_line_without_its_buttons() -> None:
+    """A transcript copied from the page reads one line each, its label then
+    its words, with the buttons among the words left out."""
+    assert run(COPY_FROM_HARNESS, APP_JS=APP_JS) == [
+        "Ada [00:00]: Hello.\nLeonard [00:01]: Ship it\n"
+    ]
+
+
+PROGRESS_HARNESS = (
+    STUBS
+    + """
+const { navigates } = require(APP_JS);
+const link = (more = {}) => ({ origin: 'http://app', target: '',
+  getAttribute: () => more.href || '/overseer/components/cache',
+  hasAttribute: (name) => name in more, ...more });
+const click = (to, more = {}) => ({ button: 0, defaultPrevented: false,
+  target: { closest: () => to }, ...more });
+console.log(JSON.stringify({
+  link: navigates(click(link())),
+  new_tab: navigates(click(link(), { metaKey: true })),
+  other_site: navigates(click(link({ origin: 'http://elsewhere' }))),
+  target_blank: navigates(click(link({ target: '_blank' }))),
+  download: navigates(click(link({ download: '' }))),
+  anchor: navigates(click(link({ href: '#top' }))),
+  htmx_took_it: navigates(click(link(), { defaultPrevented: true })),
+  not_a_link: navigates(click(null)),
+}));
+"""
+)
+
+
+def test_only_a_click_that_leaves_the_page_starts_the_bar() -> None:
+    """The progress bar along the top starts for a link that loads another
+    page here; htmx shows it for its own requests, so a link htmx took,
+    a new tab, another site, a download or an anchor leave it alone."""
+    out = run(PROGRESS_HARNESS, APP_JS=APP_JS)
+    assert out == {
+        "link": True,
+        "new_tab": False,
+        "other_site": False,
+        "target_blank": False,
+        "download": False,
+        "anchor": False,
+        "htmx_took_it": False,
+        "not_a_link": False,
+    }
+
+
+SSE_SWAP_HARNESS = (
+    STUBS
+    + """
+require(APP_JS);
+fire('htmx:afterSwap', { detail: { elt: {} } });
+console.log('true');
+"""
+)
+
+
+def test_a_live_stream_swap_has_no_target_and_breaks_nothing() -> None:
+    """The SSE extension's swaps raise ``htmx:afterSwap`` without a
+    ``target``; the swap handlers must let them pass."""
+    assert run(SSE_SWAP_HARNESS, APP_JS=APP_JS) is True
+
+
+PENDING_HARNESS = (
+    STUBS
+    + """
+let pending = true;
+const classes = new Set();
+const bar = { classList: { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) } };
+document.getElementById = (id) => (id === 'page-progress' ? bar : null);
+document.querySelector = (sel) => (sel === '[data-pending]' && pending ? {} : null);
+require(APP_JS);
+const seen = [];
+fire('htmx:load', { detail: { elt: { dataset: {} } } }); seen.push(classes.has('is-loading'));
+pending = false;
+fire('htmx:load', { detail: { elt: { dataset: {} } } }); seen.push(classes.has('is-loading'));
+console.log(JSON.stringify(seen));
+"""
+)
+
+
+def test_the_bar_runs_while_part_of_the_page_is_still_on_its_way() -> None:
+    """A section that renders before its data (``data-pending``, the
+    Container section's first read) keeps the bar going until it lands."""
+    out = run(PENDING_HARNESS, APP_JS=APP_JS)
+    assert out == [True, False]
+
+
+REQUEST_HARNESS = (
+    STUBS
+    + """
+const classes = new Set();
+const bar = { classList: { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) } };
+document.getElementById = (id) => (id === 'page-progress' ? bar : null);
+require(APP_JS);
+const ends = [];
+const xhr = { addEventListener: (name, fn) => { if (name === 'loadend') ends.push(fn); } };
+const seen = [];
+fire('htmx:beforeRequest', { detail: { elt: {}, xhr } }); seen.push(classes.has('is-loading'));
+ends.forEach((fn) => fn());  // no htmx:afterRequest reaches the page
+seen.push(classes.has('is-loading'));
+console.log(JSON.stringify(seen));
+"""
+)
+
+
+def test_the_bar_stops_when_a_request_ends_even_if_its_sender_was_swapped_out() -> None:
+    """A live frame can swap out the element that sent a request while it is
+    out (a Restart button in a row the stream re-sends): htmx's
+    ``afterRequest`` then fires on a detached element and never bubbles
+    here, so the bar counts the request down when it ends (its ``loadend``)."""
+    assert run(REQUEST_HARNESS, APP_JS=APP_JS) == [True, False]
+
+
+SCROLL_HARNESS = (
+    STUBS
+    + """
+const shown = [];
+document.querySelector = (sel) => ({
+  closest: () => null, scrollIntoView: (how) => shown.push([sel, how.block]) });
+require(APP_JS);
+const button = { dataset: { scrollTo: '#rows > tr:last-child' } };
+fire('click', { target: { closest: (sel) => (sel === '[data-scroll-to]' ? button : null) } });
+fire('click', { target: { closest: () => null } });
+console.log(JSON.stringify({ shown }));
+"""
+)
+
+
+def test_a_scroll_button_brings_its_target_into_view() -> None:
+    """A ``data-scroll-to`` button scrolls to the element its selector names
+    (a list's first or last row); a click elsewhere scrolls nothing."""
+    assert run(SCROLL_HARNESS, APP_JS=APP_JS)["shown"] == [
+        ["#rows > tr:last-child", "nearest"]
+    ]
+
+
+TABS_HARNESS = (
+    STUBS
+    + """
+const { revealTab } = require(APP_JS);
+// A view's tabs (layout.html's ``tabbed``): its buttons and its panels.
+const view = (shown) => {
+  const tabs = { dataset: { tabs: 'meeting' }, matches: () => true };
+  const buttons = ['notes', 'transcript'].map((key) => {
+    const attrs = {};
+    return { dataset: { tab: key }, attrs, setAttribute: (k, v) => { attrs[k] = v; } };
+  });
+  const panels = ['notes', 'transcript'].map((key) => (
+    { dataset: { tabPanel: key }, hidden: key !== shown, parentElement: tabs }));
+  tabs.querySelectorAll = (sel) => (sel.includes('tablist') ? buttons : sel === '[data-tabs]' ? [] : panels);
+  tabs.querySelector = (sel) => panels.find((p) => sel.includes(`"${p.dataset.tabPanel}"`));
+  return { tabs, buttons, panels };
+};
+const first = view('notes');
+revealTab({ closest: (s) => (s === '[data-tab-panel]' ? first.panels[1] : null) });
+revealTab({ closest: () => null });
+const reread = view('notes');
+fire('htmx:load', { detail: { elt: reread.tabs } });
+console.log(JSON.stringify({
+  hidden: first.panels.map((p) => p.hidden),
+  selected: first.buttons.map((b) => b.attrs['aria-selected']),
+  kept: reread.panels.map((p) => p.hidden),
+}));
+"""
+)
+
+
+def test_a_line_in_a_hidden_tab_shows_its_tab_and_a_reread_keeps_it() -> None:
+    """A note's line in the transcript shows the Transcript tab first; when
+    the view re-reads itself (a meeting while the bot is in), the tab picked
+    stays picked; something outside any tab changes nothing."""
+    assert run(TABS_HARNESS, APP_JS=APP_JS) == {
+        "hidden": [True, False],
+        "selected": ["false", "true"],
+        "kept": [True, False],
+    }
+
+
+FOLDS_HARNESS = (
+    STUBS
+    + """
+const { revealTab } = require(APP_JS);
+// A line two folds deep: each fold it sits in opens, nothing above them.
+const page = { closest: () => null };
+const outer = { open: false, parentElement: page };
+const inner = { open: false, parentElement: { closest: (s) => (s === 'details' ? outer : null) } };
+revealTab({ closest: (s) => (s === 'details' ? inner : null) });
+console.log(JSON.stringify([inner.open, outer.open]));
+"""
+)
+
+
+def test_a_line_linked_to_in_a_fold_opens_every_fold_around_it() -> None:
+    """A link to a line inside folds opens
+    each fold it sits in, so the line is there to land on."""
+    assert run(FOLDS_HARNESS, APP_JS=APP_JS) == [True, True]
+
+
+ROWS_HARNESS = (
+    STUBS
+    + """
+require(APP_JS);
+// A row ``opens_rows`` opens (or shuts) before the click reaches the page.
+const row = (key, open) => {
+  const attrs = open ? { 'data-open': '' } : {};
+  return { dataset: { row: key }, attrs, hasAttribute: (k) => k in attrs,
+           setAttribute: (k, v) => { attrs[k] = v; } };
+};
+const at = (target) => ({ target: { closest: (sel) => (sel === 'tr.log-row[data-row]' ? target : null) } });
+fire('click', at(row('41', true)));
+fire('click', at(row('42', false)));
+const again = [row('41', false), row('42', false), row('43', false)];
+const table = { querySelectorAll: (sel) => (sel === 'tr.log-row[data-row]' ? again : []) };
+fire('htmx:load', { detail: { elt: table } });
+console.log(JSON.stringify(again.map((r) => 'data-open' in r.attrs)));
+"""
+)
+
+
+def test_a_row_opened_stays_open_when_its_table_re_sends_itself() -> None:
+    """Transactions re-sends its table every second: the statement a click
+    opened stays open, by the row's key; one shut, or new, stays shut."""
+    assert run(ROWS_HARNESS, APP_JS=APP_JS) == [True, False, False]
+
+
+MARK_HARNESS = (
+    STUBS
+    + """
+const { markCurrent } = require(APP_JS);
+const link = (href) => {
+  const attrs = {};
+  return { attrs, getAttribute: () => href,
+           setAttribute: (k, v) => { attrs[k] = v; },
+           removeAttribute: (k) => { delete attrs[k]; } };
+};
+const links = ['/overseer', '/overseer/services/payment', '/overseer/services/ai'].map(link);
+links[2].attrs['aria-current'] = 'page';
+markCurrent(links, '/overseer/services/payment/transactions');
+console.log(JSON.stringify(links.map((l) => l.attrs['aria-current'] || null)));
+"""
+)
+
+
+def test_the_sidebar_marks_the_page_it_leads_to() -> None:
+    """The sidebar stays put across navigation, so the current mark moves
+    to the link whose page holds the new address (a section under it
+    included), and only the home link for the home page itself."""
+    assert run(MARK_HARNESS, APP_JS=APP_JS) == [None, "page", None]
+
+
+TOP_HARNESS = (
+    STUBS
+    + """
+const scrolled = [];
+window.scrollTo = (x, y) => scrolled.push(window.location.pathname + window.location.search);
+require(APP_JS);
+const go = (path, search = '', hash = '') => {
+  fire('htmx:beforeHistorySave', {});
+  Object.assign(window.location, { pathname: path, search, hash });
+  fire('htmx:pushedIntoHistory', {});
+};
+window.location.pathname = '/overseer/components/scheduler';
+go('/overseer/components/database');
+go('/overseer/components/database', '?window=7');
+go('/overseer/resources', '', '#disk');
+go('/overseer/components/server');
+console.log(JSON.stringify(scrolled));
+"""
+)
+
+
+def test_a_new_page_opens_at_its_top_and_a_control_on_it_keeps_its_place() -> None:
+    """A link swaps only what is right of the sidebar, so the window kept
+    the last page's scroll: a new page now opens at its top. A pager, a
+    filter or a chart's window changes only the query, and keeps its
+    place; an address naming a place on the page (``#disk``) shows it."""
+    assert run(TOP_HARNESS, APP_JS=APP_JS) == [
+        "/overseer/components/database",
+        "/overseer/components/server",
+    ]
+
+
+RANGE_HARNESS = (
+    STUBS
+    + """
+const { spanned, inView } = require(APP_JS);
+const bars = ['a', 'b', 'c', 'd'];
+const timed = [[0, 10], [10, 20], [20, 30], [30, 40]].map(([f, t]) => ({ dataset: { from: String(f), to: String(t) } }));
+console.log(JSON.stringify({
+  seen: inView(timed, 12, 25).map((b) => b.dataset.from),
+  none: inView(timed, null, null).length,
+  forward: spanned(bars, 'b', 'd'),
+  backward: spanned(bars, 'd', 'b'),
+}));
+"""
+)
+
+
+def test_dragging_across_the_volume_covers_every_bar_between() -> None:
+    """From the first bar to the last, whichever way the drag ran."""
+    out = run(RANGE_HARNESS, APP_JS=APP_JS)
+    assert out["forward"] == out["backward"] == ["b", "c", "d"]
+
+
+FACETS_HARNESS = (
+    STUBS
+    + """
+const { kept, volumeOf } = require(APP_JS);
+const row = { level: 'error', service: 'worker', container: 'w-1', app_service: 'ai',
+              model: 'tts-1 gpt-4o-mini-tts' };
+const of = (name) => row[name];
+const bars = [{ from: 0, to: 10 }, { from: 10, to: 20 }];
+const rows = [
+  { at: -5, tone: 'error' }, { at: 5, tone: 'error' }, { at: 12, tone: 'warn' },
+  { at: 15, tone: '' }, { at: 25, tone: 'muted' },
+];
+console.log(JSON.stringify({
+  nothing: kept([], of),
+  oneOf: kept([[['level', 'error'], ['level', 'critical']]], of),
+  missed: kept([[['level', 'info']]], of),
+  anySource: kept([[['service', 'redis'], ['app_service', 'ai']]], of),
+  everyList: kept([[['level', 'error']], [['service', 'redis']]], of),
+  anyOfItsOwn: kept([[['model', 'gpt-4o-mini-tts']]], of),
+  partOfOne: kept([[['model', 'tts']]], of),
+  volume: volumeOf(bars, rows),
+}));
+"""
+)
+
+
+def test_each_list_narrows_and_any_tick_in_it_keeps() -> None:
+    """The Logs filters on the page (``data-facets``): a list with nothing
+    ticked keeps every row; one with ticks keeps a row any of them matches
+    (a service, a container or an application service); every list must
+    keep it. A row holding several values for one (a voice's models,
+    space-separated) is kept by a tick on any of them, whole."""
+    out = run(FACETS_HARNESS, APP_JS=APP_JS)
+    assert [
+        out[k]
+        for k in (
+            "nothing",
+            "oneOf",
+            "missed",
+            "anySource",
+            "everyList",
+            "anyOfItsOwn",
+            "partOfOne",
+        )
+    ] == [True, True, False, True, False, True, False]
+
+
+def test_the_volume_recounts_the_rows_the_filters_keep() -> None:
+    """``ui_logs._volume``'s twin: each bar counts its rows by tone; one
+    before the window is left out, one after it lands in the last bar."""
+    out = run(FACETS_HARNESS, APP_JS=APP_JS)
+    assert out["volume"] == [
+        {"error": 1, "warn": 0, "other": 0, "total": 1},
+        {"error": 0, "warn": 1, "other": 2, "total": 3},
+    ]
+
+
+def test_the_bars_behind_the_lines_on_screen_are_marked() -> None:
+    """A bar is in view when its time overlaps the oldest to the newest line
+    showing; with no line showing, none is."""
+    out = run(RANGE_HARNESS, APP_JS=APP_JS)
+    assert out["seen"] == ["10", "20"] and out["none"] == 0
+
+
+@pytest.mark.parametrize(("text", "query", "runs"), MATCH_CASES)
+def test_a_filter_marks_the_same_matches_as_the_server(
+    text: str, query: str, runs: list[tuple[str, bool]]
+) -> None:
+    """The client-side filter's highlighter is ``split_matches``' twin, held
+    to one table (``MATCH_CASES``)."""
+    found = run(
+        STUBS
+        + "const { splitMatches } = require(APP_JS);"
+        + f"console.log(JSON.stringify(splitMatches({json.dumps(text)}, {json.dumps(query)})));",
+        APP_JS=APP_JS,
+    )
+    assert [tuple(r) for r in found] == runs
+
+
+FOCUS_HARNESS = (
+    STUBS
+    + """
+require(APP_JS);
+const c = require(APP_JS);
+const lines = [{ from: 'service_auth', to: 'database' },
+               { from: 'service_payment', to: 'outside:Stripe' },
+               { from: 'service_documents', to: 'database' }];
+console.log(JSON.stringify([...c.mapFocus(lines, 'database')].sort()));
+"""
+)
+
+
+def test_hovering_a_map_node_keeps_it_and_its_neighbours_lit() -> None:
+    """Who uses the Database: the node and every node a line joins it to;
+    the rest of the map dims."""
+    assert run(FOCUS_HARNESS, APP_JS=APP_JS) == [
+        "database",
+        "service_auth",
+        "service_documents",
+    ]
+
+
+FRAME_HARNESS = (
+    STUBS
+    + """
+const dimmed = {};
+const node = (key) => ({ dataset: { node: key },
+                         toggleAttribute: (name, on) => { dimmed[key] = on; } });
+const nodes = [node('database'), node('service_auth'), node('worker')];
+const lines = [{ dataset: { from: 'service_auth', to: 'database' },
+                 toggleAttribute: () => {} }];
+const map = { querySelectorAll: (s) => (s.startsWith('path') ? lines : nodes) };
+const root = { dataset: { hover: 'database' }, querySelector: () => map };
+document.getElementById = (id) => (id === 'overview-stack' ? root : null);
+require(APP_JS);
+fire('htmx:afterSwap', { detail: { elt: {} } });
+console.log(JSON.stringify(dimmed));
+"""
+)
+
+
+def test_a_live_frame_swaps_in_already_focused() -> None:
+    """A live frame's nodes take the hovered focus as they are swapped in,
+    before they paint: on ``htmx:load``, after the settle delay, each frame
+    showed its dimmed nodes lit and faded them back, a flicker a second."""
+    assert run(FRAME_HARNESS, APP_JS=APP_JS) == {
+        "database": False,
+        "service_auth": False,
+        "worker": True,
+    }
+
+
+LIT_HARNESS = (
+    STUBS
+    + """
+const c = require(APP_JS);
+console.log(JSON.stringify([...c.pathFocus('service_blog,database')].sort()));
+"""
+)
+
+
+def test_a_dry_path_keeps_the_parts_it_crosses_lit() -> None:
+    """Its parts lit (``?lit=``), and with them the lines between two of
+    them (``applyMapFocus``); the rest dims."""
+    assert run(LIT_HARNESS, APP_JS=APP_JS) == ["database", "service_blog"]
+
+
+LET_GO_HARNESS = (
+    STUBS
+    + """
+const root = { dataset: {}, querySelector: () => null };
+document.getElementById = (id) => (id === 'overview-stack' ? root : null);
+require(APP_JS);
+const node = { dataset: { node: 'database' } };
+const over = (sel) => (sel === '[data-map] [data-node]' ? node : sel === '[data-map]' ? {} : null);
+const seen = [];
+const focus = () => root.dataset.pinned || root.dataset.hover || '';
+fire('mouseover', { target: { closest: over } }); seen.push(focus());
+// A click holds nothing: off the node, nothing stays lit.
+fire('click', { target: { closest: over } });
+fire('mouseover', { target: { closest: (sel) => (sel === '[data-map]' ? {} : null) } });
+seen.push(focus());
+// Out of the window straight from a node: no mouseover follows to clear it.
+fire('mouseover', { target: { closest: over } });
+fire('mouseout', { relatedTarget: null });
+seen.push(focus());
+console.log(JSON.stringify(seen));
+"""
+)
+
+
+def test_a_maps_focus_follows_the_pointer_and_nothing_holds_it() -> None:
+    """A node lights while hovered and lets go when the pointer leaves it,
+    the window included; a click holds nothing, so nothing stays dimmed."""
+    assert run(LET_GO_HARNESS, APP_JS=APP_JS) == ["database", "", ""]
+
+
+COLUMN = (
+    STUBS
+    + """
+const { sourceColumn } = require(APP_JS);
+// Line 8 of a file: its number, then ``    store.put(2)`` token by token.
+const text = (s, number = false) => ({ length: s.length, parentElement: { closest: () => number } });
+const nodes = [text('8', true), text('    '), text('store'), text('.'), text('put'), text('(2)')];
+global.NodeFilter = { SHOW_TEXT: 4 };
+document.createTreeWalker = () => { let i = -1; return { nextNode: () => nodes[++i] || null }; };
+const at = (node) => sourceColumn({}, { contains: (n) => n === node });
+console.log(JSON.stringify([at(nodes[4]), at(nodes[2]), at({})]));
+"""
+)
+
+
+def test_a_clicked_name_is_found_by_its_column_in_the_source() -> None:
+    """Overseer > Code asks where a name is by line and column: the column
+    counts the line's source only, never its number."""
+    assert run(COLUMN, APP_JS=APP_JS) == [10, 4, None]
+
+
+# A declaration at a script's top level (``function mount``, ``const KEY``).
+TOP_LEVEL = re.compile(
+    r"^(?:async\s+)?(?:function\*?|const|let|var|class)\s+(\w+)", re.M
+)
+
+
+def test_the_page_scripts_declare_no_name_twice() -> None:
+    """Classic scripts share one global scope: a second ``function mount``
+    replaces the first, and its script's listeners call the other's."""
+    seen: dict[str, str] = {}
+    clashes = []
+    for path in sorted(APP_JS.parent.glob("*.js")):
+        if path.name == "mic-worklet.js":  # an audio worklet's own scope
+            continue
+        for name in TOP_LEVEL.findall(path.read_text()):
+            if name in seen and seen[name] != path.name:
+                clashes.append((name, seen[name], path.name))
+            seen.setdefault(name, path.name)
+    assert clashes == []
+
+
+# A script fetched from another origin: a tag's ``src``, or a URL a page
+# script loads itself (``createElement('script')``, ``import()``).
+REMOTE_TAG = re.compile(r"<script\b[^>]*\bsrc=\"https?://[^>]*>")
+REMOTE_URL = re.compile(r"['\"`]https?://[^'\"`]+['\"`]")
+
+
+def test_no_third_party_script_runs_unverified() -> None:
+    """A changed CDN file would run on Overseer's origin, where requests
+    carry the admin's cookie: each pins its version and the hash the
+    browser checks (``integrity``), or ships with the app."""
+    templates = APP_JS.parents[2] / "templates"
+    unverified = [
+        f"{path.name}: {tag}"
+        for path in templates.rglob("*.html")
+        for tag in REMOTE_TAG.findall(path.read_text())
+        if "integrity=" not in tag or "crossorigin=" not in tag
+    ]
+    for path in APP_JS.parent.glob("*.js"):
+        source = path.read_text()
+        if REMOTE_URL.search(source) and ".integrity = " not in source:
+            unverified.append(f"{path.name}: loads a remote script unhashed")
+    assert unverified == []
+
+
+REFUSED_HARNESS = (
+    STUBS
+    + """
+const toasts = [];
+window.dispatchEvent = (e) => toasts.push(e.detail && e.detail.text);
+require(APP_JS);
+const reply = (type, body) => ({ status: 422, responseText: body,
+  getResponseHeader: (h) => (h.toLowerCase() === 'content-type' ? type : null) });
+const json = { xhr: reply('application/json', '{"detail": "No agent called x"}'),
+               elt: { dataset: {} }, shouldSwap: true };
+const form = { xhr: reply('text/html; charset=utf-8', '<form></form>'),
+               elt: { dataset: {} }, shouldSwap: true };
+fire('htmx:beforeSwap', { detail: json });
+fire('htmx:beforeSwap', { detail: form });
+console.log(JSON.stringify({ json: json.shouldSwap, form: form.shouldSwap, toasts }));
+"""
+)
+
+
+def test_a_refusal_that_is_not_a_form_is_said_never_swapped_in() -> None:
+    """A 422 swaps for its re-rendered form; one in JSON (a service's
+    refusal) would blank the part of the page it targets."""
+    out = run(REFUSED_HARNESS, APP_JS=APP_JS)
+    assert out == {"json": False, "form": True, "toasts": ["No agent called x"]}
+
+
+GONE_HARNESS = (
+    STUBS
+    + """
+let closed = false;
+const toasts = [];
+window.dispatchEvent = (e) => toasts.push(e.detail && e.detail.text);
+document.getElementById = (id) => (id === 'drawer' ? { close: () => { closed = true; } } : null);
+require(APP_JS);
+const failed = (target, status) => fire('htmx:responseError',
+  { detail: { elt: { dataset: {} }, target: { id: target }, xhr: { status } } });
+failed('drawer-body', 404);
+failed('overseer-main', 500);
+console.log(JSON.stringify({ closed, toasts }));
+"""
+)
+
+
+def test_a_drawer_for_an_item_no_longer_there_closes() -> None:
+    """Deleted from that very drawer, or a stale link: the drawer closes
+    (its parameter leaves the address), no error; any other failure says so."""
+    out = run(GONE_HARNESS, APP_JS=APP_JS)
+    assert out == {"closed": True, "toasts": ["Request failed (500)"]}

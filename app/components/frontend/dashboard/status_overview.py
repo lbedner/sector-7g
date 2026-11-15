@@ -8,41 +8,14 @@ Uses DataTable for consistent styling with other tables in the app.
 import flet as ft
 
 from app.components.frontend.controls import DataTable, DataTableColumn
+from app.core.constants import ComponentName
 from app.services.system.models import ComponentStatus
-from app.services.system.ui import get_component_subtitle
+from app.services.system.ui import get_component_subtitle, get_database_subtitle
 
 from .cards.card_utils import (
     _open_modal,
     create_header_row,
 )
-
-# Map status overview component names to modal names
-MODAL_NAME_MAP = {
-    "backend": "backend",
-
-    "database": "database",
-
-
-
-    "cache": "redis",
-
-
-    "worker": "worker",
-
-
-    "scheduler": "scheduler",
-
-
-    "service_auth": "auth",
-
-
-
-
-    "ingress": "ingress",
-
-
-    "frontend": "frontend",
-}
 
 
 def get_component_display_info(
@@ -57,32 +30,19 @@ def get_component_display_info(
     metadata = component_data.metadata or {}
 
     # Map component names to their display info
-    if component_name == "backend":
+    if component_name == ComponentName.BACKEND:
         return ("Server", "FastAPI + Flet")
 
-    elif component_name == "database":
-        implementation = metadata.get("implementation", "sqlite")
-        if implementation == "postgresql":
-            version = metadata.get("version_short", "")
-            if not version and "version" in metadata:
-                full_version = metadata["version"]
-                if isinstance(full_version, str) and "PostgreSQL" in full_version:
-                    parts = full_version.split()
-                    version = parts[1] if len(parts) >= 2 else ""
-            subtitle = f"PostgreSQL {version}" if version else "PostgreSQL"
-        else:
-            version = metadata.get("version", "")
-            subtitle = f"SQLite {version}" if version else "SQLite"
-        return ("Database", subtitle)
+    elif component_name == ComponentName.DATABASE:
+        return ("Database", get_database_subtitle(metadata))
 
-    elif component_name == "worker":
-        return ("Worker", get_component_subtitle("worker", metadata))
+    elif component_name == ComponentName.WORKER:
+        return ("Worker", get_component_subtitle(ComponentName.WORKER, metadata))
 
-    elif component_name == "cache":
+    elif component_name == ComponentName.CACHE:
         return ("Cache", "Redis")
 
-
-    elif component_name == "scheduler":
+    elif component_name == ComponentName.SCHEDULER:
         return ("Scheduler", "APScheduler")
 
     elif component_name == "service_auth":
@@ -102,25 +62,29 @@ def get_component_display_info(
     elif component_name == "service_comms":
         return ("Comms Service", "Resend + Twilio")
 
-
-    elif component_name == "ingress":
+    elif component_name == ComponentName.INGRESS:
         version = metadata.get("version", "")
         subtitle = (
-            f"Traefik {version}"
-            if version and version != "unknown"
-            else "Traefik"
+            f"Traefik {version}" if version and version != "unknown" else "Traefik"
         )
         return ("Ingress", subtitle)
 
+    elif component_name == ComponentName.OBSERVABILITY:
+        version = metadata.get("logfire_version", "")
+        subtitle = (
+            f"Pydantic Logfire {version}".strip() if version else "Pydantic Logfire"
+        )
+        return ("Observability", subtitle)
 
-
-    elif component_name == "frontend":
+    elif component_name == ComponentName.FRONTEND:
         return ("Frontend", "Flet")
 
     else:
-        # Generic fallback
+        # Generic fallback, which is the path every plugin takes: the name
+        # comes from the health metadata the plugin declares.
         display_name = component_name.replace("_", " ").replace("service ", "").title()
-        return (display_name, "")
+        subtitle = get_component_subtitle(component_name, metadata)
+        return (display_name, "" if subtitle == display_name else subtitle)
 
 
 def create_status_cell(
@@ -160,35 +124,35 @@ class ClickableStatusCell(ft.Container):
         if not e.page:
             return
 
-        modal_name = MODAL_NAME_MAP.get(self._component_name, self._component_name)
-        _open_modal(modal_name, self._component_data, e.page)
+        _open_modal(self._component_name, self._component_data, e.page)
 
 
 class StatusOverviewPanel(ft.Container):
     """
     Status overview panel showing all components at a glance.
 
-    Uses DataTable for consistent styling with other tables.
+    Uses DataTable for consistent styling with other tables. As tall as
+    its column, its rows scrolled inside it, so a long stack reads to
+    its end.
     """
 
     def __init__(self) -> None:
         """Initialize the status overview panel."""
-        super().__init__()
+        super().__init__(expand=True)
 
-        # Single column with "Aegis Stack" header
-        self._columns = [DataTableColumn("Aegis Stack")]
-
-        # Placeholder - will be populated by update_components
-        self._table: DataTable | None = None
-
-        # Initial empty table
+        # One table for the session, its rows filled by update_components
         self._table = DataTable(
-            columns=self._columns,
+            columns=[DataTableColumn("Aegis Stack")],
             rows=[],
             row_padding=8,
+            expand=True,
             empty_message="Loading components...",
         )
         self.content = self._table
+
+        # What the current rows were built from, so an unchanged refresh
+        # can be skipped entirely.
+        self._components: dict[str, ComponentStatus] = {}
 
     def update_components(self, components: dict[str, ComponentStatus]) -> None:
         """
@@ -197,31 +161,23 @@ class StatusOverviewPanel(ft.Container):
         Args:
             components: Dictionary mapping component names to ComponentStatus
         """
+        # New rows are new objects, so Flet sends every row and cell
+        # again. Measured at 231 controls with 1 surviving a refresh whose
+        # rendered output was identical - which in the steady state is
+        # every refresh.
+        if self._components == components:
+            return
+        self._components = dict(components)
+
         # Define display order (most important first)
         display_order = [
-            "backend",
-
-            "database",
-
-
-
-            "cache",
-
-
-            "worker",
-
-
-            "scheduler",
-
-
-            "service_auth",
-
-
-
-
-            "ingress",
-
-
+            ComponentName.BACKEND,
+            ComponentName.DATABASE,
+            ComponentName.CACHE,
+            ComponentName.WORKER,
+            ComponentName.SCHEDULER,
+            ComponentName.INGRESS,
+            ComponentName.OBSERVABILITY,
         ]
 
         # Build rows in order
@@ -234,13 +190,9 @@ class StatusOverviewPanel(ft.Container):
 
         # Add any remaining components not in the display order
         for comp_name, comp_data in components.items():
-            if comp_name not in added and comp_name != "frontend":
+            if comp_name not in added and comp_name != ComponentName.FRONTEND:
                 rows.append([create_status_cell(comp_name, comp_data)])
 
-        # Rebuild table with new rows
-        self._table = DataTable(
-            columns=self._columns,
-            rows=rows,
-            row_padding=8,
-        )
-        self.content = self._table
+        # New rows in the same table: its list, and the reader's place in
+        # it, stay.
+        self._table.set_rows(rows)

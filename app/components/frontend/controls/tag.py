@@ -18,19 +18,27 @@ class Tag(ft.Container):
     Features bordered design with colored text and border, sized for compact display.
     """
 
-    def __init__(self, text: str, color: str = ft.Colors.AMBER) -> None:
+    def __init__(
+        self, text: str, color: str = ft.Colors.AMBER, *, compact: bool = False
+    ) -> None:
+        # Compact is for dense table cells: tighter padding and a smaller
+        # face, so the pill hugs a short word instead of overflowing it.
         super().__init__(
             border=ft.border.all(1, color),
             border_radius=ft.border_radius.all(5),
-            padding=ft.Padding(7.5, 2.5, 7.5, 2.5),
+            padding=ft.Padding(5, 1, 5, 1)
+            if compact
+            else ft.Padding(7.5, 2.5, 7.5, 2.5),
             alignment=ft.alignment.center,
             content=ft.Text(
                 text,
                 weight=ft.FontWeight.W_700,
                 color=color,
                 font_family=FontConfig.FAMILY_PRIMARY,
-                size=FontConfig.SIZE_TERTIARY,
+                size=10 if compact else FontConfig.SIZE_TERTIARY,
                 text_align=ft.TextAlign.CENTER,
+                no_wrap=True,
+                overflow=ft.TextOverflow.ELLIPSIS,
             ),
         )
 
@@ -46,9 +54,17 @@ class StatusTag(ft.Container):
     - UNHEALTHY: Filled red background, white text (alarm state)
 
     Optionally shows a detail line below the status (e.g., "2/3 queues online").
+    ``text`` overrides the default severity label (e.g. "Connected" or
+    "Login required" on a finance connection) while keeping the severity's
+    dot-and-weight styling.
     """
 
-    def __init__(self, status: ComponentStatusType, detail: str | None = None) -> None:
+    def __init__(
+        self,
+        status: ComponentStatusType,
+        detail: str | None = None,
+        text: str | None = None,
+    ) -> None:
         # Determine styling based on status severity
         if status == ComponentStatusType.UNHEALTHY:
             # CRITICAL: Filled background, white text - maximum attention
@@ -56,7 +72,7 @@ class StatusTag(ft.Container):
             text_color = ft.Colors.WHITE
             detail_color = ft.Colors.with_opacity(0.8, ft.Colors.WHITE)
             bg_color = Theme.Colors.ERROR
-            text = "UNHEALTHY"
+            text = text or "UNHEALTHY"
             font_weight = ft.FontWeight.W_700
         elif status == ComponentStatusType.WARNING:
             # WARNING: Amber tint background
@@ -64,7 +80,7 @@ class StatusTag(ft.Container):
             text_color = Theme.Colors.WARNING
             detail_color = ft.Colors.with_opacity(0.7, Theme.Colors.WARNING)
             bg_color = ft.Colors.with_opacity(0.15, Theme.Colors.WARNING)
-            text = "Warning"
+            text = text or "Warning"
             font_weight = ft.FontWeight.W_600
         elif status == ComponentStatusType.INFO:
             # INFO: Blue tint background
@@ -72,7 +88,7 @@ class StatusTag(ft.Container):
             text_color = Theme.Colors.INFO
             detail_color = ft.Colors.with_opacity(0.7, Theme.Colors.INFO)
             bg_color = ft.Colors.with_opacity(0.15, Theme.Colors.INFO)
-            text = "Info"
+            text = text or "Info"
             font_weight = ft.FontWeight.W_600
         else:
             # HEALTHY: Minimal - just dot and text, no background
@@ -80,7 +96,7 @@ class StatusTag(ft.Container):
             text_color = Theme.Colors.SUCCESS
             detail_color = ft.Colors.with_opacity(0.7, Theme.Colors.SUCCESS)
             bg_color = None
-            text = "Healthy"
+            text = text or "Healthy"
             font_weight = ft.FontWeight.W_500
 
         # Build the status row: dot + text

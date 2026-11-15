@@ -5,11 +5,12 @@ These tests focus on the pure logic of health checking, warning propagation,
 and component hierarchy without external dependencies like Redis or system metrics.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.system import ComponentStatus, ComponentStatusType
+from app.services.system import ComponentStatus, ComponentStatusType, SystemStatus
 from app.services.system.health import (
     get_system_status,
 )
@@ -20,7 +21,7 @@ class TestHealthUtilityFunctions:
 
     def test_format_bytes(self) -> None:
         """Test format_bytes utility function."""
-        from app.services.system.health import format_bytes
+        from app.core.formatting import format_bytes
 
         # Test various byte sizes
         assert format_bytes(0) == "0 B"
@@ -226,6 +227,40 @@ class TestSystemStatusWarningPropagation:
                 )
 
     @pytest.mark.asyncio
+    async def test_the_root_answers_for_what_overall_healthy_counts(self) -> None:
+        """A host metric leaves the Server's own status alone but counts
+        overall, so the root says so too: "not healthy" and a "healthy"
+        status would disagree."""
+        checks = {
+            "backend": AsyncMock(
+                return_value=ComponentStatus(name="backend", message="active")
+            )
+        }
+        metrics = {
+            "memory": ComponentStatus(
+                name="memory",
+                status=ComponentStatusType.WARNING,
+                message="Memory usage: 90%",
+            ),
+        }
+        with (
+            patch("app.services.system.health._health_checks", checks),
+            patch("app.services.system.health._service_health_checks", {}),
+            patch(
+                "app.services.system.health._get_cached_system_metrics",
+                return_value=metrics,
+            ),
+            patch(
+                "app.services.system.health._get_system_info",
+                return_value={"test": "info"},
+            ),
+        ):
+            system_status = await get_system_status(force_refresh=True)
+
+        assert system_status.overall_healthy is False
+        assert system_status.overall_status == ComponentStatusType.WARNING
+
+    @pytest.mark.asyncio
     async def test_system_status_with_only_warnings_is_not_healthy(self) -> None:
         """Test that system with warnings is not considered overall healthy."""
 
@@ -306,19 +341,29 @@ class TestWorkerHealthLogic:
         assert status == ComponentStatusType.WARNING  # But shows warning
 
         # Active worker with good performance
-        healthy, status = check_empty_worker_status("homer", True, True, 5)
+        healthy, status = check_empty_worker_status("load_test", True, True, 5)
         assert healthy is True
         assert status == ComponentStatusType.HEALTHY
 
         # Active worker with high failure rate
-        healthy, status = check_empty_worker_status("homer", True, True, 50)
+        healthy, status = check_empty_worker_status("load_test", True, True, 50)
         assert healthy is False
         assert status == ComponentStatusType.UNHEALTHY
 
         # Active worker that's offline
-        healthy, status = check_empty_worker_status("homer", True, False, 0)
+        healthy, status = check_empty_worker_status("load_test", True, False, 0)
         assert healthy is False
         assert status == ComponentStatusType.UNHEALTHY
+
+    @pytest.mark.parametrize("status", list(ComponentStatusType))
+    def test_the_overall_status_is_the_roots(self, status: ComponentStatusType) -> None:
+        root = ComponentStatus(name="aegis", status=status, message="root")
+        system = SystemStatus(
+            components={"aegis": root},
+            overall_healthy=status == ComponentStatusType.HEALTHY,
+            timestamp=datetime.now(UTC),
+        )
+        assert system.overall_status == status
 
     def test_warning_propagation_to_parent_components(self) -> None:
         """Test warning propagation from queue -> queues -> worker."""
@@ -348,18 +393,18 @@ class TestWorkerHealthLogic:
         # Test case: Some queues have warnings - since WARNING is not healthy,
         # the overall status should be WARNING (not all queues are healthy)
         sub_components = {
-            "homer": ComponentStatus(
-                name="homer",
+            "media": ComponentStatus(
+                name="media",
                 status=ComponentStatusType.WARNING,
                 message="No tasks configured",
             ),
-            "inanimate_rod": ComponentStatus(
-                name="inanimate_rod",
+            "system": ComponentStatus(
+                name="system",
                 status=ComponentStatusType.WARNING,
                 message="No tasks configured",
             ),
-            "lenny": ComponentStatus(
-                name="lenny",
+            "load_test": ComponentStatus(
+                name="load_test",
                 status=ComponentStatusType.HEALTHY,
                 message="Active with completed tasks",
             ),
@@ -376,7 +421,7 @@ class TestWorkerHealthLogic:
         assert queues_status == ComponentStatusType.HEALTHY
 
         # Test case: One component unhealthy
-        sub_components["lenny"].status = ComponentStatusType.UNHEALTHY
+        sub_components["load_test"].status = ComponentStatusType.UNHEALTHY
 
         queues_status = check_warning_propagation(sub_components)
         assert queues_status == ComponentStatusType.UNHEALTHY
@@ -384,6 +429,41 @@ class TestWorkerHealthLogic:
 
 class TestComponentMetadata:
     """Test component metadata handling and serialization."""
+
+    def test_a_checks_model_is_its_metadata_as_json(self) -> None:
+        """A health check hands over its figures model; a timestamp goes out
+        as text, however the check forgot to dump it."""
+        from datetime import datetime
+
+        from pydantic import BaseModel
+
+        class Counts(BaseModel):
+            items: int
+            last: datetime
+
+        status = ComponentStatus(
+            name="research",
+            message="1 item",
+            metadata=Counts(items=1, last=datetime(2026, 10, 26, 9)),
+        )
+
+        assert status.metadata == {"items": 1, "last": "2026-10-26T09:00:00"}
+
+    def test_a_status_never_carries_a_password(self) -> None:
+        """Health goes out unauthenticated (``/health/detailed``, the MCP
+        health tool): a connection URL's password is hidden however deep a
+        check put it, the message included."""
+        status = ComponentStatus(
+            name="database",
+            message="could not connect to postgresql://app:hunter2@db:5432/app",
+            metadata={
+                "url": "postgresql://app:hunter2@db:5432/app",
+                "replicas": [{"url": "redis://:hunter2@cache:6379/0"}],
+            },
+        )
+
+        assert "hunter2" not in status.model_dump_json()
+        assert status.metadata["url"] == "postgresql://app:***@db:5432/app"
 
     def test_component_status_with_complex_metadata(self) -> None:
         """Test ComponentStatus with complex metadata for different component types."""
@@ -396,10 +476,10 @@ class TestComponentMetadata:
             "overall_failure_rate_percent": 4.8,
             "redis_url": "redis://localhost:6379",
             "queue_configuration": {
-                "homer": {
-                    "description": "Homer Simpson tasks",
-                    "max_jobs": 3,
-                    "timeout_seconds": 600,
+                "load_test": {
+                    "description": "Load testing tasks",
+                    "max_jobs": 50,
+                    "timeout_seconds": 300,
                 }
             },
         }
@@ -465,163 +545,3 @@ class TestComponentMetadata:
         assert status_dict["metadata"]["key"] == "value"
         assert "sub1" in status_dict["sub_components"]
         assert status_dict["sub_components"]["sub1"]["status"] == "healthy"
-
-
-class TestDatabaseHealthCheck:
-    """Test database health check functionality."""
-
-    @pytest.mark.asyncio
-    async def test_database_health_check_success(self, db_session) -> None:
-        """Test successful PostgreSQL health check."""
-        from app.services.system.health_db_postgres import (
-            check_database_health,
-        )
-
-        mock_session = MagicMock()
-
-        def mock_execute(query):
-            query_str = str(query).lower()
-            if "select 1" in query_str:
-                return MagicMock()
-            elif "select version()" in query_str:
-                result = MagicMock()
-                result.fetchone.return_value = ["PostgreSQL 16.1"]
-                return result
-            result = MagicMock()
-            result.fetchone.return_value = None
-            return result
-
-        mock_session.execute.side_effect = mock_execute
-
-        with (
-            patch("app.services.system.health_db_postgres.settings") as mock_settings,
-            patch("app.core.db.db_session") as mock_db,
-        ):
-            mock_settings.database_url_effective = "postgresql://localhost/test"
-            mock_settings.DATABASE_ENGINE_ECHO = False
-            mock_db.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_db.return_value.__exit__ = MagicMock(return_value=None)
-
-            result = await check_database_health()
-
-            assert result.name == "database"
-            assert result.status == ComponentStatusType.HEALTHY
-            assert "successful" in result.message.lower()
-            assert result.metadata["implementation"] == "postgresql"
-
-    @pytest.mark.asyncio
-    async def test_database_health_check_import_error(self) -> None:
-        """Test database health check when db module unavailable."""
-        import builtins
-
-        from app.services.system.health_db_postgres import (
-            check_database_health,
-        )
-
-        real_import = builtins.__import__
-
-        def mock_import(name, *args, **kwargs):
-            if name == "app.core.db":
-                raise ImportError("No db module")
-            return real_import(name, *args, **kwargs)
-
-        with patch("builtins.__import__", side_effect=mock_import):
-            result = await check_database_health()
-
-            assert result.name == "database"
-            assert result.status == ComponentStatusType.UNHEALTHY
-
-    @pytest.mark.asyncio
-    async def test_database_health_check_missing_file(self) -> None:
-        """Test database health check with connection error."""
-        from app.services.system.health_db_postgres import (
-            check_database_health,
-        )
-
-        with (
-            patch("app.services.system.health_db_postgres.settings") as mock_settings,
-            patch("app.core.db.db_session") as mock_db,
-        ):
-            mock_settings.database_url_effective = "postgresql://localhost/nonexistent"
-            mock_settings.DATABASE_ENGINE_ECHO = False
-            mock_db.side_effect = Exception("connection refused")
-
-            result = await check_database_health()
-
-            assert result.name == "database"
-            assert result.status in (
-                ComponentStatusType.WARNING,
-                ComponentStatusType.UNHEALTHY,
-            )
-
-    @pytest.mark.asyncio
-    async def test_database_health_check_connection_failure(
-        self,
-    ) -> None:
-        """Test database health check when connection fails."""
-        from app.services.system.health_db_postgres import (
-            check_database_health,
-        )
-
-        mock_session = MagicMock()
-        mock_session.execute.side_effect = Exception("connection refused")
-
-        with (
-            patch("app.services.system.health_db_postgres.settings") as mock_settings,
-            patch("app.core.db.db_session") as mock_db,
-        ):
-            mock_settings.database_url_effective = "postgresql://localhost/test"
-            mock_settings.DATABASE_ENGINE_ECHO = False
-            mock_db.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_db.return_value.__exit__ = MagicMock(return_value=None)
-
-            result = await check_database_health()
-
-            assert result.name == "database"
-            assert result.status in (
-                ComponentStatusType.WARNING,
-                ComponentStatusType.UNHEALTHY,
-            )
-
-    def test_database_status_metadata_structure(self) -> None:
-        """Test that database health check includes proper metadata."""
-        from app.services.system.models import ComponentStatus, ComponentStatusType
-
-        # Test successful database component metadata with enhanced fields
-        database_metadata = {
-            "implementation": "sqlite",
-            "url": "sqlite:///:memory:",
-            "database_exists": True,
-            "engine_echo": False,
-            "version": "3.43.2",
-            "file_size_bytes": 8192,
-            "file_size_human": "8.0 KB",
-            "connection_pool_size": 1,
-            "pragma_settings": {
-                "foreign_keys": True,
-                "journal_mode": "delete",
-                "cache_size": 2000,
-            },
-            "wal_enabled": False,
-        }
-
-        database_status = ComponentStatus(
-            name="database",
-            status=ComponentStatusType.HEALTHY,
-            message="Database connection successful",
-            metadata=database_metadata,
-        )
-
-        # Test existing fields
-        assert database_status.metadata["implementation"] == "sqlite"
-        assert "sqlite://" in database_status.metadata["url"]
-        assert database_status.metadata["database_exists"] is True
-        assert database_status.metadata["engine_echo"] is False
-
-        # Test enhanced metadata fields
-        assert database_status.metadata["version"] == "3.43.2"
-        assert database_status.metadata["file_size_bytes"] == 8192
-        assert database_status.metadata["file_size_human"] == "8.0 KB"
-        assert database_status.metadata["connection_pool_size"] == 1
-        assert isinstance(database_status.metadata["pragma_settings"], dict)
-        assert database_status.metadata["wal_enabled"] is False

@@ -1,0 +1,476 @@
+[project]
+name = "sector-7g"
+version = "0.1.0"
+description = "A production-ready async Python application built with Aegis Stack"
+readme = "README.md"
+requires-python = ">=3.13,<3.15"
+
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+
+dependencies = [
+    "fastapi==0.116.1",
+    "flet[all]==0.28.3",
+    "uvicorn==0.35.0",
+    # Alternate ASGI server, selected per run by `make serve ENGINE=granian`.
+    # Shipped rather than made optional so the switch needs no install step.
+    "granian==2.8.3",
+    # Zig event loop for uvicorn, opt-in via WEBSERVER_LOOP=zuvloop. The
+    # marker is the gate: wheels start at 3.14, so older environments
+    # resolve without it rather than failing to install.
+    "zuvloop>=0.0.17,<0.1; python_version >= '3.14'",
+    "structlog==25.4.0",
+    "pydantic-settings>=2.12.0,<3",
+    # Field(exclude_if=...): an answer leaves out what does not apply.
+    "pydantic>=2.12,<3",
+    "typer==0.16.0",
+    # Pin click to avoid yanked versions (typer dependency)
+    "click==8.2.1",
+    # Rich CLI formatting
+    "rich==14.1.0",
+    # Interactive prompts with status line support
+    "prompt_toolkit>=3.0.0,<4",
+    # HTTP client for CLI API calls
+    "httpx==0.28.1",
+    # Security fix for GHSA-38jv-5279-wg99
+    "urllib3>=2.6.3,<3",
+    # System monitoring
+    "psutil==7.0.0",
+    # Reads .aegis/deploy.yml (where this project deploys to) and Hetzner's
+    # server metadata, both YAML.
+    "pyyaml>=6.0,<7",
+    # The pastebox upload endpoint (pasted images) is multipart.
+    "python-multipart==0.0.9",
+    "apscheduler==3.10.4",
+    "redis==5.0.8",
+    "arq==0.25.0",
+    # <0.0.45: that release rejects naive datetimes, and every timestamp
+    # this project writes is naive UTC (see app/core/time.py).
+    "sqlmodel>=0.0.14,<0.0.45",
+    "sqlalchemy>=2.0.0,<3",
+    "asyncpg>=0.29.0,<0.32",
+    "psycopg2-binary>=2.9.9,<3",
+    "greenlet>=1.1.0,<4",
+    "logfire[fastapi,httpx,sqlalchemy,redis]<6",
+    "jinja2>=3.1.0,<4",
+    # The web frontend's ``markdown`` filter renders it. Pinned here as
+    # well as under the AI extra because the filter belongs to the
+    # frontend: a project with htmx and no AI still has a renderer, and
+    # without this its templates module fails at import.
+    "marko==2.1.3",
+    "python-jose[cryptography]==3.3.0",
+    "bcrypt>=4.0.0,<6",
+    "alembic==1.16.5",
+    "email-validator==2.2.0",
+]
+
+[project.scripts]
+sector-7g = "app.cli.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.djlint]
+# The web frontend's templates are Jinja; without this profile djlint reads
+# their tag blocks as raw text and reports nonsense.
+profile = "jinja"
+# Only rules that are wrong for this stack are disabled, so djlint stays a
+# real guard for the rest (unclosed tags, missing alt text, and so on):
+#   J018  wants internal links to use url_for(). That is a Flask/Django
+#         pattern; Starlette's url_for needs named routes and the request in
+#         context, and these pages link to literal paths.
+#   T003  wants every endblock to repeat its block's name. These templates
+#         don't, matching the upstream they were ported from.
+#   H030  wants a meta description on every file. base.html is a layout:
+#         pages that want one set it in head_extra (the landing does), and
+#         the auth pages are deliberately noindex.
+#   H031  wants meta keywords, which search engines have ignored for years.
+ignore = "J018,T003,H030,H031"
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+# Locale files are translator-managed: each entry is a single-line
+# ``"key": "translation",`` and rewrapping breaks the translator workflow.
+# CJK locales (ja/ko/zh/zh_Hant) also can't be wrapped on word boundaries.
+# Skip them entirely; lint the rest of the codebase strictly.
+#
+# Use ``extend-exclude`` (additive), NOT ``exclude`` — the latter
+# overrides ruff's built-in defaults and silently lets pre-commit's
+# ``ruff check --fix`` rewrite ``.venv`` (e.g. desugaring third-party
+# ``Optional[X]`` → ``X | None`` and breaking ``flet``'s submodule chain).
+extend-exclude = [
+    "app/i18n/locales/*.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]  # Added UP for pyupgrade (modern Python syntax)
+ignore = [
+    "E501",  # line too long — handled by the formatter
+    "UP046",  # PEP 695 generic class — not valid on Python 3.11
+    "UP047",  # PEP 695 generic function — not valid on Python 3.11
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+force-single-line = false
+force-sort-within-sections = true
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+# deps.py is a re-export shim that exposes FastAPI dependency-injection
+# providers from a single import surface. Each import is intentionally
+# unused inside this module; without this ignore, ``ruff --fix`` deletes
+# the re-exports during post-generation formatting and any consumer that
+# does ``from app.components.backend.api.deps import X`` breaks at boot.
+"app/components/backend/api/deps.py" = ["F401"]
+
+[tool.ty.rules]
+# Configure ty to ignore only genuine false positives or unavoidable issues.
+# Real type issues should be fixed, not ignored.
+unresolved-import = "ignore"              # Missing third-party type stubs (unavoidable)
+unresolved-attribute = "ignore"           # Some dynamic attribute access in Flet is unavoidable
+invalid-argument-type = "ignore"          # Flet dynamic attributes and colors
+not-subscriptable = "ignore"              # Flet page.controls access patterns
+unsupported-operator = "ignore"           # Flet value comparisons with None
+possibly-missing-attribute = "ignore"     # Flet dynamic component properties
+call-non-callable = "ignore"              # Dynamic middleware registration patterns
+invalid-return-type = "ignore"            # Flet component return type flexibility
+# Flet descriptors (Control.color, Canvas.shapes, FontWeight enum vs str)
+# reject the types our code assigns; adding `# type: ignore` at every site
+# is noisier than one rule-level mute. All genuine assignment errors are in
+# our own typed code paths (pydantic models, FastAPI handlers) — those
+# surface through ``mypy``/runtime validators, not through this rule.
+invalid-assignment = "ignore"
+# typer's ``Option`` / ``Argument`` overload set doesn't match how we call
+# them (explicit keyword combos with sentinels); the library is fine at
+# runtime.
+no-matching-overload = "ignore"
+# SQLModel emits a deprecation "prefer exec() over execute()" warning even
+# when ``execute(text(...))`` is the right call (raw SQL / PRAGMAs where
+# ``exec()`` doesn't apply). Suppress the noise; genuine sqlalchemy API
+# deprecations still surface at runtime.
+deprecated = "ignore"
+# Third-party packages (resend, etc.) with lazy / dynamic submodule imports
+# trip ty's static submodule-resolution. The code works at runtime.
+possibly-missing-submodule = "ignore"
+
+[tool.ty.src]
+# Don't check the virtualenv. Third-party stubs vary; we only care about
+# errors in our own code.
+exclude = [".venv", "venv", ".tox", "build", "dist"]
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# One worker per CPU. ``logical``, not ``auto``: with psutil installed (it is,
+# for the runtime probes) ``auto`` counts physical cores, which is half a
+# GitHub runner. loadgroup keeps an ``xdist_group`` on one worker.
+addopts = "-n logical --dist=loadgroup"
+
+# Windows-compatible mirror of the Makefile: `uv run poe <target>` means the
+# same thing as `make <target>` on any OS, since `make` isn't a native
+# Windows binary. Kept as independent entries with the Makefile's literal
+# commands (not delegating through `make`) so nothing changes for existing
+# Mac/Linux `make` usage; the port-resolution/env-file logic behind
+# serve/serve-bg/serve-prod/migrate-reset lives once in scripts/dev_tasks.py and is called
+# from both interfaces.
+[tool.poe.tasks.build]
+help = "Build Docker image"
+cmd = "docker compose -f docker-compose.yml -f docker-compose.dev.yml build webserver"
+
+
+[tool.poe.tasks.build-static]
+help = "Compile Tailwind CSS and fingerprint assets into static/dist"
+sequence = [
+    { cmd = "npm run build" },
+    { cmd = "uv run python -m app.components.web_frontend.build" },
+]
+
+
+[tool.poe.tasks.serve]
+help = "Run all services (auto-selects a free host port if the default is taken)"
+sequence = ["build", { script = "scripts.dev_tasks:serve" }]
+
+[tool.poe.tasks.serve-bg]
+help = "Run all services in background (auto-selects a free host port if the default is taken)"
+script = "scripts.dev_tasks:serve_bg"
+
+[tool.poe.tasks.serve-prod]
+help = "Run all services with the production profile (prod config; no dev mounts/debug ports)"
+script = "scripts.dev_tasks:serve_prod"
+
+[tool.poe.tasks.stop-prod]
+help = "Stop the production-profile services"
+
+cmd = "docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile prod down --remove-orphans"
+
+
+[tool.poe.tasks.stop]
+help = "Gracefully stop all services"
+cmd = "docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev down --remove-orphans"
+
+[tool.poe.tasks.clean]
+help = "Clean up project containers, networks, volumes, and images"
+cmd = "docker compose -f docker-compose.yml -f docker-compose.dev.yml down --remove-orphans --volumes --rmi all"
+ignore_fail = true
+
+[tool.poe.tasks.rebuild]
+help = "Build images and start services"
+sequence = ["build", "serve"]
+
+[tool.poe.tasks.refresh]
+help = "Nuclear reset - clean everything and rebuild"
+sequence = ["clean", "build", "serve"]
+
+[tool.poe.tasks.restart]
+help = "Quick restart (no rebuild)"
+sequence = ["stop", "serve"]
+
+[tool.poe.tasks.logs]
+help = "Follow logs from all services"
+cmd = "docker compose logs -f"
+
+[tool.poe.tasks.logs-web]
+help = "Follow webserver logs only"
+cmd = "docker compose logs -f webserver"
+
+[tool.poe.tasks.logs-worker]
+help = "Follow worker logs only"
+cmd = "docker compose logs -f worker-system worker-load-test"
+
+[tool.poe.tasks.logs-redis]
+help = "Follow Redis logs only"
+cmd = "docker compose logs -f redis"
+
+
+[tool.poe.tasks.logs-scheduler]
+help = "Follow scheduler logs only"
+cmd = "docker compose logs -f scheduler"
+
+
+[tool.poe.tasks.shell]
+help = "Open shell in webserver container"
+cmd = "docker compose exec webserver /bin/bash"
+
+[tool.poe.tasks.cli]
+help = "Run the app CLI where the database is (poe cli --help)"
+cmd = "docker compose exec webserver /opt/venv/bin/python -c 'from app.cli.main import main; main()'"
+
+[tool.poe.tasks.shell-worker]
+help = "Open shell in worker container"
+cmd = "docker compose exec worker-system /bin/bash"
+
+[tool.poe.tasks.ps]
+help = "Show running containers"
+cmd = "docker compose ps"
+
+[tool.poe.tasks.redis-cli]
+help = "Connect to Redis CLI"
+cmd = "docker compose exec redis redis-cli"
+
+[tool.poe.tasks.redis-stats]
+help = "Show Redis memory and stats"
+cmd = "docker compose exec redis redis-cli info memory"
+
+[tool.poe.tasks.redis-keys]
+help = "Show all Redis keys"
+cmd = 'docker compose exec redis redis-cli keys "*"'
+
+[tool.poe.tasks.redis-reset]
+help = "Clear all Redis data"
+cmd = "docker compose exec redis redis-cli flushall"
+
+[tool.poe.tasks.health]
+help = "Check system health status"
+cmd = "uv run sector-7g health status"
+
+[tool.poe.tasks.health-detailed]
+help = "Detailed system health information"
+cmd = "uv run sector-7g health status --detailed"
+
+[tool.poe.tasks.health-json]
+help = "System health as JSON"
+cmd = "uv run sector-7g health status --json"
+
+[tool.poe.tasks.health-probe]
+help = "Health probe (exits 1 if unhealthy)"
+cmd = "uv run sector-7g health probe"
+
+[tool.poe.tasks.test]
+help = "Run tests locally"
+cmd = "uv run pytest"
+
+[tool.poe.tasks.test-verbose]
+help = "Run tests with verbose output"
+cmd = "uv run pytest -v"
+
+[tool.poe.tasks.lint]
+help = "Check code style with ruff"
+
+sequence = [
+    { cmd = "uv run ruff check ." },
+    "lint-frontend",
+]
+
+
+
+[tool.poe.tasks.lint-frontend]
+help = "Lint static JS (Biome) + Jinja templates (djlint)"
+sequence = [
+    { cmd = "npx --yes @biomejs/biome@2.5.1 lint app/components/web_frontend/static/js" },
+    { cmd = "uvx djlint@1.39.4 app/components/web_frontend/templates" },
+]
+
+
+[tool.poe.tasks.fix]
+help = "Auto-fix linting and formatting issues"
+sequence = [
+    { cmd = "uv run ruff check . --fix", ignore_fail = true },
+    { cmd = "uv run ruff format ." },
+    { cmd = "npx --yes @biomejs/biome@2.5.1 lint --write app/components/web_frontend/static/js", ignore_fail = true },
+]
+
+[tool.poe.tasks.format]
+help = "Format code with ruff"
+cmd = "uv run ruff format ."
+
+
+[tool.poe.tasks.format-frontend]
+help = "Format static JS with Biome (opt-in; reflows files)"
+cmd = "npx --yes @biomejs/biome@2.5.1 format --write app/components/web_frontend/static/js"
+
+
+[tool.poe.tasks.typecheck]
+help = "Run type checking with ty"
+cmd = "uv run ty check"
+
+[tool.poe.tasks.check-queries]
+help = "Fail on N+1 queries not already in .queryspy-baseline.json"
+cmd = "uv run pytest --queryspy-strict --queryspy-baseline .queryspy-baseline.json"
+
+[tool.poe.tasks.check-queries-baseline]
+help = "Rewrite .queryspy-baseline.json from the current suite"
+cmd = "uv run pytest -n 0 --queryspy-strict --queryspy-baseline .queryspy-baseline.json --queryspy-baseline-update"
+
+[tool.poe.tasks.check]
+help = "Run all code quality checks"
+sequence = ["lint", "typecheck", "test", { cmd = 'echo "All checks completed successfully!"' }]
+
+[tool.poe.tasks.install]
+help = "Install/sync dependencies with uv"
+cmd = "uv sync"
+
+[tool.poe.tasks.deps-update]
+help = "Update dependencies"
+cmd = "uv sync --upgrade"
+
+[tool.poe.tasks.clean-cache]
+help = "Clean Python cache files"
+script = "scripts.dev_tasks:clean_cache"
+
+[tool.poe.tasks.docs-serve]
+help = "Serve documentation locally (port resolved like serve)"
+script = "scripts.dev_tasks:docs"
+
+[tool.poe.tasks.docs-build]
+help = "Build static documentation"
+cmd = "uv run mkdocs build"
+
+
+[tool.poe.tasks.migrate]
+help = "Apply database migrations"
+cmd = "docker compose exec webserver uv run alembic -c alembic/alembic.ini upgrade head"
+
+[tool.poe.tasks.migrate-check]
+help = "Check migration status"
+cmd = "docker compose exec webserver uv run alembic -c alembic/alembic.ini current"
+
+[tool.poe.tasks.migrate-history]
+help = "Show migration history"
+cmd = "docker compose exec webserver uv run alembic -c alembic/alembic.ini history --verbose"
+
+[tool.poe.tasks.migrate-fix]
+help = "Auto-fix schema mismatches after upgrade (safe: only adds, never drops)"
+cmd = "docker compose exec webserver uv run python -m app.cli.migrate_fix"
+
+[tool.poe.tasks.migrate-reset]
+help = "Reset database (WARNING: destructive)"
+script = "scripts.dev_tasks:migrate_reset"
+
+
+[tool.poe.tasks.db-clean]
+help = "Remove postgres volume (nuclear reset when DB is broken)"
+sequence = [
+    { cmd = "docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev down --remove-orphans" },
+    { cmd = "docker volume rm sector-7g_postgres-data", ignore_fail = true },
+    { cmd = "echo \"Postgres volume removed. Run 'uv run poe serve' to start fresh.\"" },
+]
+
+[tool.poe.tasks.db-fresh]
+help = "Nuclear DB reset + restart"
+sequence = ["db-clean", "serve"]
+
+
+
+
+[tool.poe.tasks.worker-test]
+help = "Test workers in burst mode (process and exit)"
+cmd = "uv run python -m arq app.components.worker.queues.system.WorkerSettings --burst"
+
+
+[tool.poe.tasks.status]
+help = "Show current system status"
+script = "scripts.dev_tasks:status"
+
+# Dev dependencies live here, not in an extra: ``uv sync`` installs this
+# group by default and ``uv add --dev`` writes to it, so the default path
+# is the correct one. Splitting them across both is how adding a single
+# test dependency used to uninstall pytest.
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1,<0.29",
+    "pytest>=9.0.3,<10",
+    "pytest-asyncio>=1.1.0,<2",
+    "pytest-xdist>=3.5.0,<4",
+    "ruff==0.12.7",
+    "ty==0.0.79",
+    "types-psutil==7.0.0.20250801",
+    "pre-commit==4.2.0",
+    "pip-audit==2.9.0",
+    # Cross-platform task runner; `uv run poe <target>` mirrors `make <target>`
+    # for Windows, where `make` isn't a native binary.
+    "poethepoet==0.48.0",
+    # DOM assertions for the web test kit (tests/web/dom.py)
+    "lxml>=6.1.3,<7",
+    "cssselect>=1.5.0,<2",
+    # N+1 and query-budget detection for the test suite (make check-queries).
+    # Built on SQLAlchemy 2.0's do_orm_execute, so it needs a database stack.
+    "queryspy>=0.4.1,<0.5",
+    # Tests use in-memory SQLite for speed/isolation regardless of the
+    # production backend, so aiosqlite is required as a test dep even when
+    # the app itself runs on Postgres.
+    "aiosqlite>=0.19.0,<0.23",
+    # Auto-reload for workers; asset rebuilds for the web frontend watcher
+    "watchdog==4.0.2",
+]
+docs = [
+    "mkdocs==1.6.1",
+    "mkdocs-material==9.6.16",
+    "mkdocstrings[python]==0.30.0",
+    "mkdocs-gen-files==0.5.0",
+    "pymdown-extensions==10.16.1",
+]

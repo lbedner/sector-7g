@@ -1,5 +1,5 @@
 """
-Homer Simpson worker tasks for arq.
+Homer Simpson worker tasks.
 
 Thin wrappers around services/springfield/homer.py functions.
 """
@@ -16,33 +16,31 @@ from app.services.springfield.homer import (
 )
 
 
-async def eat_donut_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def eat_donut_task(**kwargs: Any) -> dict[str, Any]:
     """Homer eats a donut."""
     return await eat_donut()
 
 
-async def nap_at_console_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def nap_at_console_task(**kwargs: Any) -> dict[str, Any]:
     """Homer naps at his console."""
     return await nap_at_console()
 
 
-async def attempt_safety_check_task(
-    ctx: dict[str, Any], **kwargs: Any
-) -> dict[str, Any]:
+async def attempt_safety_check_task(**kwargs: Any) -> dict[str, Any]:
     """Homer attempts a safety check."""
     return await attempt_safety_check()
 
 
-async def clock_in_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def clock_in_task(**kwargs: Any) -> dict[str, Any]:
     """Homer clocks in (late)."""
     return await clock_in()
 
 
-async def go_to_moes_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def go_to_moes_task(**kwargs: Any) -> dict[str, Any]:
     """Homer goes to Moe's for lunch."""
     return await go_to_moes()
 
 
-async def rush_out_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def rush_out_task(**kwargs: Any) -> dict[str, Any]:
     """Homer rushes out at 5pm sharp."""
     return await rush_out()

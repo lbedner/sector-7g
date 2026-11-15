@@ -1,137 +1,20 @@
 """
-Inanimate Carbon Rod worker queue configuration.
+The Inanimate Carbon Rod's queue.
 
-Employee of the Month. Handles system maintenance + Rod simulation tasks.
+Employee of the Month. Runs the Rod simulation and nothing else.
 """
 
-from typing import Any
+from app.components.worker.broker import bind, stream_broker
+from app.components.worker.tasks.simulation_tasks import inanimate_rod_sim_task
+from app.core.constants import QueueName
 
-from arq.connections import RedisSettings
-from arq.constants import result_key_prefix
-from arq.jobs import deserialize_result
-import redis.asyncio as aioredis
+DESCRIPTION = "Inanimate Carbon Rod, Employee of the Month"
 
-from app.components.worker.events import publish_event
-from app.components.worker.tasks.inanimate_rod_tasks import inanimate_rod_sim_task
-from app.components.worker.tasks.simple_system_tasks import (
-    cleanup_temp_files,
-    system_health_check,
-)
-from app.core.config import settings
-from app.core.log import logger
+broker = stream_broker(QueueName.INANIMATE_ROD)
 
-
-class WorkerSettings:
-    """Inanimate Carbon Rod — Employee of the Month."""
-
-    description = "Inanimate Carbon Rod, Employee of the Month"
-
-    functions = [
-        system_health_check,
-        cleanup_temp_files,
+globals().update(
+    bind(
+        broker,
         inanimate_rod_sim_task,
-    ]
-
-    base_settings = RedisSettings.from_dsn(settings.REDIS_URL)
-    redis_settings = RedisSettings(
-        host=base_settings.host,
-        port=base_settings.port,
-        database=base_settings.database,
-        password=base_settings.password,
-        conn_timeout=settings.REDIS_CONN_TIMEOUT,
-        conn_retries=settings.REDIS_CONN_RETRIES,
-        conn_retry_delay=settings.REDIS_CONN_RETRY_DELAY,
     )
-    queue_name = "arq:queue:inanimate_rod"
-    max_jobs = 15
-    job_timeout = 300
-    keep_result = settings.WORKER_KEEP_RESULT_SECONDS
-    max_tries = settings.WORKER_MAX_TRIES
-    health_check_interval = settings.WORKER_HEALTH_CHECK_INTERVAL
-
-    @staticmethod
-    async def on_startup(ctx: dict[str, Any]) -> None:
-        """Publish worker.started event on worker startup."""
-        try:
-            redis_url = (
-                settings.redis_url_effective
-                if hasattr(settings, "redis_url_effective")
-                else settings.REDIS_URL
-            )
-            ctx["events_redis"] = aioredis.from_url(redis_url)
-            ctx["worker_queue_name"] = "inanimate_rod"
-            await publish_event(
-                ctx["events_redis"], "worker.started", "inanimate_rod"
-            )
-        except Exception as e:
-            logger.debug(f"Failed to initialize event publishing: {e}")
-
-    @staticmethod
-    async def on_shutdown(ctx: dict[str, Any]) -> None:
-        """Publish worker.stopped event on worker shutdown."""
-        if "events_redis" in ctx:
-            await publish_event(
-                ctx["events_redis"], "worker.stopped", "inanimate_rod"
-            )
-            await ctx["events_redis"].aclose()
-
-    @staticmethod
-    async def on_job_start(ctx: dict[str, Any]) -> None:
-        """Publish job.started event and record task history."""
-        if "events_redis" not in ctx:
-            return
-        job_id = str(ctx.get("job_id", "unknown"))
-        await publish_event(
-            ctx["events_redis"],
-            "job.started",
-            ctx.get("worker_queue_name", "inanimate_rod"),
-            {"job_id": job_id},
-        )
-        from app.components.worker.task_history import (
-            record_task_started,
-            resolve_arq_task_name,
-        )
-
-        task_name = await resolve_arq_task_name(ctx["events_redis"], job_id)
-        await record_task_started(
-            ctx["events_redis"],
-            job_id,
-            task_name=task_name,
-            queue_name="inanimate_rod",
-        )
-
-    @staticmethod
-    async def after_job_end(ctx: dict[str, Any]) -> None:
-        """Publish job result event and record task history."""
-        if "events_redis" not in ctx:
-            return
-        job_id = str(ctx.get("job_id", "unknown"))
-        queue = ctx.get("worker_queue_name", "inanimate_rod")
-        success = True
-        error_msg: str | None = None
-        task_name: str | None = None
-        try:
-            raw = await ctx["events_redis"].get(result_key_prefix + job_id)
-            if raw:
-                result = deserialize_result(raw)
-                success = result.success
-                task_name = getattr(result, "function", None)
-                if not success:
-                    error_msg = str(getattr(result, "result", ""))[:2000]
-        except Exception:
-            pass
-        event_type = "job.completed" if success else "job.failed"
-        await publish_event(
-            ctx["events_redis"], event_type, queue,
-            {"job_id": job_id, "status": "success" if success else "failed"},
-        )
-        from app.components.worker.task_history import record_task_finished
-
-        await record_task_finished(
-            ctx["events_redis"],
-            job_id,
-            success=success,
-            error=error_msg,
-            task_name=task_name,
-            queue_name=queue,
-        )
+)

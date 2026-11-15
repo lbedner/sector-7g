@@ -1,0 +1,11 @@
+"""Point the job API at the shared store the worker and the deploy agent
+write to."""
+
+from app.core.log import logger
+from app.services.system.job_store import RedisJobStore
+from app.services.system.jobs import get_job_runner
+
+
+async def startup_hook() -> None:
+    get_job_runner().attach_remote(RedisJobStore.shared())
+    logger.info("Job runner attached to the shared Redis job store")

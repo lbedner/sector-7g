@@ -1,0 +1,2922 @@
+{
+  "tool": "queryspy",
+  "version": "0.4.1",
+  "entries": [
+    {
+      "kind": "column_load",
+      "label": "Agent",
+      "file": "tests/services/ai/test_agent_loader.py",
+      "function": "_add_agent"
+    },
+    {
+      "kind": "column_load",
+      "label": "Agent",
+      "file": "tests/services/ai/test_agent_registry.py",
+      "function": "_add_agent"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/api/test_finance_endpoints.py",
+      "function": "test_batch_approve_with_a_veto"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_attach.py",
+      "function": "test_backfill_never_steals_claimed_rows"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_attach.py",
+      "function": "test_it_backfills_the_payees_history"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_bill_editing.py",
+      "function": "test_declaring_with_a_category_leaves_transactions_alone"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_bill_editing.py",
+      "function": "test_the_member_transactions_are_left_alone"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_declare_recurring.py",
+      "function": "test_detection_leaves_a_confirmed_bills_members_alone"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_pending_changes.py",
+      "function": "test_a_batch_shares_one_id_and_moves_nothing"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_pending_changes.py",
+      "function": "test_approve_assigns_the_payee_creating_it_once"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_pending_changes.py",
+      "function": "test_approve_attaches_the_payment_and_advances_the_bill"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_pending_changes.py",
+      "function": "test_approve_batch_executes_all_but_the_vetoed"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_pending_changes.py",
+      "function": "test_reject_batch_leaves_the_ledger_untouched"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_transfers.py",
+      "function": "test_a_same_day_purchase_and_refund_is_left_alone"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_transfers.py",
+      "function": "test_an_adjustment_pair_drops_out_of_reports"
+    },
+    {
+      "kind": "column_load",
+      "label": "FinanceTransaction",
+      "file": "tests/services/test_finance_transfers.py",
+      "function": "test_old_flagged_payments_pair_confirmed"
+    },
+    {
+      "kind": "column_load",
+      "label": "KnowledgeBase",
+      "file": "tests/services/rag/test_knowledge_models.py",
+      "function": "test_kb_and_source_round_trip"
+    },
+    {
+      "kind": "column_load",
+      "label": "Tool",
+      "file": "tests/services/ai/test_agent_loader.py",
+      "function": "test_only_active_tools_are_exposed"
+    },
+    {
+      "kind": "column_load",
+      "label": "User",
+      "file": "tests/api/test_auth_endpoints.py",
+      "function": "_admin_and_target"
+    },
+    {
+      "kind": "lazy_load",
+      "label": "Agent.tools",
+      "file": "tests/services/ai/test_agent_models.py",
+      "function": "test_the_default_agent_reads_the_app_from_the_ontology"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\"",
+      "file": "app/services/auth/domains/users/accounts.py",
+      "function": "create_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\" WHERE \"user\".deleted_at IS NULL AND \"user\".id != :id_1 ORDER BY \"user\".created_at DESC",
+      "file": "app/services/auth/domains/users/accounts.py",
+      "function": "list_users"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\" WHERE \"user\".email = :email_1 AND \"user\".deleted_at IS NULL",
+      "file": "app/services/auth/domains/users/accounts.py",
+      "function": "get_user_by_email"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\" WHERE \"user\".email IN (__[POSTCOMPILE_email_1]) AND \"user\".deleted_at IS NULL",
+      "file": "app/services/auth/domains/users/accounts.py",
+      "function": "get_user_ids_by_emails"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\" WHERE \"user\".id = :id_1",
+      "file": "app/services/auth/domains/users/deletion.py",
+      "function": "hard_delete_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\" WHERE \"user\".id = :id_1",
+      "file": "app/services/auth/domains/users/deletion.py",
+      "function": "restore_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM \"user\" WHERE \"user\".id IN (__[POSTCOMPILE_id_1]) AND \"user\".deleted_at IS NULL",
+      "file": "app/services/auth/domains/users/accounts.py",
+      "function": "get_users_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent AS agent_1 JOIN agent_tool AS agent_tool_1 ON agent_1.id = agent_tool_1.agent_id JOIN tool ON tool.id = agent_tool_1.tool_id WHERE agent_1.id IN (__[POSTCOMPILE_primary_keys])",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "agent_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent AS agent_1 JOIN agent_tool AS agent_tool_1 ON agent_1.id = agent_tool_1.agent_id JOIN tool ON tool.id = agent_tool_1.tool_id WHERE agent_1.id IN (__[POSTCOMPILE_primary_keys])",
+      "file": "app/services/ai/fixtures/agent_fixtures.py",
+      "function": "attach_tools"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent WHERE agent.slug = :slug_1",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "agent_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent WHERE agent.slug = :slug_1",
+      "file": "app/services/ai/fixtures/agent_fixtures.py",
+      "function": "attach_tools"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent WHERE agent.slug = :slug_1",
+      "file": "app/services/finance/domains/detection/analyst/seeds.py",
+      "function": "load_finance_agent_fixtures"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent WHERE agent.slug IN (__[POSTCOMPILE_slug_1])",
+      "file": "app/services/ai/fixtures/agent_fixtures.py",
+      "function": "seed_missing_agents"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM agent_user_memory WHERE agent_user_memory.user_id = :user_id_1",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "user_memory_for"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM apscheduler_jobs ORDER BY apscheduler_jobs.next_run_time DESC NULLS LAST",
+      "file": "app/services/scheduler/scheduled_task_manager.py",
+      "function": "list_tasks"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post",
+      "file": "app/services/blog/service.py",
+      "function": "list_posts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post ORDER BY blog_post.created_at DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/blog/service.py",
+      "function": "list_posts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.id = :id_1",
+      "file": "app/services/blog/service.py",
+      "function": "_get_post_model"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.slug = :slug_1",
+      "file": "app/services/blog/domains/transfer/payloads.py",
+      "function": "_get_post_by_slug_any_status"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.slug = :slug_1",
+      "file": "app/services/blog/service.py",
+      "function": "_ensure_slug_available"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.slug = :slug_1 AND blog_post.id != :id_1",
+      "file": "app/services/blog/service.py",
+      "function": "_ensure_slug_available"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.slug = :slug_1 AND blog_post.status = :status_1",
+      "file": "app/services/blog/service.py",
+      "function": "_get_post_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.status = :status_1",
+      "file": "app/services/blog/service.py",
+      "function": "list_posts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post WHERE blog_post.status = :status_1 ORDER BY blog_post.created_at DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/blog/service.py",
+      "function": "list_posts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_post_tag JOIN blog_tag ON blog_tag.id = blog_post_tag.tag_id WHERE blog_post_tag.post_id IN (__[POSTCOMPILE_post_id_1]) ORDER BY blog_tag.name",
+      "file": "app/services/blog/queries.py",
+      "function": "tags_for_posts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_tag ORDER BY blog_tag.name",
+      "file": "app/services/blog/service.py",
+      "function": "list_tags"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_tag WHERE blog_tag.id = :id_1",
+      "file": "app/services/blog/service.py",
+      "function": "_get_tag_model"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM blog_tag WHERE blog_tag.slug = :slug_1",
+      "file": "app/services/blog/domains/posts/tags.py",
+      "function": "get_or_create_tag"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation LEFT OUTER JOIN sentiment_analysis ON sentiment_analysis.conversation_id = conversation.id WHERE sentiment_analysis.id IS NULL ORDER BY conversation.updated_at LIMIT :param_1",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "unscored_conversations"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation ORDER BY conversation.updated_at DESC",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "conversations_with_messages"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation WHERE conversation.id = :pk_1",
+      "file": "app/services/ai/domains/chat/chat_kit/history.py",
+      "function": "append_turn"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation WHERE conversation.id = :pk_1",
+      "file": "app/services/ai/domains/chat/conversation.py",
+      "function": "_save_to_db"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation_message WHERE conversation_message.conversation_id = :conversation_id_1",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "latest_message_timestamp"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation_message WHERE conversation_message.conversation_id IN (__[POSTCOMPILE_primary_keys])",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "conversations_with_messages"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM conversation_message WHERE conversation_message.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "existing_message_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM deploy_event WHERE deploy_event.kind = :kind_1 ORDER BY deploy_event.finished_at DESC LIMIT :param_1",
+      "file": "app/components/deploy/history.py",
+      "function": "latest_event"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM deployment",
+      "file": "tests/components/test_deploy_history.py",
+      "function": "_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM deployment WHERE deployment.build_id = :pk_1",
+      "file": "app/components/deploy/history.py",
+      "function": "record_start"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.content_hash = :content_hash_1 AND document.deleted_at IS NULL",
+      "file": "app/services/documents/queries.py",
+      "function": "document_by_content"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.content_hash = :content_hash_1 AND document.deleted_at IS NULL AND document.owner_user_id = :owner_user_id_1",
+      "file": "app/services/documents/queries.py",
+      "function": "document_by_content"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.deleted_at IS NULL AND (document.id NOT IN (SELECT document.supersedes_id FROM document WHERE document.supersedes_id IS NOT NULL AND document.deleted_at IS NULL))",
+      "file": "app/services/documents/queries.py",
+      "function": "documents_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.deleted_at IS NULL AND (document.id NOT IN (SELECT document.supersedes_id FROM document WHERE document.supersedes_id IS NOT NULL AND document.deleted_at IS NULL)) ORDER BY document.created_at DESC, document.id DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/documents/queries.py",
+      "function": "documents_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.deleted_at IS NULL AND document.received_at >= :received_at_1",
+      "file": "app/services/documents/queries.py",
+      "function": "store_summary"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.deleted_at IS NULL GROUP BY document.kind",
+      "file": "app/services/documents/queries.py",
+      "function": "store_summary"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.id = :id_1 AND document.deleted_at IS NULL",
+      "file": "app/services/documents/queries.py",
+      "function": "document_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document WHERE document.id = :id_1 AND document.deleted_at IS NULL AND document.owner_user_id = :owner_user_id_1",
+      "file": "app/services/documents/queries.py",
+      "function": "document_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document_page WHERE document_page.document_id = :document_id_1 AND document_page.page_number = :page_number_1",
+      "file": "app/services/documents/queries.py",
+      "function": "page_for"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document_page WHERE document_page.document_id = :document_id_1 ORDER BY document_page.page_number",
+      "file": "app/services/documents/queries.py",
+      "function": "pages_for"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document_tag WHERE document_tag.document_id = :document_id_1 AND document_tag.label = :label_1",
+      "file": "app/services/documents/service.py",
+      "function": "tag"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document_tag WHERE document_tag.document_id = :document_id_1 ORDER BY document_tag.label",
+      "file": "app/services/documents/queries.py",
+      "function": "tags_for"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM document_tag WHERE document_tag.document_id IN (__[POSTCOMPILE_document_id_1]) ORDER BY document_tag.document_id, document_tag.label",
+      "file": "app/services/documents/queries.py",
+      "function": "tags_for_many"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM email_verification_token WHERE email_verification_token.token = :token_1",
+      "file": "tests/services/test_auth_integration.py",
+      "function": "test_resend_marks_prior_token_used"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM email_verification_token WHERE email_verification_token.user_id = :user_id_1 AND email_verification_token.used = false",
+      "file": "app/services/auth/domains/users/verification.py",
+      "function": "_invalidate_prior_email_verification_tokens"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account",
+      "file": "tests/services/test_finance_import.py",
+      "function": "_count"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "account_rollup"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL",
+      "file": "tests/services/test_finance_demo_seed.py",
+      "function": "_accounts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND NOT finance_account.is_hidden",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "accounts_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND NOT finance_account.is_hidden ORDER BY finance_account.classification, finance_account.name LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "accounts_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.account_type = :account_type_1 AND finance_account.owner_user_id = :owner_user_id_1 ORDER BY finance_account.id",
+      "file": "app/services/finance/domains/planning/queries.py",
+      "function": "accounts_of_type"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.account_type = :account_type_1 ORDER BY finance_account.id",
+      "file": "app/services/finance/domains/planning/queries.py",
+      "function": "accounts_of_type"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "account_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "accounts_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "account_rollup"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1 AND NOT finance_account.is_hidden",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "accounts_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1 AND NOT finance_account.is_hidden ORDER BY finance_account.classification, finance_account.name LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "accounts_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1 ORDER BY finance_account.classification, finance_account.name LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "accounts_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1 ORDER BY finance_account.id",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "live_accounts_for_owner"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "account_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.deleted_at IS NULL ORDER BY finance_account.id",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "live_accounts_for_owner"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.id = :id_1 AND finance_account.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "account_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.id = :id_1 AND finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "account_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.name = :name_1 AND finance_account.deleted_at IS NOT NULL AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "removed_account_exists"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.name = :name_1 AND finance_account.deleted_at IS NOT NULL AND finance_account.owner_user_id IS NULL",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "removed_account_exists"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.name = :name_1 AND finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "live_account_id_by_name"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.name = :name_1 AND finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "live_account_id_by_name"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/seeds/demo_seed/shared.py",
+      "function": "_demo_accounts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.owner_user_id = :owner_user_id_1 AND finance_account.deleted_at IS NULL AND finance_account.classification = :classification_1 AND finance_account.account_type IN (__[POSTCOMPILE_account_type_1]) AND finance_account.is_closed IS false AND finance_account.is_hidden IS false",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "account_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.owner_user_id = :owner_user_id_1 AND finance_account.deleted_at IS NULL AND finance_account.classification = :classification_1 AND finance_account.is_closed IS false AND finance_account.is_hidden IS false",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "account_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.owner_user_id IS NULL AND finance_account.deleted_at IS NULL AND finance_account.classification = :classification_1 AND finance_account.account_type IN (__[POSTCOMPILE_account_type_1]) AND finance_account.is_closed IS false AND finance_account.is_hidden IS false",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "account_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.owner_user_id IS NULL AND finance_account.deleted_at IS NULL AND finance_account.classification = :classification_1 AND finance_account.is_closed IS false AND finance_account.is_hidden IS false",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "account_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.provider = :provider_1 AND finance_account.name = :name_1 AND finance_account.deleted_at IS NULL AND finance_account.mask = :mask_1 AND finance_account.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "account_first_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_account WHERE finance_account.provider = :provider_1 AND finance_account.provider_account_id = :provider_account_id_1",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "account_by_provider_account_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_analyst_snapshot WHERE finance_analyst_snapshot.owner_user_id = :owner_user_id_1 AND finance_analyst_snapshot.as_of_date < :as_of_date_1 ORDER BY finance_analyst_snapshot.as_of_date DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "analyst_snapshot_before"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_analyst_snapshot WHERE finance_analyst_snapshot.owner_user_id = :owner_user_id_1 AND finance_analyst_snapshot.as_of_date = :as_of_date_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "analyst_snapshot_on"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_balance_snapshot JOIN finance_account ON finance_account.id = finance_balance_snapshot.account_id WHERE finance_balance_snapshot.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_balance_snapshot.balance_date >= :balance_date_1 AND finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_1 GROUP BY finance_balance_snapshot.balance_date, finance_account.classification ORDER BY finance_balance_snapshot.balance_date",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "balance_class_series"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_balance_snapshot WHERE finance_balance_snapshot.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_balance_snapshot.balance_date >= :balance_date_1 AND finance_balance_snapshot.balance_date <= :balance_date_2",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "balance_snapshots_between"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget WHERE finance_budget.name = :name_1 AND finance_budget.deleted_at IS NULL AND finance_budget.owner_user_id = :owner_user_id_1 ORDER BY finance_budget.id",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "monthly_budget"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget WHERE finance_budget.name = :name_1 AND finance_budget.deleted_at IS NULL ORDER BY finance_budget.id",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "monthly_budget"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.budget_id = :budget_id_1 AND finance_budget_category.category_id IS NOT NULL",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "budget_lines_with_category"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.budget_id = :budget_id_1 AND finance_budget_category.category_id IS NOT NULL AND finance_budget_category.period_month IS NULL",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "dismissal_marker_lines"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.budget_id = :budget_id_1 AND finance_budget_category.period_month < :period_month_1 ORDER BY finance_budget_category.period_month DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "latest_period_with_lines"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.budget_id = :budget_id_1 AND finance_budget_category.period_month = :period_month_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "budget_lines_for_period"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.budget_id = :budget_id_1 AND finance_budget_category.period_month = :period_month_1 AND finance_budget_category.category_id = :category_id_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "budget_line_for_target"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.id = :id_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "budget_line_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_budget_category WHERE finance_budget_category.id = :id_1 AND finance_budget_category.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "budget_line_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category",
+      "file": "tests/services/test_finance_import.py",
+      "function": "_count"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category WHERE finance_category.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_names_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category WHERE finance_category.owner_user_id IS NULL OR finance_category.owner_user_id = :owner_user_id_1 ORDER BY finance_category.name",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "all_categories"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category WHERE finance_category.slug = :slug_1 AND finance_category.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category WHERE finance_category.slug = :slug_1 AND finance_category.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category_alias WHERE finance_category_alias.normalized_alias = :normalized_alias_1 AND finance_category_alias.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "alias_by_normalized"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category_alias WHERE finance_category_alias.normalized_alias = :normalized_alias_1 AND finance_category_alias.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "alias_by_normalized"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category_alias WHERE finance_category_alias.normalized_alias IN (__[POSTCOMPILE_normalized_alias_1]) AND (finance_category_alias.owner_user_id IS NULL OR finance_category_alias.owner_user_id = :owner_user_id_1) ORDER BY finance_category_alias.owner_user_id DESC NULLS LAST",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_alias_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_category_alias WHERE finance_category_alias.normalized_alias IN (__[POSTCOMPILE_normalized_alias_1]) ORDER BY finance_category_alias.owner_user_id DESC NULLS LAST",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_alias_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_connection WHERE finance_connection.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "connection_rollup"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_connection WHERE finance_connection.deleted_at IS NULL AND finance_connection.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "connection_rollup"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_connection WHERE finance_connection.deleted_at IS NULL AND finance_connection.provider = :provider_1 AND finance_connection.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "connections_for_owner"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_connection WHERE finance_connection.id = :id_1 AND finance_connection.deleted_at IS NULL AND finance_connection.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "connection_by_id_live"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_connection WHERE finance_connection.provider = :provider_1 AND finance_connection.provider_item_id = :provider_item_id_1",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "connection_by_provider_item"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_connection WHERE finance_connection.provider = :provider_1 AND finance_connection.provider_item_id = :provider_item_id_1 AND finance_connection.deleted_at IS NULL",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "connection_by_provider_item"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_currency WHERE finance_currency.code = :code_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "currency_by_code"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_currency WHERE finance_currency.code = :code_1",
+      "file": "app/services/finance/seeds/seed.py",
+      "function": "seed_finance_tables"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_holding JOIN finance_account ON finance_account.id = finance_holding.account_id WHERE finance_holding.deleted_at IS NULL AND finance_account.deleted_at IS NULL AND finance_holding.account_id = :account_id_1 ORDER BY finance_holding.as_of_date",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "live_holdings_joined"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_holding JOIN finance_account ON finance_account.id = finance_holding.account_id WHERE finance_holding.deleted_at IS NULL AND finance_account.deleted_at IS NULL AND finance_holding.owner_user_id = :owner_user_id_1 AND finance_holding.account_id = :account_id_1 ORDER BY finance_holding.as_of_date",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "live_holdings_joined"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_holding JOIN finance_account ON finance_account.id = finance_holding.account_id WHERE finance_holding.deleted_at IS NULL AND finance_account.deleted_at IS NULL AND finance_holding.owner_user_id = :owner_user_id_1 ORDER BY finance_holding.as_of_date",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "live_holdings_joined"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_holding WHERE finance_holding.account_id = :account_id_1 AND finance_holding.security_id = :security_id_1 AND finance_holding.as_of_date = :as_of_date_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "holding_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_holding WHERE finance_holding.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "holding_quantities"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_icon WHERE finance_icon.domain IN (__[POSTCOMPILE_domain_1])",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "icons_by_domains"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_import_batch",
+      "file": "tests/services/test_finance_import.py",
+      "function": "_count"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_import_batch WHERE finance_import_batch.owner_user_id = :owner_user_id_1 AND finance_import_batch.file_sha256 = :file_sha256_1",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "prior_batch"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_import_batch WHERE finance_import_batch.source_type = :source_type_1",
+      "file": "tests/services/test_finance_plaid.py",
+      "function": "_batches"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_import_profile",
+      "file": "tests/services/test_finance_reference_seed.py",
+      "function": "test_seeding_twice_changes_nothing"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_import_profile WHERE finance_import_profile.owner_user_id IS NULL AND finance_import_profile.name = :name_1",
+      "file": "app/services/finance/seeds/seed.py",
+      "function": "seed_finance_tables"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_import_profile WHERE finance_import_profile.source_format = :source_format_1 AND finance_import_profile.deleted_at IS NULL",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "csv_profiles"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.insight_type = :insight_type_1",
+      "file": "tests/services/test_finance_insights.py",
+      "function": "_insights_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.insight_type = :insight_type_1",
+      "file": "tests/services/test_finance_insights.py",
+      "function": "test_dismiss_survives_rerun"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.owner_user_id = :owner_user_id_1 AND finance_insight.dedup_key = :dedup_key_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "insight_exists"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.owner_user_id = :owner_user_id_1 AND finance_insight.dedup_key = :dedup_key_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "insight_first_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.owner_user_id = :owner_user_id_1 AND finance_insight.insight_type = :insight_type_1 AND finance_insight.related_stream_id = :related_stream_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "insight_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.owner_user_id = :owner_user_id_1 AND finance_insight.insight_type = :insight_type_1 AND finance_insight.related_stream_id IS NOT NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "insight_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.owner_user_id = :owner_user_id_1 AND finance_insight.status = :status_1 ORDER BY finance_insight.id DESC",
+      "file": "app/services/finance/domains/planning/queries.py",
+      "function": "insights_list"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_insight WHERE finance_insight.related_stream_id IN (__[POSTCOMPILE_related_stream_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "insight_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_liability_detail",
+      "file": "tests/services/test_finance_plaid.py",
+      "function": "_liability_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_liability_detail WHERE finance_liability_detail.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "liability_details_by_account"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant WHERE finance_merchant.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "merchant_names_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant WHERE finance_merchant.normalized_name = :normalized_name_1 AND finance_merchant.deleted_at IS NULL AND finance_merchant.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "merchant_by_normalized"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant WHERE finance_merchant.normalized_name = :normalized_name_1 AND finance_merchant.deleted_at IS NULL AND finance_merchant.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "merchant_by_normalized"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant_alias",
+      "file": "tests/services/test_finance_payee_aliases.py",
+      "function": "_stored"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant_alias WHERE finance_merchant_alias.normalized_alias IN (__[POSTCOMPILE_normalized_alias_1]) AND finance_merchant_alias.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "merchant_aliases_by_normalized"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant_alias WHERE finance_merchant_alias.normalized_alias IN (__[POSTCOMPILE_normalized_alias_1]) AND finance_merchant_alias.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "merchant_aliases_by_normalized"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_merchant_alias WHERE finance_merchant_alias.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "delete_merchant_aliases"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_net_worth_snapshot",
+      "file": "tests/services/test_finance_demo_seed.py",
+      "function": "test_clear_repairs_the_net_worth_history"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_net_worth_snapshot",
+      "file": "tests/services/test_finance_service.py",
+      "function": "test_recompute_is_idempotent"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_net_worth_snapshot WHERE finance_net_worth_snapshot.as_of_date >= :as_of_date_1 AND finance_net_worth_snapshot.currency = :currency_1 AND finance_net_worth_snapshot.owner_user_id = :owner_user_id_1 ORDER BY finance_net_worth_snapshot.as_of_date",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "net_worth_series_since"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_net_worth_snapshot WHERE finance_net_worth_snapshot.currency = :currency_1 AND finance_net_worth_snapshot.as_of_date >= :as_of_date_1 AND finance_net_worth_snapshot.as_of_date <= :as_of_date_2 AND finance_net_worth_snapshot.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "net_worth_snapshots_between"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream",
+      "file": "tests/services/test_finance_stream_regimes.py",
+      "function": "_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream JOIN finance_category ON finance_category.id = finance_recurring_stream.category_id WHERE finance_recurring_stream.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "stream_stored_category_names"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE (finance_recurring_stream.is_user_confirmed IS true OR finance_recurring_stream.source = :source_1) AND finance_recurring_stream.deleted_at IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "confirmed_stream_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/seeds/demo_seed/curate.py",
+      "function": "_count_derived"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.deleted_at IS NULL",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "all_live_streams"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.deleted_at IS NULL",
+      "file": "tests/services/_finance_factories.py",
+      "function": "live_streams"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.name = :name_1",
+      "file": "tests/services/_finance_factories.py",
+      "function": "declare_bill"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.status != :status_1 AND finance_recurring_stream.owner_user_id = :owner_user_id_1 ORDER BY finance_recurring_stream.next_expected_date",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "active_streams"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.status != :status_1 ORDER BY finance_recurring_stream.next_expected_date",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "active_streams"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.id = :id_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "stream_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.id = :id_1 AND finance_recurring_stream.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "stream_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "streams_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.id IN (__[POSTCOMPILE_id_1]) AND finance_recurring_stream.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "streams_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.name = :name_1",
+      "file": "tests/services/test_finance_query_batching.py",
+      "function": "_confirmed_uncategorized_stream"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND (finance_recurring_stream.is_user_confirmed IS true OR finance_recurring_stream.source = :source_1)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.account_id = :account_id_1 AND finance_recurring_stream.direction = :direction_1 AND finance_recurring_stream.normalized_payee = :normalized_payee_1 AND finance_recurring_stream.provider_stream_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "local_stream_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.account_id = :account_id_1 AND finance_recurring_stream.direction = :direction_1 AND finance_recurring_stream.provider_stream_id IS NULL AND finance_recurring_stream.deleted_at IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "sibling_streams_raw"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.account_id = :account_id_1 AND finance_recurring_stream.direction = :direction_1 AND finance_recurring_stream.source = :source_1 AND finance_recurring_stream.is_user_confirmed IS false AND finance_recurring_stream.provider_stream_id IS NULL AND (finance_recurring_stream.is_muted IS true OR finance_recurring_stream.deleted_at IS NOT NULL)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.deleted_at IS NULL",
+      "file": "app/services/finance/seeds/demo_seed/seed.py",
+      "function": "seed_demo"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.direction = :direction_1 AND finance_recurring_stream.is_subscription IS false AND finance_recurring_stream.source = :source_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "promotable_streams"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.direction = :direction_1 AND finance_recurring_stream.is_subscription IS true AND finance_recurring_stream.is_muted IS false AND (finance_recurring_stream.paused_until IS NULL OR finance_recurring_stream.paused_until <= :paused_until_1)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_ids_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.status = :status_1 AND finance_recurring_stream.is_active IS true AND finance_recurring_stream.is_muted IS false AND (finance_recurring_stream.paused_until IS NULL OR finance_recurring_stream.paused_until <= :paused_until_1) AND finance_recurring_stream.next_expected_date IS NOT NULL AND (finance_recurring_stream.account_id IS NULL OR finance_recurring_stream.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_2))",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.status = :status_1 AND finance_recurring_stream.is_active IS true AND finance_recurring_stream.is_muted IS false AND (finance_recurring_stream.paused_until IS NULL OR finance_recurring_stream.paused_until <= :paused_until_1) AND finance_recurring_stream.next_expected_date IS NOT NULL AND (finance_recurring_stream.account_id IS NULL OR finance_recurring_stream.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL))",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.deleted_at IS NULL AND finance_recurring_stream.status = :status_1 AND finance_recurring_stream.is_muted IS false AND (finance_recurring_stream.paused_until IS NULL OR finance_recurring_stream.paused_until <= :paused_until_1) AND finance_recurring_stream.amount_is_variable IS false AND finance_recurring_stream.direction = :direction_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.source = :source_1 AND finance_recurring_stream.is_user_confirmed IS false AND finance_recurring_stream.provider_stream_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_recurring_stream WHERE finance_recurring_stream.owner_user_id = :owner_user_id_1 AND finance_recurring_stream.source = :source_1 AND finance_recurring_stream.is_user_confirmed IS false AND finance_recurring_stream.provider_stream_id IS NULL AND (finance_recurring_stream.id NOT IN (__[POSTCOMPILE_id_1]))",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security WHERE finance_security.cusip = :cusip_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "security_by_identifier"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security WHERE finance_security.figi = :figi_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "security_by_identifier"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security WHERE finance_security.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "securities_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security WHERE finance_security.name = :name_1 ORDER BY finance_security.id",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "security_ticker_by_name"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security WHERE finance_security.provider = :provider_1 AND finance_security.provider_security_id = :provider_security_id_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "security_by_provider_ref"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security WHERE finance_security.ticker = :ticker_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "security_by_ticker"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_security_price WHERE finance_security_price.security_id = :security_id_1 AND finance_security_price.price_date = :price_date_1 AND finance_security_price.source = :source_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "security_price_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_tag WHERE finance_tag.owner_user_id = :owner_user_id_1 AND finance_tag.normalized_name = :normalized_name_1 AND finance_tag.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "tag_by_normalized_name"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_trade WHERE finance_trade.account_id = :account_id_1 AND finance_trade.source = :source_1 AND finance_trade.external_id = :external_id_1 AND finance_trade.deleted_at IS NULL",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "trade_by_external_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_trade WHERE finance_trade.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_trade.security_id IS NOT NULL ORDER BY finance_trade.account_id, finance_trade.trade_date",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "priced_trade_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_trade WHERE finance_trade.owner_user_id = :owner_user_id_1 AND finance_trade.deleted_at IS NULL AND finance_trade.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) ORDER BY finance_trade.trade_date DESC, finance_trade.id DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/investments/queries.py",
+      "function": "trades_feed"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction",
+      "file": "tests/services/test_finance_demo_seed.py",
+      "function": "_transactions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction",
+      "file": "tests/services/test_finance_import.py",
+      "function": "_count"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction JOIN finance_category ON finance_category.id = finance_transaction.category_id WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transaction.category_id IS NOT NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "stream_member_categories"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction JOIN finance_category ON finance_category.id = finance_transaction.category_id WHERE finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transaction.deleted_at IS NULL GROUP BY finance_transaction.recurring_stream_id, finance_category.name",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "stream_member_category_votes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction JOIN finance_category ON finance_transaction.category_id = finance_category.id WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS false GROUP BY finance_category.name",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_spend_totals"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id = :account_id_1 AND finance_transaction.deleted_at IS NULL AND coalesce(finance_transaction.external_id_source, :coalesce_1) != :coalesce_2 LIMIT :param_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "has_nonreconcile_register"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id = :account_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.import_hash = :import_hash_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "dedup_match"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id = :account_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.source = :source_1 AND finance_transaction.external_id = :external_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "dedup_match"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id = :account_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.status = :status_1 AND finance_transaction.date <= :date_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "register_balance_through"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id = :account_id_1 AND finance_transaction.external_id_source = :external_id_source_1 AND finance_transaction.date = :date_1 AND finance_transaction.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "reconcile_adjustment_on"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/seeds/demo_seed/clear.py",
+      "function": "_delete_demo_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.deleted_at IS NOT NULL",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "deleted_transactions_for_accounts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.deleted_at IS NULL",
+      "file": "app/services/finance/adapters/importers/queries.py",
+      "function": "live_transactions_for_accounts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 GROUP BY finance_transaction.account_id, finance_transaction.date ORDER BY finance_transaction.account_id, finance_transaction.date",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "daily_register_deltas"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.deleted_at IS NULL AND finance_transaction.is_transfer IS false AND finance_transaction.merchant_id IS NULL",
+      "file": "app/services/finance/seeds/demo_seed/curate.py",
+      "function": "_name_payees"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.source = :source_1 AND finance_transaction.deleted_at IS NULL",
+      "file": "app/services/finance/adapters/providers/queries.py",
+      "function": "provider_rows_for_accounts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.category_id IN (__[POSTCOMPILE_category_id_1]) AND finance_transaction.deleted_at IS NULL AND finance_transaction.amount < :amount_1 AND finance_transaction.is_transfer IS false GROUP BY finance_transaction.category_id",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "category_first_spend"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND (finance_transaction.recurring_stream_id IS NULL OR NOT (EXISTS (SELECT finance_recurring_stream.id FROM finance_recurring_stream WHERE finance_recurring_stream.id = finance_transaction.recurring_stream_id AND finance_recurring_stream.deleted_at IS NULL))) AND finance_transaction.amount < :amount_1 AND finance_transaction.owner_user_id = :owner_user_id_1 AND abs(finance_transaction.amount) BETWEEN :abs_1 AND :abs_2 AND finance_transaction.date BETWEEN :date_1 AND :date_2 ORDER BY finance_transaction.date DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "candidate_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND (finance_transaction.recurring_stream_id IS NULL OR NOT (EXISTS (SELECT finance_recurring_stream.id FROM finance_recurring_stream WHERE finance_recurring_stream.id = finance_transaction.recurring_stream_id AND finance_recurring_stream.deleted_at IS NULL))) AND finance_transaction.amount < :amount_1 AND finance_transaction.owner_user_id IS NULL AND abs(finance_transaction.amount) BETWEEN :abs_1 AND :abs_2 AND finance_transaction.date BETWEEN :date_1 AND :date_2 ORDER BY finance_transaction.date DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "candidate_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transactions_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1 AND (lower(finance_transaction.name) LIKE lower(:name_1) OR lower(finance_transaction.merchant_name) LIKE lower(:merchant_name_1) OR lower(finance_transaction.original_description) LIKE lower(:original_description_1) OR lower(finance_transaction.memo) LIKE lower(:memo_1) OR finance_transaction.merchant_id IN (SELECT finance_merchant.id FROM finance_merchant WHERE lower(finance_merchant.name) LIKE lower(:name_2)) OR finance_transaction.category_id IN (SELECT finance_category.id FROM finance_category WHERE lower(finance_category.name) LIKE lower(:name_3)) OR finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE lower(finance_account.name) LIKE lower(:name_4)) OR abs(finance_transaction.amount) = :abs_1)",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transactions_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1 AND (lower(finance_transaction.name) LIKE lower(:name_1) OR lower(finance_transaction.merchant_name) LIKE lower(:merchant_name_1) OR lower(finance_transaction.original_description) LIKE lower(:original_description_1) OR lower(finance_transaction.memo) LIKE lower(:memo_1) OR finance_transaction.merchant_id IN (SELECT finance_merchant.id FROM finance_merchant WHERE lower(finance_merchant.name) LIKE lower(:name_2)) OR finance_transaction.category_id IN (SELECT finance_category.id FROM finance_category WHERE lower(finance_category.name) LIKE lower(:name_3)) OR finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE lower(finance_account.name) LIKE lower(:name_4)) OR abs(finance_transaction.amount) = :abs_1) ORDER BY finance_transaction.date DESC, finance_transaction.id DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transactions_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.account_id = :account_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transactions_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.account_id = :account_id_1 ORDER BY finance_transaction.date DESC, finance_transaction.id DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transactions_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1 ORDER BY finance_transaction.date DESC, finance_transaction.id DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transactions_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) GROUP BY finance_transaction.account_id",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "transaction_totals_by_account"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.category_id IS NOT NULL AND (finance_transaction.category_id NOT IN (SELECT finance_category.id FROM finance_category WHERE lower(finance_category.name) IN (__[POSTCOMPILE_lower_1]))) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "categorized_history"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS false",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "outflow_tuples"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.is_split IS false",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "outflow_tuples"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS false",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "outflow_tuples"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS false AND finance_transaction.category_id IN (__[POSTCOMPILE_category_id_1]) GROUP BY finance_transaction.category_id",
+      "file": "app/services/finance/domains/planning/queries.py",
+      "function": "spend_by_category"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date <= :date_2 AND finance_transaction.is_transfer IS false AND finance_transaction.owner_user_id = :owner_user_id_1 GROUP BY finance_transaction.account_id",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "outflow_by_account_in_window"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date <= :date_2 AND finance_transaction.is_transfer IS false GROUP BY finance_transaction.account_id",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "outflow_by_account_in_window"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_split IS false AND (finance_transaction.category_id IS NULL OR finance_transaction.category_id IN (SELECT finance_category.id FROM finance_category WHERE lower(finance_category.name) IN (__[POSTCOMPILE_lower_1]))) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "uncategorized_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.is_split IS false AND (finance_transaction.category_id IS NULL OR finance_transaction.category_id IN (SELECT finance_category.id FROM finance_category WHERE lower(finance_category.name) IN (__[POSTCOMPILE_lower_1]))) AND finance_transaction.owner_user_id = :owner_user_id_1 ORDER BY finance_transaction.date DESC",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "uncategorized_page"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.recurring_stream_id IS NULL AND (finance_transaction.external_id_source IS NULL OR finance_transaction.external_id_source != :external_id_source_1) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "category_dated_amounts_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.recurring_stream_id IS NULL AND (finance_transaction.external_id_source IS NULL OR finance_transaction.external_id_source != :external_id_source_1) AND finance_transaction.owner_user_id = :owner_user_id_1 AND (finance_transaction.category_id IS NULL OR (finance_transaction.category_id NOT IN (__[POSTCOMPILE_category_id_1])))",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "category_dated_amounts_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.recurring_stream_id IS NULL AND (finance_transaction.external_id_source IS NULL OR finance_transaction.external_id_source != :external_id_source_1) AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "category_dated_amounts_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.date >= :date_1 AND finance_transaction.date <= :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "dated_amounts_in_window"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.amount != :amount_1 AND finance_transaction.owner_user_id = :owner_user_id_1 AND (lower(finance_transaction.name) LIKE lower(:name_1) OR lower(finance_transaction.original_description) LIKE lower(:original_description_1) OR lower(finance_transaction.name) LIKE lower(:name_2) OR lower(finance_transaction.original_description) LIKE lower(:original_description_2) OR lower(finance_transaction.name) LIKE lower(:name_3) OR lower(finance_transaction.original_description) LIKE lower(:original_description_3) OR lower(finance_transaction.name) LIKE lower(:name_4) OR lower(finance_transaction.original_description) LIKE lower(:original_description_4) OR lower(finance_transaction.name) LIKE lower(:name_5) OR lower(finance_transaction.original_description) LIKE lower(:original_description_5))",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.amount != :amount_1 AND finance_transaction.owner_user_id IS NULL AND (lower(finance_transaction.name) LIKE lower(:name_1) OR lower(finance_transaction.original_description) LIKE lower(:original_description_1) OR lower(finance_transaction.name) LIKE lower(:name_2) OR lower(finance_transaction.original_description) LIKE lower(:original_description_2) OR lower(finance_transaction.name) LIKE lower(:name_3) OR lower(finance_transaction.original_description) LIKE lower(:original_description_3) OR lower(finance_transaction.name) LIKE lower(:name_4) OR lower(finance_transaction.original_description) LIKE lower(:original_description_4) OR lower(finance_transaction.name) LIKE lower(:name_5) OR lower(finance_transaction.original_description) LIKE lower(:original_description_5))",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.is_transfer IS false AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.is_transfer IS false AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.date >= :date_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.is_transfer IS false AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.category_id IN (SELECT finance_category.id FROM finance_category WHERE finance_category.classification = :classification_1) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.is_transfer IS false AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.category_id IN (SELECT finance_category.id FROM finance_category WHERE finance_category.classification = :classification_1) AND finance_transaction.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) GROUP BY finance_transaction.account_id",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "transaction_totals_by_account"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.amount < :amount_1 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.amount > :amount_1 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.transfer_group_id IS NULL AND finance_transaction.amount > :amount_1 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.is_transfer IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.category_id IS NOT NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "categorized_outflow_history"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.merchant_id IS NOT NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "named_transactions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.merchant_id IS NOT NULL AND finance_transaction.owner_user_id = :owner_user_id_1 GROUP BY finance_transaction.merchant_id",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "merchant_usage_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.merchant_id IS NOT NULL GROUP BY finance_transaction.merchant_id",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "merchant_usage_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.merchant_id IS NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/merchants.py",
+      "function": "payeeless_transactions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.external_id_source = :external_id_source_1 AND finance_transaction.deleted_at IS NULL",
+      "file": "tests/services/test_finance_reconcile.py",
+      "function": "test_reconcile_is_idempotent_per_date"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.id = :id_1 AND finance_transaction.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transaction_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.id = :id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "transaction_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.id IN (__[POSTCOMPILE_id_1]) AND finance_transaction.deleted_at IS NULL",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "live_transactions_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.id IN (__[POSTCOMPILE_id_1]) AND finance_transaction.deleted_at IS NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.id IN (__[POSTCOMPILE_id_1]) AND finance_transaction.deleted_at IS NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "live_transactions_by_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND (finance_transaction.is_transfer IS false AND finance_transaction.excluded_from_reports IS false OR (EXISTS (SELECT finance_transfer.id FROM finance_transfer JOIN finance_account ON finance_account.id = (SELECT finance_transaction.account_id FROM finance_transaction WHERE finance_transaction.id = finance_transfer.to_transaction_id) WHERE finance_transfer.from_transaction_id = finance_transaction.id AND finance_transfer.status = :status_1 AND finance_account.classification = :classification_1))) AND finance_transaction.status = :status_2",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND (finance_transaction.is_transfer IS false AND finance_transaction.excluded_from_reports IS false OR (EXISTS (SELECT finance_transfer.id FROM finance_transfer JOIN finance_account ON finance_account.id = (SELECT finance_transaction.account_id FROM finance_transaction WHERE finance_transaction.id = finance_transfer.to_transaction_id) WHERE finance_transfer.from_transaction_id = finance_transaction.id AND finance_transfer.status = :status_1 AND finance_account.classification = :classification_1))) AND finance_transaction.status = :status_2 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_2) AND finance_transaction.date >= :date_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.category_id IS NOT NULL AND finance_transaction.date >= :date_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_2)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transaction.date >= :date_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_2)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.recurring_stream_id IS NULL AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id = :owner_user_id_2)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id IS NULL AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND (finance_transaction.is_transfer IS false AND finance_transaction.excluded_from_reports IS false OR (EXISTS (SELECT finance_transfer.id FROM finance_transfer JOIN finance_account ON finance_account.id = (SELECT finance_transaction.account_id FROM finance_transaction WHERE finance_transaction.id = finance_transfer.to_transaction_id) WHERE finance_transfer.from_transaction_id = finance_transaction.id AND finance_transfer.status = :status_1 AND finance_account.classification = :classification_1))) AND finance_transaction.status = :status_2 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id IS NULL AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL) AND finance_transaction.date >= :date_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id IS NULL AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.category_id IS NOT NULL AND finance_transaction.date >= :date_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id IS NULL AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.amount < :amount_1 AND finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transaction.date >= :date_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.owner_user_id IS NULL AND finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.is_transfer IS false AND finance_transaction.recurring_stream_id IS NULL AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL AND finance_account.owner_user_id IS NULL)",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id = :recurring_stream_id_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "stream_members"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id = :recurring_stream_id_1 AND finance_transaction.category_id IS NOT NULL AND finance_transaction.deleted_at IS NULL GROUP BY finance_transaction.category_id ORDER BY count(*) DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "stream_member_category_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id = :recurring_stream_id_1 AND finance_transaction.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "any_member_linked"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1])",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "transaction_rows_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transaction.deleted_at IS NULL AND finance_transaction.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "member_ids_of_streams"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id IS NOT NULL AND finance_transaction.deleted_at IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "linked_stream_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction WHERE finance_transaction.source = :source_1",
+      "file": "tests/services/test_finance_plaid.py",
+      "function": "_plaid_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_split JOIN finance_transaction ON finance_transaction.id = finance_transaction_split.parent_transaction_id JOIN finance_category ON finance_transaction_split.category_id = finance_category.id WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS true GROUP BY finance_category.name",
+      "file": "app/services/finance/domains/ledger/queries/categories.py",
+      "function": "category_spend_totals"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_split JOIN finance_transaction ON finance_transaction.id = finance_transaction_split.parent_transaction_id WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.account_id IN (__[POSTCOMPILE_account_id_1]) AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS true",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "outflow_tuples"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_split JOIN finance_transaction ON finance_transaction.id = finance_transaction_split.parent_transaction_id WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.is_split IS true",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "outflow_tuples"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_split JOIN finance_transaction ON finance_transaction.id = finance_transaction_split.parent_transaction_id WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS true",
+      "file": "app/services/finance/domains/planning/budgets/queries.py",
+      "function": "outflow_tuples"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_split JOIN finance_transaction ON finance_transaction.id = finance_transaction_split.parent_transaction_id WHERE finance_transaction.deleted_at IS NULL AND finance_transaction.dedup_status != :dedup_status_1 AND finance_transaction.excluded_from_reports IS false AND finance_transaction.account_id IN (SELECT finance_account.id FROM finance_account WHERE finance_account.deleted_at IS NULL) AND finance_transaction.amount < :amount_1 AND finance_transaction.date >= :date_1 AND finance_transaction.date < :date_2 AND finance_transaction.owner_user_id = :owner_user_id_1 AND finance_transaction.is_split IS true AND finance_transaction_split.category_id IN (__[POSTCOMPILE_category_id_1]) GROUP BY finance_transaction_split.category_id",
+      "file": "app/services/finance/domains/planning/queries.py",
+      "function": "spend_by_category"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_split WHERE finance_transaction_split.parent_transaction_id IN (__[POSTCOMPILE_parent_transaction_id_1]) ORDER BY finance_transaction_split.parent_transaction_id, finance_transaction_split.sort_order",
+      "file": "app/services/finance/domains/ledger/queries/splits.py",
+      "function": "splits_for_parents"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_tag JOIN finance_tag ON finance_tag.id = finance_transaction_tag.tag_id WHERE finance_transaction_tag.transaction_id IN (__[POSTCOMPILE_transaction_id_1]) AND finance_tag.deleted_at IS NULL ORDER BY finance_tag.name",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "tags_by_transaction"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transaction_tag WHERE finance_transaction_tag.tag_id = :tag_id_1 AND finance_transaction_tag.transaction_id IN (__[POSTCOMPILE_transaction_id_1])",
+      "file": "app/services/finance/domains/ledger/queries/transactions.py",
+      "function": "tagged_transaction_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transfer WHERE finance_transfer.from_account_id IN (__[POSTCOMPILE_from_account_id_1]) OR finance_transfer.to_account_id IN (__[POSTCOMPILE_to_account_id_1])",
+      "file": "app/services/finance/seeds/demo_seed/curate.py",
+      "function": "_count_derived"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transfer WHERE finance_transfer.from_transaction_id IS NOT NULL AND finance_transfer.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "claimed_leg_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transfer WHERE finance_transfer.from_transaction_id IS NOT NULL AND finance_transfer.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "claimed_leg_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transfer WHERE finance_transfer.to_transaction_id IS NOT NULL AND finance_transfer.owner_user_id = :owner_user_id_1",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "claimed_leg_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_transfer WHERE finance_transfer.to_transaction_id IS NOT NULL AND finance_transfer.owner_user_id IS NULL",
+      "file": "app/services/finance/domains/detection/queries.py",
+      "function": "claimed_leg_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_valuation WHERE finance_valuation.account_id = :account_id_1 AND finance_valuation.as_of_date = :as_of_date_1 AND finance_valuation.source = :source_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "valuation_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_valuation WHERE finance_valuation.account_id = :account_id_1 AND finance_valuation.source = :source_1 ORDER BY finance_valuation.as_of_date DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "latest_valuation_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_valuation WHERE finance_valuation.account_id = :account_id_1 ORDER BY finance_valuation.as_of_date",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "valuations_for_account"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_valuation WHERE finance_valuation.account_id = :account_id_1 ORDER BY finance_valuation.as_of_date DESC LIMIT :param_1",
+      "file": "app/services/finance/domains/ledger/queries/accounts.py",
+      "function": "latest_valuation_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM finance_valuation WHERE finance_valuation.account_id IN (__[POSTCOMPILE_account_id_1]) ORDER BY finance_valuation.account_id, finance_valuation.as_of_date",
+      "file": "app/services/finance/domains/ledger/queries/networth.py",
+      "function": "valuations_for_accounts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_event WHERE insight_event.event_type IN (__[POSTCOMPILE_event_type_1])",
+      "file": "app/services/insights/queries/events.py",
+      "function": "events_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_event WHERE insight_event.event_type IN (__[POSTCOMPILE_event_type_1]) AND insight_event.project_id = :project_id_1",
+      "file": "app/services/insights/queries/events.py",
+      "function": "events_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric JOIN insight_metric_type ON insight_metric.metric_type_id = insight_metric_type.id JOIN insight_source ON insight_metric_type.source_id = insight_source.id WHERE insight_source.key = :key_1 AND insight_metric_type.key = :key_2 AND insight_metric.date >= :date_1",
+      "file": "tests/services/test_goal_service.py",
+      "function": "spy_exec"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric WHERE insight_metric.metric_type_id = :metric_type_id_1 AND insight_metric.date = :date_1 AND insight_metric.period = :period_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "metric_on"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric WHERE insight_metric.metric_type_id = :metric_type_id_1 AND insight_metric.date = :date_1 AND insight_metric.period = :period_1 AND insight_metric.project_id = :project_id_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "metric_on"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric WHERE insight_metric.metric_type_id IN (__[POSTCOMPILE_metric_type_id_1]) AND insight_metric.period = :period_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "metrics_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric WHERE insight_metric.metric_type_id IN (__[POSTCOMPILE_metric_type_id_1]) AND insight_metric.period = :period_1 AND insight_metric.project_id = :project_id_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "metrics_where"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric_type WHERE insight_metric_type.key = :key_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "metric_type_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric_type WHERE insight_metric_type.key = :key_1 AND insight_metric_type.source_id = :source_id_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "metric_type_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_metric_type WHERE insight_metric_type.source_id = :source_id_1 AND insight_metric_type.key = :key_1",
+      "file": "app/services/insights/seed.py",
+      "function": "seed_insight_tables"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_record WHERE insight_record.metric_type_id = :metric_type_id_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "record_for_type"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_source WHERE insight_source.key = :key_1",
+      "file": "app/services/insights/queries/metrics.py",
+      "function": "source_by_key"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM insight_source WHERE insight_source.key = :key_1",
+      "file": "app/services/insights/seed.py",
+      "function": "seed_insight_tables"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM scheduler.job_execution WHERE scheduler.job_execution.job_id = :job_id_1",
+      "file": "app/services/scheduler/scheduled_task_manager.py",
+      "function": "list_executions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM scheduler.job_execution WHERE scheduler.job_execution.job_id = :job_id_1 ORDER BY scheduler.job_execution.started_at DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/scheduler/scheduled_task_manager.py",
+      "function": "list_executions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM large_language_model",
+      "file": "app/services/ai/domains/llm/etl/queries.py",
+      "function": "all_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM large_language_model WHERE large_language_model.model_id = :model_id_1 OR (large_language_model.model_id LIKE '%' || :model_id_2) ORDER BY CASE WHEN (large_language_model.model_id = :model_id_3) THEN :param_1 ELSE :param_2 END, large_language_model.model_id",
+      "file": "app/services/ai/domains/llm/queries.py",
+      "function": "latest_price_for_model"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_active_selection WHERE llm_active_selection.owner_user_id = :owner_user_id_1",
+      "file": "app/services/ai/domains/llm/queries.py",
+      "function": "active_selection"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_active_selection WHERE llm_active_selection.owner_user_id IS NULL",
+      "file": "app/services/ai/domains/llm/queries.py",
+      "function": "active_selection"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_deployment",
+      "file": "app/services/ai/domains/llm/etl/queries.py",
+      "function": "all_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_modality",
+      "file": "app/services/ai/domains/llm/etl/queries.py",
+      "function": "all_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_org",
+      "file": "app/services/ai/domains/llm/etl/queries.py",
+      "function": "all_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_org WHERE (llm_org.slug IN (__[POSTCOMPILE_slug_1]) OR llm_org.name IN (__[POSTCOMPILE_name_1])) AND llm_org.icon_b64 IS NOT NULL",
+      "file": "app/services/ai/domains/llm/queries.py",
+      "function": "org_icons"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_org WHERE llm_org.id IN (__[POSTCOMPILE_primary_keys])",
+      "file": "tests/services/ai/test_llm_service.py",
+      "function": "all"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_price",
+      "file": "app/services/ai/domains/llm/etl/queries.py",
+      "function": "all_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_price WHERE llm_price.llm_id = :llm_id_1 ORDER BY llm_price.effective_date DESC LIMIT :param_1",
+      "file": "app/services/ai/domains/llm/queries.py",
+      "function": "latest_price_for"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_price WHERE llm_price.llm_id IN (__[POSTCOMPILE_llm_id_1]) ORDER BY llm_price.llm_id, llm_price.effective_date DESC",
+      "file": "tests/services/ai/test_llm_service.py",
+      "function": "exec"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM llm_usage WHERE llm_usage.user_id = :user_id_1",
+      "file": "tests/services/ai/test_usage_tracking.py",
+      "function": "test_a_turn_that_used_no_tools_records_zero_not_null"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting",
+      "file": "app/services/meetings/queries.py",
+      "function": "meetings_counts"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting LEFT OUTER JOIN meeting_bot_account ON meeting.account_id = meeting_bot_account.id WHERE meeting.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "wakers_in"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting ORDER BY meeting.created_at DESC, meeting.id DESC LIMIT :param_1",
+      "file": "app/services/meetings/queries.py",
+      "function": "meetings_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :id_1",
+      "file": "app/services/meetings/queries.py",
+      "function": "meeting"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :id_1 AND meeting.owner_user_id = :owner_user_id_1",
+      "file": "app/services/meetings/queries.py",
+      "function": "meeting"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :pk_1",
+      "file": "app/services/meetings/domains/bot/row.py",
+      "function": "write_captions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :pk_1",
+      "file": "app/services/meetings/domains/notes/service.py",
+      "function": "keep_notes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :pk_1",
+      "file": "app/services/meetings/domains/series/themes.py",
+      "function": "write_themes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :pk_1",
+      "file": "tests/services/test_meetings_calendar_owners.py",
+      "function": "_given"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.id = :pk_1",
+      "file": "tests/services/test_meetings_calendar_owners.py",
+      "function": "test_the_meeting_is_whoevers_invite_it_is"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.owner_user_id = :owner_user_id_1 AND (lower(meeting.url) LIKE lower(:url_1) || '%') ORDER BY meeting.created_at DESC, meeting.id DESC",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "meetings_on"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.owner_user_id = :owner_user_id_1 ORDER BY meeting.created_at DESC, meeting.id DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "owner_meetings"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.owner_user_id IS NULL AND (lower(meeting.url) LIKE lower(:url_1) || '%') ORDER BY meeting.created_at DESC, meeting.id DESC",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "meetings_on"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.owner_user_id IS NULL ORDER BY meeting.created_at DESC, meeting.id DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "owner_meetings"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting WHERE meeting.status IN (__[POSTCOMPILE_status_1]) ORDER BY meeting.id",
+      "file": "app/services/meetings/domains/accounts/queries.py",
+      "function": "meetings_in"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run JOIN meeting_moment ON meeting_moment.id = meeting_action_run.moment_id JOIN meeting ON meeting.id = meeting_moment.meeting_id WHERE meeting.owner_user_id = :owner_user_id_1 AND meeting_action_run.status = :status_1 AND meeting_action_run.action IN (__[POSTCOMPILE_action_1]) ORDER BY meeting_action_run.asked_at, meeting_action_run.id LIMIT :param_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "waiting"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run JOIN meeting_moment ON meeting_moment.id = meeting_action_run.moment_id JOIN meeting ON meeting.id = meeting_moment.meeting_id WHERE meeting_action_run.id = :id_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "run"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run JOIN meeting_moment ON meeting_moment.id = meeting_action_run.moment_id JOIN meeting ON meeting.id = meeting_moment.meeting_id WHERE meeting_action_run.status = :status_1 AND meeting_action_run.action IN (__[POSTCOMPILE_action_1]) ORDER BY meeting_action_run.asked_at, meeting_action_run.id LIMIT :param_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "waiting"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run JOIN meeting_moment ON meeting_moment.id = meeting_action_run.moment_id JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_moment.line_id LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_moment.meeting_id = :meeting_id_1 AND meeting_action_run.status IN (__[POSTCOMPILE_status_1]) AND meeting_moment.kind = :kind_1 ORDER BY meeting_action_run.finished_at DESC, meeting_action_run.id DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "_going"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run JOIN meeting_moment ON meeting_moment.id = meeting_action_run.moment_id JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_moment.line_id LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_moment.meeting_id = :meeting_id_1 AND meeting_action_run.status IN (__[POSTCOMPILE_status_1]) ORDER BY meeting_action_run.asked_at, meeting_action_run.id",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "_going"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run WHERE meeting_action_run.id = :pk_1",
+      "file": "app/services/meetings/domains/actions/runs.py",
+      "function": "_run_in_the_app"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run WHERE meeting_action_run.moment_id IN (__[POSTCOMPILE_moment_id_1]) AND meeting_action_run.action = :action_1 AND meeting_action_run.status IN (__[POSTCOMPILE_status_1])",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "answered"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run WHERE meeting_action_run.moment_id IN (__[POSTCOMPILE_moment_id_1]) AND meeting_action_run.action = :action_1 AND meeting_action_run.status IN (__[POSTCOMPILE_status_1])",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "going"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_action_run WHERE meeting_action_run.moment_id IN (__[POSTCOMPILE_moment_id_1]) ORDER BY meeting_action_run.asked_at, meeting_action_run.id",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "runs_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_agent_image JOIN meeting_bot_account ON meeting_bot_account.id = meeting_agent_image.account_id WHERE meeting_bot_account.name = :name_1",
+      "file": "app/services/meetings/domains/accounts/queries.py",
+      "function": "image_named"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_agent_image WHERE meeting_agent_image.account_id IN (__[POSTCOMPILE_account_id_1])",
+      "file": "app/services/meetings/domains/accounts/queries.py",
+      "function": "with_images"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_bot_account ORDER BY meeting_bot_account.id",
+      "file": "app/services/meetings/domains/accounts/queries.py",
+      "function": "every_account"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_bot_step WHERE meeting_bot_step.meeting_id = :meeting_id_1 ORDER BY meeting_bot_step.at, meeting_bot_step.id",
+      "file": "app/services/meetings/queries.py",
+      "function": "steps"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event LEFT OUTER JOIN meeting ON meeting.id = meeting_calendar_event.meeting_id JOIN meeting_bot_account ON meeting_bot_account.id = meeting_calendar_event.account_id WHERE meeting_calendar_event.id = :id_1",
+      "file": "app/services/meetings/domains/calendar/queries.py",
+      "function": "one"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event LEFT OUTER JOIN meeting ON meeting.id = meeting_calendar_event.meeting_id WHERE meeting_calendar_event.account_id IN (__[POSTCOMPILE_account_id_1]) AND meeting_calendar_event.starts_at >= :starts_at_1 AND meeting_calendar_event.starts_at < :starts_at_2 ORDER BY meeting_calendar_event.starts_at, meeting_calendar_event.id",
+      "file": "app/services/meetings/domains/calendar/queries.py",
+      "function": "between"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event ORDER BY meeting_calendar_event.starts_at",
+      "file": "tests/services/test_meetings_calendar.py",
+      "function": "kept"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event WHERE meeting_calendar_event.account_id IN (__[POSTCOMPILE_account_id_1]) AND (meeting_calendar_event.starts_at BETWEEN :starts_at_1 AND :starts_at_2 OR meeting_calendar_event.key IN (__[POSTCOMPILE_key_1]))",
+      "file": "app/services/meetings/domains/calendar/queries.py",
+      "function": "events_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event WHERE meeting_calendar_event.meeting_id IN (__[POSTCOMPILE_meeting_id_1]) AND meeting_calendar_event.title != :title_1 ORDER BY meeting_calendar_event.starts_at DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "title_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event WHERE meeting_calendar_event.starts_at <= :starts_at_1 AND meeting_calendar_event.ends_at > :ends_at_1 AND meeting_calendar_event.url IS NOT NULL AND meeting_calendar_event.cancelled IS false AND meeting_calendar_event.sent_at IS NULL ORDER BY meeting_calendar_event.starts_at, meeting_calendar_event.id",
+      "file": "app/services/meetings/domains/calendar/queries.py",
+      "function": "due"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_calendar_event WHERE meeting_calendar_event.url = :url_1 AND meeting_calendar_event.title != :title_1 ORDER BY meeting_calendar_event.starts_at DESC LIMIT :param_1",
+      "file": "app/services/meetings/queries.py",
+      "function": "title_for"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_guide_point LEFT OUTER JOIN meeting_guide_point_line ON meeting_guide_point_line.point_id = meeting_guide_point.id WHERE meeting_guide_point.guide_id IN (__[POSTCOMPILE_guide_id_1]) ORDER BY meeting_guide_point.guide_id, meeting_guide_point.ord, meeting_guide_point_line.ord",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "guide_points"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_moment JOIN meeting ON meeting.id = meeting_moment.meeting_id WHERE meeting_moment.id = :id_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "moment"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_moment JOIN meeting ON meeting.id = meeting_moment.meeting_id WHERE meeting_moment.id = :id_1 AND meeting_moment.meeting_id = :meeting_id_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "moment"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_moment JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_moment.line_id LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_moment.meeting_id = :meeting_id_1 AND (meeting_moment.kind NOT IN (__[POSTCOMPILE_kind_1])) ORDER BY meeting_transcript_line.start_seconds, meeting_moment.id",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "of_meeting"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_moment WHERE meeting_moment.id = :pk_1",
+      "file": "app/services/meetings/domains/actions/runs.py",
+      "function": "_run_in_the_app"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_moment WHERE meeting_moment.meeting_id IN (__[POSTCOMPILE_meeting_id_1]) AND meeting_moment.kind IN (__[POSTCOMPILE_kind_1])",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "_put_to_it"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_moment WHERE meeting_moment.meeting_id IN (__[POSTCOMPILE_meeting_id_1]) AND meeting_moment.line_id IN (__[POSTCOMPILE_line_id_1])",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "in_meetings"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_note_item JOIN (SELECT rowid AS id FROM meeting_note_search WHERE meeting_note_search MATCH :query) AS found ON found.id = meeting_note_item.id JOIN meeting ON meeting.id = meeting_note_item.meeting_id LEFT OUTER JOIN (SELECT meeting_note_line.item_id AS item_id, meeting_note_line.line_id AS line_id FROM meeting_note_line WHERE meeting_note_line.against IS false AND meeting_note_line.ord = :ord_1) AS first ON first.item_id = meeting_note_item.id LEFT OUTER JOIN meeting_transcript_line ON meeting_transcript_line.id = first.line_id WHERE meeting.owner_user_id = :owner_user_id_1 ORDER BY meeting.created_at DESC, meeting.id DESC, CASE meeting_note_item.kind WHEN :param_1 THEN :param_2 WHEN :param_3 THEN :param_4 WHEN :param_5 THEN :param_6 WHEN :param_7 THEN :param_8 WHEN :param_9 THEN :param_10 WHEN :param_11 THEN :param_12 WHEN :param_13 THEN :param_14 WHEN :param_15 THEN :param_16 ELSE :param_17 END, meeting_note_item.ord LIMIT :param_18",
+      "file": "app/services/meetings/domains/search/queries.py",
+      "function": "notes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_note_item LEFT OUTER JOIN meeting_note_line ON meeting_note_line.item_id = meeting_note_item.id WHERE meeting_note_item.meeting_id = :meeting_id_1 AND meeting_note_item.kind = :kind_1",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "commitment_lines"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_note_item WHERE meeting_note_item.meeting_id IN (__[POSTCOMPILE_meeting_id_1]) ORDER BY meeting_note_item.meeting_id, meeting_note_item.kind, meeting_note_item.ord",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "items_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_note_line JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_note_line.line_id LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_note_line.item_id IN (__[POSTCOMPILE_item_id_1]) ORDER BY meeting_note_line.item_id, meeting_note_line.ord",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "cited"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_notes WHERE meeting_notes.meeting_id = :meeting_id_1 FOR UPDATE",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "locked_notes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_notes WHERE meeting_notes.meeting_id IN (__[POSTCOMPILE_meeting_id_1])",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "notes_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_participant JOIN meeting ON meeting.id = meeting_participant.meeting_id WHERE meeting.owner_user_id = :owner_user_id_1 AND meeting_participant.display_name IN (__[POSTCOMPILE_display_name_1]) ORDER BY meeting_participant.id",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "people_known_as"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_participant JOIN meeting ON meeting.id = meeting_participant.meeting_id WHERE meeting.owner_user_id IS NULL AND meeting_participant.display_name IN (__[POSTCOMPILE_display_name_1]) ORDER BY meeting_participant.id",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "people_known_as"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_participant JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_participant.meeting_id = :meeting_id_1 ORDER BY meeting_participant.display_name",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "meeting_people"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_participant WHERE meeting_participant.meeting_id = :meeting_id_1 AND meeting_participant.display_name IN (__[POSTCOMPILE_display_name_1])",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "participants_named"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_participant WHERE meeting_participant.meeting_id IN (__[POSTCOMPILE_meeting_id_1])",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "people_in"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.id = :pk_1",
+      "file": "app/services/meetings/domains/people/guides.py",
+      "function": "_write"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "person_names"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.id IN (__[POSTCOMPILE_id_1]) AND (meeting_person.id NOT IN (SELECT meeting_participant.person_id FROM meeting_participant))",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "drop_people_in_no_meeting"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.name = :name_1 AND meeting_person.owner_user_id = :owner_user_id_1",
+      "file": "tests/_meetings.py",
+      "function": "person_named"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.owner_user_id = :owner_user_id_1",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "owner_people"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.owner_user_id = :owner_user_id_1 AND meeting_person.is_me IS true",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "my_names"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.owner_user_id = :owner_user_id_1 AND meeting_person.name IN (__[POSTCOMPILE_name_1])",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "people_known_as"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.owner_user_id IS NULL",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "owner_people"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.owner_user_id IS NULL AND meeting_person.is_me IS true",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "my_names"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person WHERE meeting_person.owner_user_id IS NULL AND meeting_person.name IN (__[POSTCOMPILE_name_1])",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "people_known_as"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide",
+      "file": "tests/services/test_meetings_kept.py",
+      "function": "test_a_guide_written_again_keeps_the_owners_note"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide JOIN meeting_person ON meeting_person.id = meeting_person_guide.person_id WHERE meeting_person.owner_user_id = :owner_user_id_1 AND meeting_person.is_me IS false ORDER BY meeting_person_guide.written_at DESC, meeting_person_guide.id DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "guides"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide JOIN meeting_person ON meeting_person.id = meeting_person_guide.person_id WHERE meeting_person_guide.id = :id_2",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "guide"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide JOIN meeting_person ON meeting_person.id = meeting_person_guide.person_id WHERE meeting_person_guide.id = :id_2 AND meeting_person.owner_user_id = :owner_user_id_1",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "guide"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide WHERE meeting_person_guide.person_id = :person_id_1",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "guide_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide WHERE meeting_person_guide.person_id = :person_id_1",
+      "file": "tests/_meetings.py",
+      "function": "kept_guide"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_person_guide WHERE meeting_person_guide.person_id = :person_id_1 FOR UPDATE",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "guide_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_runner_token WHERE meeting_runner_token.owner_user_id = :owner_user_id_1 AND meeting_runner_token.revoked_at IS NULL ORDER BY meeting_runner_token.created_at DESC",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "live_tokens"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_runner_token WHERE meeting_runner_token.owner_user_id IS NULL AND meeting_runner_token.revoked_at IS NULL ORDER BY meeting_runner_token.created_at DESC",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "live_tokens"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_runner_token WHERE meeting_runner_token.revoked_at IS NULL AND meeting_runner_token.digest = :digest_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "live_token"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_runner_token WHERE meeting_runner_token.revoked_at IS NULL AND meeting_runner_token.id = :id_1 AND meeting_runner_token.owner_user_id IS NULL",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "live_token"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_runner_token WHERE meeting_runner_token.revoked_at IS NULL AND meeting_runner_token.last_used_at >= :last_used_at_1 LIMIT :param_1",
+      "file": "app/services/meetings/domains/actions/queries.py",
+      "function": "used_since"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_series WHERE meeting_series.id = :id_1",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "one_series"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_series WHERE meeting_series.id = :id_1 AND meeting_series.owner_user_id = :owner_user_id_1",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "one_series"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_series WHERE meeting_series.owner_user_id = :owner_user_id_1 AND meeting_series.link = :link_1 FOR UPDATE",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "series_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_series WHERE meeting_series.owner_user_id IS NULL AND meeting_series.link = :link_1",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "series_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_series WHERE meeting_series.owner_user_id IS NULL AND meeting_series.link = :link_1 FOR UPDATE",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "series_row"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_theme LEFT OUTER JOIN meeting_theme_line ON meeting_theme_line.theme_id = meeting_theme.id WHERE meeting_theme.series_id = :series_id_1 ORDER BY meeting_theme.kind, meeting_theme.ord, meeting_theme_line.ord",
+      "file": "app/services/meetings/domains/series/queries.py",
+      "function": "theme_lines"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_theme_line WHERE meeting_theme_line.theme_id IN (__[POSTCOMPILE_theme_id_1])",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "citing_nothing"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line JOIN (SELECT rowid AS id FROM meeting_line_search WHERE meeting_line_search MATCH :query) AS found ON found.id = meeting_transcript_line.id JOIN meeting ON meeting.id = meeting_transcript_line.meeting_id LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting.owner_user_id = :owner_user_id_1 ORDER BY meeting.created_at DESC, meeting.id DESC, meeting_transcript_line.start_seconds, meeting_transcript_line.id LIMIT :param_1",
+      "file": "app/services/meetings/domains/search/queries.py",
+      "function": "lines"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "speakers"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.id IN (__[POSTCOMPILE_id_2])",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "quotes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.meeting_id = :meeting_id_1 AND meeting_transcript_line.start_seconds <= :start_seconds_1 ORDER BY meeting_transcript_line.start_seconds DESC, meeting_transcript_line.id DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "said"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.meeting_id = :meeting_id_1 ORDER BY meeting_transcript_line.start_seconds, meeting_transcript_line.id",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "said"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.meeting_id = :meeting_id_1 ORDER BY meeting_transcript_line.start_seconds, meeting_transcript_line.id",
+      "file": "app/services/meetings/queries.py",
+      "function": "transcript"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.meeting_id IN (__[POSTCOMPILE_meeting_id_1]) ORDER BY meeting_transcript_line.meeting_id, meeting_transcript_line.start_seconds, meeting_transcript_line.id",
+      "file": "app/services/meetings/domains/moments/queries.py",
+      "function": "_lines"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line LEFT OUTER JOIN meeting_participant ON meeting_transcript_line.participant_id = meeting_participant.id LEFT OUTER JOIN meeting_person ON meeting_person.id = meeting_participant.person_id WHERE meeting_transcript_line.meeting_id IN (__[POSTCOMPILE_meeting_id_1]) ORDER BY meeting_transcript_line.meeting_id, meeting_transcript_line.start_seconds, meeting_transcript_line.id",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "said_in"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line WHERE meeting_transcript_line.id = :pk_1",
+      "file": "app/services/meetings/domains/actions/prompt.py",
+      "function": "excerpt"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM meeting_transcript_line WHERE meeting_transcript_line.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "existing"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM context_module WHERE context_module.slug = :slug_1",
+      "file": "app/services/ai/domains/chat/queries.py",
+      "function": "context_module_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM context_module WHERE context_module.slug = :slug_1",
+      "file": "app/services/finance/domains/detection/analyst/seeds.py",
+      "function": "load_finance_agent_fixtures"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM org_invite WHERE org_invite.organization_id = :organization_id_1 AND org_invite.email = :email_1 AND org_invite.status = :status_1",
+      "file": "app/services/auth/domains/orgs/invites.py",
+      "function": "_get_pending_invite"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization WHERE organization.id = :id_1",
+      "file": "app/services/auth/domains/orgs/organizations.py",
+      "function": "hard_delete_org"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization WHERE organization.id = :id_1",
+      "file": "app/services/auth/domains/orgs/organizations.py",
+      "function": "restore_org"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization WHERE organization.id = :id_1",
+      "file": "tests/services/test_org_integration.py",
+      "function": "_org_deleted_at"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization WHERE organization.id = :id_1 AND organization.deleted_at IS NULL",
+      "file": "app/services/auth/domains/orgs/organizations.py",
+      "function": "get_org_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization WHERE organization.slug = :slug_1",
+      "file": "tests/_test_org.py",
+      "function": "ensure_org_for_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization_member JOIN organization ON organization.id = organization_member.organization_id WHERE organization_member.user_id = :user_id_1 AND organization_member.role = :role_1 AND organization.deleted_at IS NULL",
+      "file": "app/services/auth/domains/users/deletion.py",
+      "function": "orphaned_sole_owner_org_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization_member WHERE organization_member.organization_id = :organization_id_1",
+      "file": "app/services/auth/domains/orgs/memberships.py",
+      "function": "list_org_members"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization_member WHERE organization_member.organization_id = :organization_id_1 AND organization_member.user_id = :user_id_1",
+      "file": "app/components/backend/api/insights.py",
+      "function": "create_project"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization_member WHERE organization_member.organization_id = :organization_id_1 AND organization_member.user_id = :user_id_1",
+      "file": "app/services/auth/domains/orgs/memberships.py",
+      "function": "get_member"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM organization_member WHERE organization_member.organization_id IN (__[POSTCOMPILE_organization_id_1]) GROUP BY organization_member.organization_id",
+      "file": "app/services/auth/domains/users/deletion.py",
+      "function": "orphaned_sole_owner_org_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_customer WHERE payment_customer.id IN (__[POSTCOMPILE_id_1])",
+      "file": "app/services/payment/domains/reporting/revenue.py",
+      "function": "get_customers"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_customer WHERE payment_customer.user_id = :user_id_1",
+      "file": "app/services/payment/service.py",
+      "function": "_customer_ids_for_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_customer WHERE payment_customer.user_id = :user_id_1",
+      "file": "app/services/payment/service.py",
+      "function": "_ensure_customer_for_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_dispute WHERE payment_dispute.id = :id_1 AND payment_dispute.transaction_id IN (__[POSTCOMPILE_transaction_id_1])",
+      "file": "app/services/payment/domains/charges/disputes.py",
+      "function": "get_dispute_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_dispute WHERE payment_dispute.provider_dispute_id = :provider_dispute_id_1",
+      "file": "app/services/payment/domains/charges/disputes.py",
+      "function": "_handle_dispute_event"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_dispute WHERE payment_dispute.provider_dispute_id = :provider_dispute_id_1",
+      "file": "app/services/payment/domains/charges/disputes.py",
+      "function": "_handle_early_fraud_warning"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_dispute WHERE payment_dispute.transaction_id IN (__[POSTCOMPILE_transaction_id_1]) ORDER BY payment_dispute.created_at DESC",
+      "file": "app/services/payment/domains/charges/disputes.py",
+      "function": "get_disputes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_provider WHERE payment_provider.key = :key_1",
+      "file": "app/services/payment/service.py",
+      "function": "get_or_create_provider"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_subscription WHERE payment_subscription.customer_id IN (__[POSTCOMPILE_customer_id_1]) ORDER BY payment_subscription.created_at DESC",
+      "file": "app/services/payment/domains/subscriptions/plans.py",
+      "function": "get_subscriptions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction",
+      "file": "app/services/payment/domains/reporting/revenue.py",
+      "function": "get_status_summary"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.customer_id IN (__[POSTCOMPILE_customer_id_1])",
+      "file": "app/services/payment/domains/charges/disputes.py",
+      "function": "_transaction_ids_for_customers"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.customer_id IN (__[POSTCOMPILE_customer_id_1])",
+      "file": "app/services/payment/service.py",
+      "function": "get_transactions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.customer_id IN (__[POSTCOMPILE_customer_id_1]) ORDER BY payment_transaction.created_at DESC LIMIT :param_1 OFFSET :param_2",
+      "file": "app/services/payment/service.py",
+      "function": "get_transactions"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.id = :id_1",
+      "file": "app/services/payment/service.py",
+      "function": "get_transaction_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.id = :id_1 AND payment_transaction.customer_id IN (__[POSTCOMPILE_customer_id_1])",
+      "file": "app/services/payment/service.py",
+      "function": "get_transaction_by_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.provider_transaction_id = :provider_transaction_id_1",
+      "file": "app/services/payment/domains/charges/disputes.py",
+      "function": "_find_transaction_by_charge_id"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM payment_transaction WHERE payment_transaction.provider_transaction_id = :provider_transaction_id_1",
+      "file": "app/services/payment/domains/webhooks/billing.py",
+      "function": "_handle_checkout_completed"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE (pending_change.status = :status_1 OR pending_change.resolved_at >= :resolved_at_1) AND pending_change.owner_user_id = :owner_user_id_1 ORDER BY pending_change.id DESC",
+      "file": "app/services/change_queue/queries.py",
+      "function": "list_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.batch_id = :batch_id_1 AND pending_change.owner_user_id = :owner_user_id_1 ORDER BY pending_change.id",
+      "file": "app/services/change_queue/queries.py",
+      "function": "batch_rows"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.id = :id_1",
+      "file": "app/services/change_queue/queries.py",
+      "function": "get_change"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.id = :id_1 AND pending_change.owner_user_id = :owner_user_id_1",
+      "file": "app/services/change_queue/queries.py",
+      "function": "get_change"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.proposed_by_agent = :proposed_by_agent_1 AND (pending_change.status = :status_1 OR pending_change.resolved_at >= :resolved_at_1) ORDER BY pending_change.id DESC",
+      "file": "app/services/change_queue/queries.py",
+      "function": "list_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.status = :status_1",
+      "file": "app/services/change_queue/queries.py",
+      "function": "count_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.status = :status_1 AND pending_change.owner_user_id = :owner_user_id_1",
+      "file": "app/services/change_queue/queries.py",
+      "function": "count_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.status = :status_1 AND pending_change.owner_user_id = :owner_user_id_1 ORDER BY pending_change.id DESC",
+      "file": "app/services/change_queue/queries.py",
+      "function": "list_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.status = :status_1 OR pending_change.resolved_at >= :resolved_at_1 ORDER BY pending_change.id DESC",
+      "file": "app/services/change_queue/queries.py",
+      "function": "list_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM pending_change WHERE pending_change.status = :status_1 ORDER BY pending_change.id DESC",
+      "file": "app/services/change_queue/queries.py",
+      "function": "list_changes"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM project LIMIT :param_1",
+      "file": "tests/services/test_insight_service.py",
+      "function": "_ensure_project"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM project LIMIT :param_1",
+      "file": "tests/services/test_query_service.py",
+      "function": "_ensure_project"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM project WHERE project.slug = :slug_1 AND project.owner_user_id = :owner_user_id_1",
+      "file": "app/services/insights/queries/projects.py",
+      "function": "project_by_slug"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM refresh_token WHERE refresh_token.family_id = :family_id_1 AND refresh_token.revoked_at IS NULL AND refresh_token.expires_at > :expires_at_1 LIMIT :param_1",
+      "file": "app/services/auth/domains/sessions/tokens.py",
+      "function": "is_live_session"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM refresh_token WHERE refresh_token.token = :pk_1",
+      "file": "app/services/auth/domains/sessions/tokens.py",
+      "function": "row_of"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM refresh_token WHERE refresh_token.token = :pk_1",
+      "file": "tests/services/test_refresh_service.py",
+      "function": "test_the_table_never_keeps_a_token_itself"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM refresh_token WHERE refresh_token.user_id = :user_id_1 AND refresh_token.revoked_at IS NULL AND refresh_token.expires_at > :expires_at_1",
+      "file": "app/services/auth/domains/sessions/devices.py",
+      "function": "list_active_for_user"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM research_item",
+      "file": "tests/services/test_research_service.py",
+      "function": "_items"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM research_item WHERE research_item.id IN (SELECT research_match.item_id FROM research_match JOIN research_watch ON research_watch.id = research_match.watch_id WHERE research_watch.owner_user_id = :owner_user_id_1) OR research_item.root_id IN (SELECT coalesce(research_item.root_id, research_match.item_id) AS coalesce_1 FROM research_match JOIN research_watch ON research_watch.id = research_match.watch_id JOIN research_item ON research_item.id = research_match.item_id WHERE research_watch.owner_user_id = :owner_user_id_2 AND research_watch.with_threads IS true) ORDER BY research_item.published_at DESC NULLS LAST, research_item.id LIMIT :param_1",
+      "file": "app/services/research/service.py",
+      "function": "search"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM research_item_snapshot JOIN research_item ON research_item.id = research_item_snapshot.item_id WHERE research_item_snapshot.item_id = :item_id_1 AND (research_item.id IN (SELECT research_match.item_id FROM research_match JOIN research_watch ON research_watch.id = research_match.watch_id WHERE research_watch.owner_user_id = :owner_user_id_1) OR research_item.root_id IN (SELECT coalesce(research_item.root_id, research_match.item_id) AS coalesce_1 FROM research_match JOIN research_watch ON research_watch.id = research_match.watch_id JOIN research_item ON research_item.id = research_match.item_id WHERE research_watch.owner_user_id = :owner_user_id_2 AND research_watch.with_threads IS true)) ORDER BY research_item_snapshot.as_of",
+      "file": "app/services/research/service.py",
+      "function": "history"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM research_watch WHERE research_watch.id = :id_1",
+      "file": "app/services/research/service.py",
+      "function": "get_watch"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM research_watch WHERE research_watch.id = :id_1 AND research_watch.owner_user_id = :owner_user_id_1",
+      "file": "app/services/research/service.py",
+      "function": "get_watch"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM saved_query ORDER BY saved_query.name",
+      "file": "app/components/database/saved.py",
+      "function": "kept"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM saved_query WHERE saved_query.id = :pk_1",
+      "file": "app/components/database/saved.py",
+      "function": "forget"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM saved_query WHERE saved_query.name = :name_1",
+      "file": "app/components/database/saved.py",
+      "function": "keep"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM secret",
+      "file": "app/components/secrets/store.py",
+      "function": "stored"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM secret WHERE secret.name = :pk_1",
+      "file": "app/components/secrets/store.py",
+      "function": "put"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM secret WHERE secret.name IN (__[POSTCOMPILE_name_1])",
+      "file": "app/components/secrets/store.py",
+      "function": "get_many"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM tool",
+      "file": "app/services/ai/fixtures/agent_fixtures.py",
+      "function": "load_agent_fixtures"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM tool WHERE tool.name IN (__[POSTCOMPILE_name_1])",
+      "file": "app/services/ai/fixtures/agent_fixtures.py",
+      "function": "attach_tools"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT ... FROM user_oauth_identity WHERE user_oauth_identity.provider = :provider_1 AND user_oauth_identity.provider_user_id = :provider_user_id_1",
+      "file": "app/services/auth/domains/users/accounts.py",
+      "function": "upsert_from_oauth"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM finance_transaction JOIN finance_transfer ON finance_transfer.from_transaction_id = finance_transaction.id JOIN finance_transaction AS finance_transaction_1 ON finance_transaction_1.id = finance_transfer.to_transaction_id JOIN finance_account ON finance_account.id = finance_transaction_1.account_id WHERE finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transfer.status = :status_1 AND finance_account.classification = :classification_1 AND finance_account.account_type = :account_type_1",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "card_payment_stream_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND (EXISTS (SELECT finance_transfer.id FROM finance_transfer JOIN finance_account ON finance_account.id = (SELECT finance_transaction.account_id FROM finance_transaction WHERE finance_transaction.id = finance_transfer.to_transaction_id) WHERE finance_transfer.from_transaction_id = finance_transaction.id AND finance_transfer.status = :status_1 AND finance_account.classification = :classification_1))",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "payment_flagged_stream_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM finance_transaction WHERE finance_transaction.recurring_stream_id IN (__[POSTCOMPILE_recurring_stream_id_1]) AND finance_transaction.is_transfer IS true",
+      "file": "app/services/finance/domains/planning/recurring/queries.py",
+      "function": "transfer_flagged_stream_ids"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM meeting_guide_point_line JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_guide_point_line.line_id WHERE meeting_transcript_line.meeting_id = :meeting_id_1",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "citing"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM meeting_note_line JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_note_line.line_id WHERE meeting_transcript_line.meeting_id = :meeting_id_1",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "citing"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM meeting_participant WHERE meeting_participant.person_id = :person_id_1 ORDER BY meeting_participant.meeting_id DESC LIMIT :param_1",
+      "file": "app/services/meetings/domains/people/queries.py",
+      "function": "meetings_with"
+    },
+    {
+      "kind": "repeated_statement",
+      "label": "SELECT DISTINCT ... FROM meeting_theme_line JOIN meeting_transcript_line ON meeting_transcript_line.id = meeting_theme_line.line_id WHERE meeting_transcript_line.meeting_id = :meeting_id_1",
+      "file": "app/services/meetings/domains/notes/queries.py",
+      "function": "citing"
+    }
+  ]
+}

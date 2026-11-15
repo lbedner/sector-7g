@@ -1,0 +1,76 @@
+"""Small conversions the modals share: durations, timestamps, match tests, colours."""
+
+from __future__ import annotations
+
+import flet as ft
+
+from app.components.frontend.controls import (
+    StatusDot,
+)
+from app.components.frontend.theme import AegisTheme as Theme
+from app.services.system.models import ComponentStatus, ComponentStatusType
+
+
+def headline_stat_color(cents: int) -> str:
+    """Red once a figure goes negative; otherwise the primary text colour.
+
+    Deliberately NOT green-for-positive: when every healthy number is
+    coloured, colour stops meaning anything and the one number in trouble
+    no longer stands out.
+    """
+    return Theme.Colors.ERROR if cents < 0 else Theme.Colors.TEXT_PRIMARY
+
+
+def date_cell(
+    value: object, control: type[ft.Text] | None = None, *, sort_value: object = None
+) -> ft.Control:
+    """A human-readable date cell that still sorts chronologically.
+
+    DataTable sorts on a cell's text (controls/data_table.py), so the
+    rendered "Aug 19, 2026" would sort alphabetically. ``.data`` is the
+    escape hatch ``cell_text`` falls back to, so the ISO string rides
+    along invisibly and the column keeps sorting by date. ``sort_value``
+    is for a column that shows one date and sorts in the order of another.
+    """
+    from app.components.frontend.controls.table import TableCellText
+    from app.core.formatting import format_date
+
+    factory = control or TableCellText
+    cell = factory(format_date(value))
+    cell.data = str(sort_value if sort_value is not None else value or "")
+    return cell
+
+
+def status_dot(label: str, color: str, tooltip: str) -> StatusDot:
+    """Status as the house dot: a circle + colored label, no pill
+    background. The tooltip carries what the state actually MEANS -
+    "Detected" is a question the detector is asking, and a bare word does
+    not say so.
+
+    Kept as a name the finance tabs already call; the recipe itself lives
+    in ``controls.StatusDot`` so a surface can reach for the control
+    directly.
+    """
+    return StatusDot(label, color, tooltip)
+
+
+def health_dot(component_data: ComponentStatus, tooltip: str) -> StatusDot:
+    """A component's health check as the house dot: its message, accent
+    when healthy, red otherwise."""
+    healthy = component_data.status == ComponentStatusType.HEALTHY
+    return status_dot(
+        component_data.message,
+        Theme.Colors.ACCENT if healthy else Theme.Colors.ERROR,
+        tooltip,
+    )
+
+
+def ledger_amount_color(cents: int) -> str:
+    """Colour for a money amount in a TABLE row.
+
+    The opposite of ``headline_stat_color``, on purpose. A ledger is
+    mostly spending, so an outflow is the assumption and takes no colour -
+    tinting nearly every row points at nothing. Money coming IN is the
+    exception, and that is what teal marks.
+    """
+    return Theme.Colors.SUCCESS if cents > 0 else Theme.Colors.TEXT_PRIMARY

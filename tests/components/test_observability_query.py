@@ -1,0 +1,164 @@
+"""The Overseer's Logfire queries stay inside a read token's query budget.
+
+A read token's budget is shared by every process and every stack holding it.
+The result cache lived in process memory, so each hot reload started from
+nothing and queried again, and the three queries ran at once against the
+token's concurrency limit: 429s through a normal working day.
+"""
+
+from datetime import UTC, datetime, timedelta
+import importlib
+import inspect
+from pathlib import Path
+from types import ModuleType
+from typing import Any, Self
+
+import pytest
+
+import app.services.system.health_observability as observability
+
+TOKEN = "read-token"
+
+
+class FakeClient:
+    """Stands in for ``AsyncLogfireQueryClient``; records every query."""
+
+    queries: list[str] = []
+    since: list[datetime] = []
+    in_flight = 0
+    max_in_flight = 0
+    fail = False
+
+    def __init__(self, read_token: str) -> None:
+        pass
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def query_json_rows(
+        self, sql: str, *, min_timestamp: datetime, limit: int | None = None
+    ) -> dict[str, Any]:
+        cls = type(self)
+        cls.queries.append(sql)
+        cls.since.append(min_timestamp)
+        cls.in_flight += 1
+        cls.max_in_flight = max(cls.max_in_flight, cls.in_flight)
+        try:
+            import asyncio
+
+            await asyncio.sleep(0)
+            if cls.fail:
+                raise RuntimeError("429 Rate limit exceeded (hour)")
+            return {"rows": [{"total_spans": 7}]}
+        finally:
+            cls.in_flight -= 1
+
+
+@pytest.fixture
+def fresh(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
+    """The module as a newly started process sees it, caching under tmp_path."""
+    from logfire import query_client
+
+    FakeClient.queries = []
+    FakeClient.since = []
+    FakeClient.max_in_flight = 0
+    FakeClient.fail = False
+    monkeypatch.setattr(query_client, "AsyncLogfireQueryClient", FakeClient)
+    monkeypatch.setattr(observability, "_CACHE_DIR", tmp_path)
+    return observability
+
+
+def _restart(module: ModuleType, cache_dir: Path) -> ModuleType:
+    """A hot reload: module state from scratch, same cache directory."""
+    reloaded = importlib.reload(module)
+    reloaded._CACHE_DIR = cache_dir
+    return reloaded
+
+
+def _required(function: Any) -> set[str]:
+    return {
+        name
+        for name, param in inspect.signature(function).parameters.items()
+        if param.default is inspect.Parameter.empty and name != "self"
+    }
+
+
+def test_the_fake_asks_what_the_real_client_requires() -> None:
+    """A fake looser than the SDK hid that Logfire 5 requires a window."""
+    from logfire.query_client import AsyncLogfireQueryClient
+
+    assert _required(FakeClient.query_json_rows) == _required(
+        AsyncLogfireQueryClient.query_json_rows
+    )
+
+
+async def test_each_query_names_the_window_it_reads(fresh: ModuleType) -> None:
+    before = datetime.now(UTC)
+    await fresh._query_logfire_trace_data(TOKEN)
+
+    assert len(FakeClient.since) == 3
+    assert all(before - timedelta(days=2) < t < before for t in FakeClient.since)
+
+
+async def test_row_caps_go_to_the_sdk_not_the_sql(fresh: ModuleType) -> None:
+    """The SDK returns at most 100 rows unless told otherwise, so a LIMIT in
+    the SQL above that is silently cut to 100."""
+    await fresh._query_logfire_trace_data(TOKEN)
+
+    assert not [sql for sql in FakeClient.queries if "LIMIT" in sql.upper()]
+
+
+async def test_the_three_queries_run_one_at_a_time(fresh: ModuleType) -> None:
+    await fresh._query_logfire_trace_data(TOKEN)
+
+    assert len(FakeClient.queries) == 3
+    assert FakeClient.max_in_flight == 1
+
+
+async def test_a_reload_reuses_the_cached_result(
+    fresh: ModuleType, tmp_path: Path
+) -> None:
+    first = await fresh._query_logfire_trace_data(TOKEN)
+
+    again = await _restart(fresh, tmp_path)._query_logfire_trace_data(TOKEN)
+
+    assert len(FakeClient.queries) == 3
+    assert again == first
+
+
+async def test_a_reload_keeps_the_backoff_after_a_failure(
+    fresh: ModuleType, tmp_path: Path
+) -> None:
+    FakeClient.fail = True
+    await fresh._query_logfire_trace_data(TOKEN)
+    attempts = len(FakeClient.queries)
+
+    await _restart(fresh, tmp_path)._query_logfire_trace_data(TOKEN)
+
+    assert len(FakeClient.queries) == attempts
+
+
+async def test_a_fresh_result_is_kept_for_ten_minutes(
+    fresh: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import time
+
+    start = time.time()
+    await fresh._query_logfire_trace_data(TOKEN)
+    monkeypatch.setattr(time, "time", lambda: start + 9 * 60)
+
+    await fresh._query_logfire_trace_data(TOKEN)
+
+    assert len(FakeClient.queries) == 3
+
+
+async def test_only_the_owner_can_read_the_cache(
+    fresh: ModuleType, tmp_path: Path
+) -> None:
+    await fresh._query_logfire_trace_data(TOKEN)
+
+    (cache,) = tmp_path.glob("aegis-logfire-query-*.json")
+    assert cache.stat().st_mode & 0o077 == 0

@@ -1,0 +1,291 @@
+"""Tests for scheduler execution read queries (ScheduledTaskManager)."""
+
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+
+import pytest
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.services.scheduler.models import JobExecution
+import app.services.scheduler.scheduled_task_manager as stm
+from app.services.scheduler.scheduled_task_manager import ScheduledTaskManager
+
+_BASE = datetime(2026, 1, 1)
+
+
+def test_a_jobs_last_runs_are_indexed() -> None:
+    """History reads one job's runs newest first, so the pair is the index."""
+    indexed = {
+        tuple(column.name for column in index.columns)
+        for index in JobExecution.__table__.indexes
+    }
+    assert ("job_id", "started_at") in indexed
+
+
+@pytest.fixture
+def manager(
+    async_db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> ScheduledTaskManager:
+    """Route the manager's ``get_async_session`` to the test session."""
+
+    @asynccontextmanager
+    async def _session():
+        yield async_db_session
+
+    monkeypatch.setattr(stm, "get_async_session", _session)
+    return ScheduledTaskManager()
+
+
+async def _seed(session: AsyncSession, rows: list[dict]) -> None:
+    for row in rows:
+        session.add(JobExecution(**row))
+    await session.flush()
+
+
+async def test_list_executions_paginates_newest_first(
+    async_db_session: AsyncSession, manager: ScheduledTaskManager
+) -> None:
+    await _seed(
+        async_db_session,
+        [
+            {
+                "job_id": "j1",
+                "job_name": "J1",
+                "started_at": _BASE + timedelta(minutes=i),
+                "status": "success",
+            }
+            for i in range(5)
+        ],
+    )
+
+    records, total = await manager.list_executions(offset=0, limit=2)
+
+    assert total == 5
+    assert len(records) == 2
+    assert records[0]["started_at"] > records[1]["started_at"]  # newest first
+    assert "traceback" not in records[0]  # omitted from list payloads
+
+
+async def test_list_executions_status_and_job_filters(
+    async_db_session: AsyncSession, manager: ScheduledTaskManager
+) -> None:
+    await _seed(
+        async_db_session,
+        [
+            {"job_id": "j1", "started_at": _BASE, "status": "success"},
+            {"job_id": "j1", "started_at": _BASE, "status": "failed"},
+            {"job_id": "j2", "started_at": _BASE, "status": "failed"},
+        ],
+    )
+
+    _, total_failed = await manager.list_executions(status="failed")
+    assert total_failed == 2
+
+    _, total_j1 = await manager.list_executions(job_id="j1")
+    assert total_j1 == 2
+
+    records, total_j1_failed = await manager.list_executions(
+        status="failed", job_id="j1"
+    )
+    assert total_j1_failed == 1
+    assert records[0]["status"] == "failed"
+    assert records[0]["job_id"] == "j1"
+
+
+async def test_get_job_stats_computes_rate_and_avg(
+    async_db_session: AsyncSession, manager: ScheduledTaskManager
+) -> None:
+    await _seed(
+        async_db_session,
+        [
+            {
+                "job_id": "j1",
+                "job_name": "J1",
+                "started_at": _BASE,
+                "status": "success",
+                "duration_ms": 100.0,
+            },
+            {
+                "job_id": "j1",
+                "job_name": "J1",
+                "started_at": _BASE + timedelta(minutes=1),
+                "status": "success",
+                "duration_ms": 200.0,
+            },
+            {
+                "job_id": "j1",
+                "job_name": "J1",
+                "started_at": _BASE + timedelta(minutes=2),
+                "status": "failed",
+                "duration_ms": 300.0,
+            },
+        ],
+    )
+
+    stats = await manager.get_job_stats("j1")
+
+    assert stats["total_runs"] == 3
+    assert stats["success_count"] == 2
+    assert stats["failure_count"] == 1
+    assert stats["success_rate"] == round(2 / 3 * 100, 1)
+    assert stats["avg_duration_ms"] == 200.0
+    assert stats["last_run"]["status"] == "failed"  # newest run
+
+
+async def test_get_job_stats_empty(manager: ScheduledTaskManager) -> None:
+    stats = await manager.get_job_stats("does-not-exist")
+
+    assert stats["total_runs"] == 0
+    assert stats["success_count"] == 0
+    assert stats["success_rate"] == 0.0
+    assert stats["avg_duration_ms"] is None
+    assert stats["last_run"] is None
+
+
+async def test_is_job_running_true_when_latest_running(
+    async_db_session: AsyncSession, manager: ScheduledTaskManager
+) -> None:
+    await _seed(
+        async_db_session,
+        [{"job_id": "j1", "started_at": _BASE, "status": "running"}],
+    )
+    assert await manager.is_job_running("j1") is True
+    assert await manager.is_job_running("other") is False
+
+
+async def test_is_job_running_false_when_latest_finished(
+    async_db_session: AsyncSession, manager: ScheduledTaskManager
+) -> None:
+    await _seed(
+        async_db_session,
+        [
+            {"job_id": "j1", "started_at": _BASE, "status": "running"},
+            {
+                "job_id": "j1",
+                "started_at": _BASE + timedelta(minutes=1),
+                "status": "success",
+            },
+        ],
+    )
+    assert await manager.is_job_running("j1") is False
+
+
+async def test_list_executions_reads_on_a_session_it_is_given(
+    async_db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller already holding a session (a web request) passes it in: on
+    SQLite a second session would wait on the first's write lock and fail
+    with "database is locked"."""
+
+    @asynccontextmanager
+    async def _refuse():
+        raise AssertionError("opened a second session")
+        yield
+
+    monkeypatch.setattr(stm, "get_async_session", _refuse)
+    await _seed(
+        async_db_session,
+        [{"job_id": "j1", "job_name": "J1", "started_at": _BASE, "status": "success"}],
+    )
+
+    records, total = await ScheduledTaskManager().list_executions(
+        session=async_db_session
+    )
+
+    assert total == 1
+    assert records[0]["job_id"] == "j1"
+
+
+async def test_stats_for_many_jobs_come_from_one_query(
+    async_db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The clock needs every job's stats at once; one ``IN`` query, on the
+    caller's session, not one query per job."""
+
+    @asynccontextmanager
+    async def _refuse():
+        raise AssertionError("opened a second session")
+        yield
+
+    monkeypatch.setattr(stm, "get_async_session", _refuse)
+    await _seed(
+        async_db_session,
+        [
+            {
+                "job_id": "a",
+                "job_name": "A",
+                "started_at": _BASE,
+                "status": "success",
+                "duration_ms": 1000,
+            },
+            {
+                "job_id": "a",
+                "job_name": "A",
+                "started_at": _BASE + timedelta(hours=1),
+                "status": "failed",
+                "duration_ms": 3000,
+            },
+            {
+                "job_id": "b",
+                "job_name": "B",
+                "started_at": _BASE,
+                "status": "success",
+                "duration_ms": 500,
+            },
+        ],
+    )
+    statements: list[str] = []
+    real_exec = async_db_session.exec
+
+    async def counting_exec(statement, *args, **kwargs):
+        statements.append(str(statement))
+        return await real_exec(statement, *args, **kwargs)
+
+    monkeypatch.setattr(async_db_session, "exec", counting_exec)
+    stats = await ScheduledTaskManager().get_jobs_stats(
+        ["a", "b", "never"], session=async_db_session
+    )
+
+    assert len(statements) == 1
+    assert stats["a"]["avg_duration_ms"] == 2000
+    assert stats["a"]["last_run"]["status"] == "failed"
+    assert stats["b"]["total_runs"] == 1
+    assert stats["never"]["total_runs"] == 0
+
+
+async def test_the_runs_aggregate_counts_by_job_status_and_day(
+    async_db_session: AsyncSession,
+) -> None:
+    """``scheduler.runs``: figures only, over one of the app's windows."""
+    from app.core.time import utcnow
+    from app.services.scheduler import aggregates
+
+    now = utcnow()
+    runs = [
+        ("backup", "success", 0),
+        ("backup", "failed", 0),
+        ("backup", "success", 1),
+        ("sync", "success", 0),
+        ("sync", "success", 30),
+    ]
+    await _seed(
+        async_db_session,
+        [
+            {
+                "job_id": job,
+                "job_name": job,
+                "started_at": now - timedelta(days=ago),
+                "status": status,
+            }
+            for job, status, ago in runs
+        ],
+    )
+    week = await aggregates.runs(async_db_session, 7)
+
+    assert week.total == 4
+    assert week.by_job == {
+        "backup": {"failed": 1, "success": 2},
+        "sync": {"success": 1},
+    }
+    assert sum(week.by_day.values()) == 4 and len(week.by_day) == 2
+    assert (await aggregates.runs(async_db_session, None)).total == 5
