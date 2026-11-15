@@ -5,7 +5,7 @@ Tests the service layer for scheduled task management, including database
 operations and task data transformations.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import pickle
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -90,14 +90,16 @@ class TestScheduledTaskManager:
     async def test_has_persistence_database_error(
         self, manager: ScheduledTaskManager
     ) -> None:
-        """Test has_persistence handles database errors gracefully."""
+        """A database that cannot be read is an error, not a missing table:
+        read as "no persistence", the scheduler's health said its jobs
+        table was not found while it was there (2026-10-24)."""
         with patch(
             "app.services.scheduler.scheduled_task_manager.async_engine"
         ) as mock_engine:
-            mock_engine.begin.side_effect = Exception("Database error")
+            mock_engine.begin.side_effect = OSError("Database error")
 
-            result = await manager.has_persistence()
-            assert result is False
+            with pytest.raises(OSError, match="Database error"):
+                await manager.has_persistence()
 
     @pytest.mark.asyncio
     async def test_list_tasks_no_persistence(
@@ -135,6 +137,9 @@ class TestScheduledTaskManager:
             assert task.job_id == "test_job_id"
             assert task.name == "Test Job"
             assert task.status == "active"  # Has next_run_time
+            # Says its zone: a reader (an agent, a page) never guesses it.
+            assert task.next_run_time is not None
+            assert task.next_run_time.utcoffset() == timedelta(0)
 
     @pytest.mark.asyncio
     async def test_list_tasks_empty_database(
@@ -178,6 +183,31 @@ class TestScheduledTaskManager:
             assert isinstance(task, ScheduledTask)
             assert task.job_id == "test_job_id"
             assert task.name == "Test Job"
+
+    @pytest.mark.asyncio
+    async def test_a_task_carries_the_arguments_its_job_was_stored_with(
+        self, manager: ScheduledTaskManager, mock_job_data: dict[str, Any]
+    ) -> None:
+        """A scheduled enqueue is stored as ``enqueue_task`` plus the task
+        name; running it by hand needs both."""
+        stored = APSchedulerJob(
+            id="test_job_id",
+            next_run_time=None,
+            job_state=pickle.dumps({**mock_job_data, "args": ("a_job", "system")}),
+        )
+        with patch(
+            "app.services.scheduler.scheduled_task_manager.get_async_session"
+        ) as mock_session:
+            mock_session_instance = AsyncMock()
+            mock_session.return_value.__aenter__.return_value = mock_session_instance
+            mock_result = MagicMock()
+            mock_result.first.return_value = stored
+            mock_session_instance.exec.return_value = mock_result
+
+            task = await manager.get_task("test_job_id")
+
+        assert task is not None
+        assert task.args == ["a_job", "system"]
 
     @pytest.mark.asyncio
     async def test_get_task_not_found(self, manager: ScheduledTaskManager) -> None:
@@ -240,69 +270,75 @@ class TestScheduledTaskManager:
             assert stats.active_tasks == 2
             assert stats.paused_tasks == 1
 
-    def test_format_trigger_interval(self, manager: ScheduledTaskManager) -> None:
-        """Test _format_trigger handles interval triggers correctly."""
-        # Mock IntervalTrigger
-        mock_trigger = MagicMock()
-        mock_trigger.__class__.__name__ = "IntervalTrigger"
 
-        # Test seconds
-        mock_trigger.interval.total_seconds.return_value = 30
-        result = manager._format_trigger(mock_trigger)
-        assert result == "Every 30s"
+class TestOneScheduleWording:
+    """Both scheduler backends describe a trigger the same way.
 
-        # Test minutes
-        mock_trigger.interval.total_seconds.return_value = 300  # 5 minutes
-        result = manager._format_trigger(mock_trigger)
-        assert result == "Every 5m"
+    The task manager read stored jobs through one formatter and the health
+    monitor's direct inspection through a second copy; for cron they
+    disagreed ("Cron: hour=2..." against "Cron schedule").
+    """
 
-        # Test hours
-        mock_trigger.interval.total_seconds.return_value = 7200  # 2 hours
-        result = manager._format_trigger(mock_trigger)
-        assert result == "Every 2h"
+    @pytest.mark.parametrize(
+        ("trigger", "words", "kind"),
+        [
+            ({"seconds": 15}, "Every 15s", "interval"),
+            ({"minutes": 5}, "Every 5m", "interval"),
+            ({"hours": 2}, "Every 2h", "interval"),
+            ({"minutes": 90}, "Every 1.5h", "interval"),
+            ({"days": 1}, "Every 1d", "interval"),
+        ],
+    )
+    def test_interval(self, trigger: dict[str, int], words: str, kind: str) -> None:
+        from apscheduler.triggers.interval import IntervalTrigger
 
-    def test_format_trigger_cron(self, manager: ScheduledTaskManager) -> None:
-        """Test _format_trigger handles cron triggers correctly."""
-        mock_trigger = MagicMock()
-        mock_trigger.__class__.__name__ = "CronTrigger"
+        from app.services.scheduler.schedule import describe_trigger, trigger_kind
 
-        # Mock fields
-        mock_field = MagicMock()
-        mock_field.name = "hour"
-        mock_field.__str__ = MagicMock(return_value="2")
-        mock_trigger.fields = [mock_field]
+        assert describe_trigger(IntervalTrigger(**trigger)) == words
+        assert trigger_kind(IntervalTrigger(**trigger)) == kind
 
-        result = manager._format_trigger(mock_trigger)
-        assert result == "Cron: hour=2"
+    def test_cron_names_its_fields(self) -> None:
+        from apscheduler.triggers.cron import CronTrigger
 
-    def test_format_trigger_unknown(self, manager: ScheduledTaskManager) -> None:
-        """Test _format_trigger handles unknown triggers."""
-        result = manager._format_trigger(None)
-        assert result == "Unknown"
+        from app.services.scheduler.schedule import describe_trigger, trigger_kind
 
-        mock_trigger = MagicMock()
-        mock_trigger.__class__.__name__ = "UnknownTrigger"
-        result = manager._format_trigger(mock_trigger)
-        assert result == "Unknown"
+        trigger = CronTrigger(hour=2, minute=30)
+        assert describe_trigger(trigger).startswith("Cron: hour=2, minute=30")
+        assert trigger_kind(trigger) == "cron"
 
-    def test_get_trigger_type(self, manager: ScheduledTaskManager) -> None:
-        """Test _get_trigger_type extracts trigger types correctly."""
-        # Test interval
-        mock_trigger = MagicMock()
-        mock_trigger.__class__.__name__ = "IntervalTrigger"
-        result = manager._get_trigger_type(mock_trigger)
-        assert result == "interval"
+    def test_a_one_off_date(self) -> None:
+        from datetime import datetime
 
-        # Test cron
-        mock_trigger.__class__.__name__ = "CronTrigger"
-        result = manager._get_trigger_type(mock_trigger)
-        assert result == "cron"
+        from apscheduler.triggers.date import DateTrigger
 
-        # Test date
-        mock_trigger.__class__.__name__ = "DateTrigger"
-        result = manager._get_trigger_type(mock_trigger)
-        assert result == "date"
+        from app.services.scheduler.schedule import describe_trigger, trigger_kind
 
-        # Test unknown
-        result = manager._get_trigger_type(None)
-        assert result == "unknown"
+        trigger = DateTrigger(run_date=datetime(2026, 10, 1, 9, 5, 0))
+        assert describe_trigger(trigger) == "Once at 2026-10-01 09:05:00"
+        assert trigger_kind(trigger) == "date"
+
+    def test_nothing_to_describe(self) -> None:
+        from app.services.scheduler.schedule import describe_trigger, trigger_kind
+
+        assert describe_trigger(None) == "Unknown"
+        assert trigger_kind(None) == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_direct_inspection_uses_the_same_words(self) -> None:
+        """The health monitor's direct-inspection fallback (used when the job
+        store cannot be read) is where the second copy lived."""
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+        from app.services.scheduler.task_monitor import TaskHealthMonitor
+
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(print, "cron", hour=2, minute=30, id="nightly")
+        scheduler.start(paused=True)
+        try:
+            metadata = await TaskHealthMonitor()._get_direct_scheduler_metadata(
+                scheduler
+            )
+        finally:
+            scheduler.shutdown(wait=False)
+
+        assert metadata.upcoming_tasks[0].schedule.startswith("Cron: hour=2, minute=30")

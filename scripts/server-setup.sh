@@ -55,14 +55,6 @@ install_docker_fedora() {
     dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
-install_docker_rhel() {
-    echo "Installing Docker on RHEL/Rocky/AlmaLinux/CentOS..."
-
-    dnf -y install dnf-plugins-core
-    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-}
-
 # Install Docker if not present
 if ! command -v docker &> /dev/null; then
     case $OS in
@@ -71,9 +63,6 @@ if ! command -v docker &> /dev/null; then
             ;;
         fedora)
             install_docker_fedora
-            ;;
-        rocky|almalinux|centos|rhel)
-            install_docker_rhel
             ;;
         *)
             echo "ERROR: Unsupported OS: $OS"
@@ -96,7 +85,7 @@ case $OS in
     ubuntu|debian)
         apt-get install -y --no-install-recommends build-essential
         ;;
-    fedora|rocky|almalinux|centos|rhel)
+    fedora)
         dnf install -y gcc gcc-c++ make
         ;;
 esac
@@ -215,22 +204,32 @@ if ! sysctl net.ipv4.tcp_congestion_control 2>/dev/null | grep -q bbr; then
     sysctl -p 2>/dev/null || true
 fi
 
+# Swap on small boxes. The image builds here beside the running stack; under
+# 4 GB of RAM that can exhaust memory, and without swap the OOM killer has
+# nothing to fall back on. Sized to RAM, capped at 2 GB; skipped when the box
+# already has swap of its own.
+SWAPFILE=/swapfile
+MEM_MB=$(awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo)
+if [ "$MEM_MB" -lt 4096 ]; then
+    if [ ! -f "$SWAPFILE" ] && [ -z "$(swapon --show --noheadings)" ]; then
+        SWAP_MB=$(( MEM_MB < 2048 ? MEM_MB : 2048 ))
+        echo "Creating a ${SWAP_MB} MB swapfile (${MEM_MB} MB RAM)..."
+        fallocate -l "${SWAP_MB}M" "$SWAPFILE" || dd if=/dev/zero of="$SWAPFILE" bs=1M count="$SWAP_MB"
+        chmod 600 "$SWAPFILE"
+        mkswap "$SWAPFILE"
+    fi
+    if [ -f "$SWAPFILE" ]; then
+        swapon --show=NAME --noheadings | grep -qx "$SWAPFILE" || swapon "$SWAPFILE"
+        grep -q "^$SWAPFILE " /etc/fstab || echo "$SWAPFILE none swap sw 0 0" >> /etc/fstab
+    fi
+    # Swap as a last resort, not a place to park the app's working set.
+    echo "vm.swappiness=10" > /etc/sysctl.d/99-swappiness.conf
+    sysctl -q -p /etc/sysctl.d/99-swappiness.conf
+fi
+
 #=============================================================================
 # VERIFICATION
 #=============================================================================
 
-echo ""
-echo "=== Setup Complete ==="
-echo ""
-echo "Verifying installation:"
-echo "  Docker: $(docker --version)"
-echo "  Docker Compose: $(docker compose version)"
-echo "  uv: $(uv --version)"
-echo "  App Directory: $APP_DIR"
-echo ""
-echo "Next steps:"
-echo "  1. On your local machine, run: make deploy-context"
-echo "  2. Create .env.deploy with your production settings"
-echo "  3. Run: make deploy"
 echo ""
 

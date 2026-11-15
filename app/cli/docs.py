@@ -5,32 +5,54 @@ Displays documentation URLs for installed components and services.
 
 from pathlib import Path
 
-from rich.console import Console
 from rich.panel import Panel
 import typer
 
-app = typer.Typer(
-    name="docs", help="Show documentation links", invoke_without_command=True
-)
-console = Console()
+from app.cli import theme
+from app.i18n import lazy_t, t
+
+app = typer.Typer(name="docs", help=lazy_t("docs.help"), invoke_without_command=True)
+console = theme.console()
 
 # Base URL for Aegis Stack documentation
-AEGIS_BASE = "https://lbedner.github.io/aegis-stack"
+AEGIS_BASE = "https://docs.aegis-stack.io"
+
+
+def _worker_docs() -> tuple[str, str | None, str]:
+    """Worker's upstream docs link depends on the configured backend.
+
+    Backend files are renamed to canonical names at generation time, so detect
+    the backend from the installed package instead.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("taskiq") is not None:
+        return ("/components/worker/", "https://taskiq-python.github.io/", "TaskIQ")
+    if importlib.util.find_spec("dramatiq") is not None:
+        return ("/components/worker/", "https://dramatiq.io/", "Dramatiq")
+    return ("/components/worker/", "https://arq-docs.helpmanual.io/", "arq")
+
 
 # Documentation config: name -> (aegis_path, external_url, description)
 # Components
 COMPONENT_DOCS: dict[str, tuple[str, str | None, str]] = {
-    "backend": ("/components/webserver/", "https://fastapi.tiangolo.com/", "FastAPI"),
+    "backend": ("/components/backend/", "https://fastapi.tiangolo.com/", "FastAPI"),
     "frontend": ("/components/frontend/", "https://flet.dev/", "Flet"),
     "scheduler": (
         "/components/scheduler/",
         "https://apscheduler.readthedocs.io/",
         "APScheduler",
     ),
-    "worker": (
-        "/components/worker/",
-        "https://arq-docs.helpmanual.io/",
-        "arq",
+    "worker": _worker_docs(),
+    "ingress": (
+        "/components/ingress/",
+        "https://doc.traefik.io/traefik/",
+        "Traefik",
+    ),
+    "observability": (
+        "/components/observability/",
+        "https://logfire.pydantic.dev/docs/",
+        "Logfire",
     ),
     "database": (
         "/components/database/",
@@ -44,6 +66,9 @@ SERVICE_DOCS: dict[str, tuple[str, str | None, str]] = {
     "auth": ("/services/auth/", None, "Authentication"),
     "ai": ("/services/ai/", None, "AI Service"),
     "comms": ("/services/comms/", None, "Communications"),
+    "insights": ("/services/insights/", None, "Insights"),
+    "payment": ("/services/payment/", None, "Payments"),
+    "blog": ("/services/blog/", None, "Blog"),
 }
 
 
@@ -69,6 +94,14 @@ def _detect_installed() -> tuple[list[str], list[str]]:
     if (components_dir / "worker").exists():
         components.append("worker")
 
+    # ingress / observability have no package of their own; detect them via
+    # their dashboard cards.
+    cards_dir = components_dir / "frontend" / "dashboard" / "cards"
+    if (cards_dir / "ingress_card.py").exists():
+        components.append("ingress")
+    if (cards_dir / "observability_card.py").exists():
+        components.append("observability")
+
     # Check if database is present (models directory with actual models)
     models_dir = app_path / "models"
     if models_dir.exists():
@@ -77,16 +110,12 @@ def _detect_installed() -> tuple[list[str], list[str]]:
         if model_files:
             components.append("database")
 
-    # Check services
+    # Check services (any service directory we have documentation for)
     services: list[str] = []
     services_dir = app_path / "services"
-
-    if (services_dir / "auth").exists():
-        services.append("auth")
-    if (services_dir / "ai").exists():
-        services.append("ai")
-    if (services_dir / "comms").exists():
-        services.append("comms")
+    for name in SERVICE_DOCS:
+        if (services_dir / name).exists():
+            services.append(name)
 
     return components, services
 
@@ -107,39 +136,40 @@ def _format_docs_section(
         List of formatted lines.
     """
     lines: list[str] = []
-    lines.append(f"[bold cyan]{title}:[/bold cyan]")
+    lines.append(f"[bold]{title}:[/bold]")
 
     for item in items:
         if item not in docs_config:
             continue
 
         aegis_path, external_url, description = docs_config[item]
-        lines.append(f"  [bold]{item}[/bold] ({description})")
-        lines.append(f"    Guide: {AEGIS_BASE}{aegis_path}")
+        lines.append(f"  [{theme.ACCENT}]{item}[/{theme.ACCENT}] ({description})")
+        lines.append(f"    {t('docs.guide_label')} {AEGIS_BASE}{aegis_path}")
         if external_url:
-            lines.append(f"    Docs:  {external_url}")
+            lines.append(f"    {t('docs.docs_label')}  {external_url}")
         lines.append("")
 
     return lines
 
 
-@app.callback()
+@app.callback(help=lazy_t("docs.help_show"))
 def show() -> None:
-    """Display documentation links for installed components and services."""
     components, services = _detect_installed()
 
     lines: list[str] = []
 
     # Components section
     if components:
-        lines.extend(_format_docs_section("Components", components, COMPONENT_DOCS))
+        lines.extend(
+            _format_docs_section(t("docs.components"), components, COMPONENT_DOCS)
+        )
 
     # Services section
     if services:
-        lines.extend(_format_docs_section("Services", services, SERVICE_DOCS))
+        lines.extend(_format_docs_section(t("docs.services"), services, SERVICE_DOCS))
 
     if not lines:
-        console.print("[yellow]No components or services detected.[/yellow]")
+        console.print(f"[{theme.WARNING}]{t('docs.no_detected')}[/{theme.WARNING}]")
         return
 
     # Get project name from directory
@@ -147,8 +177,8 @@ def show() -> None:
 
     panel = Panel(
         "\n".join(lines).rstrip(),
-        title=f"[bold]{project_name} Documentation[/bold]",
-        border_style="cyan",
+        title=f"[bold]{project_name} {t('docs.documentation')}[/bold]",
+        border_style="dim",
     )
     console.print(panel)
 

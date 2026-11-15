@@ -8,19 +8,22 @@
 
 services:
   webserver:
-    volumes: []  # Remove dev code mount - code is baked into the image
+    volumes:
+      # The code mount is gone (baked into the image); stored objects are
+      # not code and must outlive a redeploy.
+      - storage-data:/data/storage
     labels:
       # Public router (HTTPS)
       - "traefik.http.routers.webserver.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.webserver.entrypoints=websecure"
       - "traefik.http.routers.webserver.tls.certresolver=letsencrypt"
       # Admin paths - IP restricted
-      - "traefik.http.routers.webserver-admin.rule=Host(`${DOMAIN}`) && (PathPrefix(`/dashboard`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`))"
+      - "traefik.http.routers.webserver-admin.rule=Host(`${DOMAIN}`) && (PathPrefix(`/dashboard`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`) || PathPrefix(`/openapi.json`) || PathPrefix(`/health/detailed`) || PathPrefix(`/health/dashboard`))"
       - "traefik.http.routers.webserver-admin.entrypoints=websecure"
       - "traefik.http.routers.webserver-admin.tls.certresolver=letsencrypt"
       - "traefik.http.routers.webserver-admin.service=webserver"
       - "traefik.http.routers.webserver-admin.middlewares=admin-ipallowlist"
-      - "traefik.http.middlewares.admin-ipallowlist.ipallowlist.sourcerange=${ADMIN_IP_ALLOWLIST:-0.0.0.0/0}"
+      - "traefik.http.middlewares.admin-ipallowlist.ipallowlist.sourcerange=${ADMIN_IP_ALLOWLIST:-127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
     profiles:
       - dev
       - prod
@@ -32,8 +35,21 @@ services:
       - prod
 
 
+  postgres:
+    ports: []  # No direct DB access in production
+    profiles:
+      - dev
+      - prod
+
   traefik:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    entrypoint:
+      - sh
+      - -c
+      - '[ -n "$$ACME_EMAIL" ] || { echo "Set ACME_EMAIL in .env.deploy: the certificate needs it." >&2; exit 1; }; sed "s|__ACME_EMAIL__|$$ACME_EMAIL|" /etc/traefik/traefik.yml > /tmp/traefik.yml && exec traefik --configFile=/tmp/traefik.yml'
       # No 8080 dashboard port exposed in production
+

@@ -5,7 +5,7 @@ import pickle
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Float, LargeBinary, String
+from sqlalchemy import Column, DateTime, Float, Index, LargeBinary, String, Text
 from sqlmodel import Field as SQLField
 from sqlmodel import SQLModel
 
@@ -43,7 +43,49 @@ class APSchedulerJob(SQLModel, table=True):
             This is safe because we're reading APScheduler's own data format.
             APScheduler writes pickled job data to this table - we're just reading it.
         """
-        return pickle.loads(self.job_state)
+        return pickle.loads(self.job_state)  # type: ignore[no-any-return]
+
+
+class JobExecution(SQLModel, table=True):
+    """One row per scheduled-job run (success, failure, or in-flight).
+
+    Written by the scheduler's APScheduler event listeners; read by the
+    backend API for the dashboard History view. ``job_id`` is APScheduler's
+    job id (not an FK) and ``job_name`` is denormalized so history survives
+    a job being removed from the schedule.
+
+    Lives in a dedicated ``scheduler`` Postgres schema, kept apart from
+    service tables. SQLite has no schemas, so there it lands in the single
+    database file unqualified.
+    """
+
+    __tablename__ = "job_execution"
+    __table_args__ = (
+        Index("ix_job_execution_job_started", "job_id", "started_at"),
+        {"schema": "scheduler"},
+    )
+
+    id: int | None = SQLField(default=None, primary_key=True)
+    job_id: str = SQLField(sa_column=Column(String(191), index=True, nullable=False))
+    job_name: str = SQLField(default="", sa_column=Column(String(255), nullable=False))
+    scheduled_run_time: datetime | None = SQLField(default=None)
+    started_at: datetime = SQLField(
+        sa_column=Column(DateTime, index=True, nullable=False)
+    )
+    finished_at: datetime | None = SQLField(default=None)
+    duration_ms: float | None = SQLField(default=None)
+    # running | success | failed | missed
+    status: str = SQLField(
+        default="running", sa_column=Column(String(16), index=True, nullable=False)
+    )
+    error_message: str | None = SQLField(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    traceback: str | None = SQLField(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    # What the run logged (``run_log``), copied here when it finished.
+    log: str | None = SQLField(default=None, sa_column=Column(Text, nullable=True))
 
 
 # ============================================================================
@@ -60,6 +102,9 @@ class ScheduledTask(BaseModel):
     job_id: str = Field(..., description="Unique task identifier")
     name: str = Field(..., description="Human-readable task name")
     function: str = Field(..., description="Function reference (module:function)")
+    args: list[Any] = Field(
+        default_factory=list, description="Arguments the job is called with"
+    )
     schedule: str = Field(..., description="Human-readable schedule (e.g., 'Every 5m')")
     trigger_type: Literal["interval", "cron", "date", "unknown"] = Field(
         ..., description="Type of scheduling trigger"
@@ -108,6 +153,6 @@ class SchedulerHealthMetadata(BaseModel):
     active_tasks: int = Field(0, description="Number of active tasks")
     paused_tasks: int = Field(0, description="Number of paused tasks")
     upcoming_tasks: list[UpcomingTask] = Field(
-        default_factory=list, description="List of upcoming tasks"
+        default_factory=list, description="List of upcoming tasks (max 5)"
     )
     scheduler_state: str = Field("unknown", description="Scheduler state description")

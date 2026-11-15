@@ -1,4 +1,3 @@
-
 """
 Tests for worker event streaming infrastructure.
 
@@ -6,12 +5,16 @@ Tests publish_event, EventPublishMiddleware (TaskIQ only), and
 pure helper functions _format_eta and _compute_queue_values.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.components.worker.events import WORKER_EVENT_STREAM, publish_event
-
+from app.components.worker.events import (
+    WORKER_EVENT_STREAM,
+    WORKER_EVENT_STREAM_MAXLEN,
+    publish_event,
+)
 
 # ---------------------------------------------------------------------------
 # Group 1: publish_event()
@@ -31,6 +34,18 @@ async def test_publish_event_calls_xadd() -> None:
     assert fields["type"] == "job.started"
     assert fields["queue"] == "system"
     assert "timestamp" in fields
+
+
+@pytest.mark.asyncio
+async def test_publish_event_caps_the_stream() -> None:
+    """The stream is trimmed as it grows, so it cannot fill Redis: the SSE
+    feed tails new entries only, and nothing reads history past the cap."""
+    redis = AsyncMock()
+    await publish_event(redis, "job.started", "system")
+
+    kwargs = redis.xadd.call_args.kwargs
+    assert kwargs["maxlen"] == WORKER_EVENT_STREAM_MAXLEN
+    assert kwargs["approximate"] is True
 
 
 @pytest.mark.asyncio
@@ -57,13 +72,189 @@ async def test_publish_event_swallows_redis_errors() -> None:
     await publish_event(redis, "job.started", "system")
 
 
+# ---------------------------------------------------------------------------
+# Group 2: EventPublishMiddleware (TaskIQ only)
+# ---------------------------------------------------------------------------
+
+from app.components.worker.middleware import EventPublishMiddleware  # noqa: E402
+
+
+def test_set_queue_name_fluent() -> None:
+    """set_queue_name should return self for fluent chaining."""
+    mw = EventPublishMiddleware()
+    result = mw.set_queue_name("system")
+    assert result is mw
+    assert mw._queue_name == "system"
+
+
+@pytest.mark.asyncio
+async def test_pre_execute_publishes_job_started() -> None:
+    """pre_execute should publish a job.started event."""
+    mw = EventPublishMiddleware()
+    mw.set_queue_name("load_test")
+    mw._redis = AsyncMock()
+
+    message = MagicMock()
+    message.task_id = "task-42"
+    message.task_name = "cpu_intensive_task"
+
+    result = await mw.pre_execute(message)
+
+    assert result is message
+    # Verify publish_event was called via xadd on the mocked redis
+    mw._redis.xadd.assert_called_once()
+    fields = mw._redis.xadd.call_args[0][1]
+    assert fields["type"] == "job.started"
+    assert fields["queue"] == "load_test"
+
+
+@pytest.mark.asyncio
+async def test_a_task_runs_as_a_run_of_its_own_id() -> None:
+    """What the task logs lands under its id (``run_log``): bound before
+    it runs, unbound after, whether or not Redis events are on."""
+    import structlog
+
+    mw = EventPublishMiddleware().set_queue_name("system")
+    message = MagicMock()
+    message.task_id = "task-7"
+    message.task_name = "cleanup"
+
+    await mw.pre_execute(message)
+    assert structlog.contextvars.get_contextvars()["run_id"] == "task-7"
+    result = MagicMock()
+    result.is_err = False
+    await mw.post_execute(message, result)
+    assert "run_id" not in structlog.contextvars.get_contextvars()
+
+
+@pytest.mark.asyncio
+async def test_a_running_job_holds_its_claim_from_start_to_finish() -> None:
+    """Only a job that really runs keeps its claim fresh: one the receiver
+    drops (an unknown task) never starts, so a live worker still lets it go."""
+    mw = EventPublishMiddleware().set_queue_name("system")
+    mw._redis = AsyncMock()
+    mw.broker = MagicMock()
+    message = MagicMock()
+    message.task_id = "task-9"
+    message.task_name = "cleanup"
+
+    await mw.pre_execute(message)
+    mw.broker.keep_claim.assert_called_once_with("task-9")
+    result = MagicMock()
+    result.is_err = False
+    await mw.post_execute(message, result)
+    mw.broker.release_claim.assert_called_once_with("task-9")
+
+
+@pytest.mark.asyncio
+async def test_post_execute_completed() -> None:
+    """post_execute should publish job.completed when result is not an error."""
+    mw = EventPublishMiddleware()
+    mw.set_queue_name("system")
+    mw._redis = AsyncMock()
+
+    message = MagicMock()
+    message.task_id = "task-1"
+    message.task_name = "cleanup"
+
+    result = MagicMock()
+    result.is_err = False
+
+    await mw.post_execute(message, result)
+
+    fields = mw._redis.xadd.call_args[0][1]
+    assert fields["type"] == "job.completed"
+
+
+@pytest.mark.asyncio
+async def test_post_execute_failed() -> None:
+    """post_execute should publish job.failed when result is an error."""
+    mw = EventPublishMiddleware()
+    mw.set_queue_name("system")
+    mw._redis = AsyncMock()
+
+    message = MagicMock()
+    message.task_id = "task-2"
+    message.task_name = "flaky_task"
+
+    result = MagicMock()
+    result.is_err = True
+
+    await mw.post_execute(message, result)
+
+    fields = mw._redis.xadd.call_args[0][1]
+    assert fields["type"] == "job.failed"
+
+
+@pytest.mark.asyncio
+async def test_history_files_each_job_under_its_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job spawned with ``.kiq()`` has no enqueue record, so the middleware
+    creates it; without a queue it lands in no queue's history, and that
+    queue's counts (busy, completed) never see it."""
+    from app.components.worker import task_history
+
+    started, finished = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(task_history, "record_task_started", started)
+    monkeypatch.setattr(task_history, "record_task_finished", finished)
+    mw = EventPublishMiddleware().set_queue_name("load_test")
+    mw._redis = AsyncMock()
+    message = MagicMock()
+    message.task_id = "task-9"
+    message.task_name = "app.components.worker.queues.load_test:cpu_intensive_task"
+    result = MagicMock()
+    result.is_err = False
+
+    await mw.pre_execute(message)
+    await mw.post_execute(message, result)
+
+    for recorded in (started, finished):
+        assert recorded.call_args.kwargs["queue_name"] == "load_test"
+        assert recorded.call_args.kwargs["task_name"] == "cpu_intensive_task"
+
+
+@pytest.mark.asyncio
+async def test_the_worker_reports_what_it_runs_with(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Startup reports the flags taskiq really got; shutdown clears it."""
+    from app.components.worker import middleware, runtime
+
+    started: dict[str, Any] = {}
+    stopped: list[str] = []
+
+    def start(redis: Any, fields: dict[str, Any]) -> None:
+        started.update(fields)
+
+    async def stop(redis: Any, task: Any, worker: str) -> None:
+        stopped.append(worker)
+
+    monkeypatch.setattr(middleware.aioredis, "from_url", lambda *_a, **_k: AsyncMock())
+    monkeypatch.setattr(runtime, "start_reporting", start)
+    monkeypatch.setattr(runtime, "stop_reporting", stop)
+    monkeypatch.setattr(
+        middleware.sys,
+        "argv",
+        ["taskiq", "worker", "q:broker", "--workers", "1", "--max-async-tasks", "50"],
+    )
+    mw = EventPublishMiddleware().set_queue_name("load_test")
+
+    await mw.startup()
+    assert started["engine"] == "taskiq" and started["queue"] == "load_test"
+    assert started["processes"] == 1 and started["concurrency"] == 50
+
+    await mw.shutdown()
+    assert stopped == [started["worker"]]
 
 
 # ---------------------------------------------------------------------------
 # Group 3: _format_eta()
 # ---------------------------------------------------------------------------
 
-from app.components.frontend.dashboard.modals.worker_modal import _format_eta  # noqa: E402
+from app.components.frontend.dashboard.modals.worker_modal import (  # noqa: E402
+    _format_eta,
+)
 
 
 def test_format_eta_subsecond() -> None:
@@ -93,6 +284,7 @@ def test_format_eta_hours() -> None:
 from app.components.frontend.dashboard.modals.worker_modal import (  # noqa: E402
     _compute_queue_values,
 )
+from app.components.frontend.theme import AegisTheme as Theme  # noqa: E402
 from app.services.system.models import ComponentStatus  # noqa: E402
 
 
@@ -126,23 +318,21 @@ def test_queue_values_online() -> None:
     """Alive worker with no active jobs should show Online / green."""
     vals = _compute_queue_values(_make_queue_status(worker_alive=True))
     assert vals["status_text"] == "Online"
-    assert vals["status_icon"] == "🟢"
+    assert vals["status_color"] == Theme.Colors.SUCCESS
 
 
 def test_queue_values_active() -> None:
-    """Alive worker with ongoing jobs should show Active / blue."""
-    vals = _compute_queue_values(
-        _make_queue_status(worker_alive=True, jobs_ongoing=3)
-    )
+    """Alive worker with ongoing jobs should show Active / amber."""
+    vals = _compute_queue_values(_make_queue_status(worker_alive=True, jobs_ongoing=3))
     assert vals["status_text"] == "Active"
-    assert vals["status_icon"] == "🔵"
+    assert vals["status_color"] == Theme.Colors.WARNING
 
 
 def test_queue_values_offline() -> None:
     """Dead worker should show Offline / red."""
     vals = _compute_queue_values(_make_queue_status(worker_alive=False))
     assert vals["status_text"] == "Offline"
-    assert vals["status_icon"] == "🔴"
+    assert vals["status_color"] == Theme.Colors.ERROR
 
 
 def test_queue_values_degraded() -> None:
@@ -150,9 +340,9 @@ def test_queue_values_degraded() -> None:
     vals = _compute_queue_values(
         _make_queue_status(
             worker_alive=True,
-            jobs_completed=90,
-            jobs_failed=10,
-            failure_rate_percent=10.0,
+            jobs_completed=85,
+            jobs_failed=15,
+            failure_rate_percent=15.0,
         )
     )
     assert vals["status_text"] == "Degraded"
@@ -163,9 +353,138 @@ def test_queue_values_failing() -> None:
     vals = _compute_queue_values(
         _make_queue_status(
             worker_alive=True,
-            jobs_completed=75,
-            jobs_failed=25,
-            failure_rate_percent=25.0,
+            jobs_completed=70,
+            jobs_failed=30,
+            failure_rate_percent=30.0,
         )
     )
     assert vals["status_text"] == "Failing"
+
+
+# ---------------------------------------------------------------------------
+# Group 5: the worker modal's live feed runs only while the modal is open
+# ---------------------------------------------------------------------------
+#
+# The SSE listener and its 10 Hz flush loop only ever serve the worker
+# modal, yet every tab started both at page load and discarded every event
+# until someone opened the modal. The stream sends an absolute baseline on
+# each connect, so connecting on open loses nothing.
+
+import asyncio  # noqa: E402
+
+from app.components.frontend.overseer import loops as overseer_loops  # noqa: E402
+
+
+@pytest.fixture
+def feed(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+    """Stand-ins for the two loops: count starts and cancellations."""
+    calls = {"listen": 0, "flush": 0, "cancelled": 0}
+
+    def _loop(name: str) -> Any:
+        async def run(*_args: Any) -> None:
+            calls[name] += 1
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                calls["cancelled"] += 1
+                raise
+
+        return run
+
+    monkeypatch.setattr(overseer_loops, "listen_for_worker_events", _loop("listen"))
+    monkeypatch.setattr(overseer_loops, "flush_worker_modal", _loop("flush"))
+    return calls
+
+
+def _stream() -> Any:
+    """A stream on a page that runs tasks the way Flet's does: handed to the
+    page's loop from whatever thread asks."""
+    loop = asyncio.get_running_loop()
+    page = MagicMock()
+    page.session_id = "tab-1"
+    page.run_task = lambda fn, *args: asyncio.run_coroutine_threadsafe(fn(*args), loop)
+    return overseer_loops.WorkerStream(MagicMock(), page, MagicMock())
+
+
+async def _settle() -> None:
+    """Let work handed over from another thread reach the loop and run."""
+    for _ in range(5):
+        await asyncio.sleep(0)
+
+
+async def test_the_feed_does_not_run_until_the_modal_opens(
+    feed: dict[str, int],
+) -> None:
+    stream = _stream()
+    await _settle()
+
+    assert not stream.running
+    assert feed["listen"] == feed["flush"] == 0
+
+
+async def test_opening_starts_one_listener_and_one_flush(
+    feed: dict[str, int],
+) -> None:
+    stream = _stream()
+    stream.start()
+    stream.start()
+    await _settle()
+
+    assert stream.running
+    assert feed["listen"] == feed["flush"] == 1
+    stream.stop()
+
+
+async def test_closing_ends_both_and_reopening_starts_again(
+    feed: dict[str, int],
+) -> None:
+    stream = _stream()
+    stream.start()
+    await _settle()
+    stream.stop()
+    await _settle()
+
+    assert not stream.running
+    assert feed["cancelled"] == 2
+
+    stream.start()
+    await _settle()
+    assert feed["listen"] == feed["flush"] == 2
+    stream.stop()
+
+
+async def test_a_click_handler_thread_can_open_it(feed: dict[str, int]) -> None:
+    """Flet runs sync click handlers in a thread pool, where there is no
+    running loop: ``start`` from there must still start both loops."""
+    stream = _stream()
+    await asyncio.to_thread(stream.start)
+    await _settle()
+
+    assert stream.running
+    assert feed["listen"] == feed["flush"] == 1
+    stream.stop()
+
+
+def test_the_dialog_drives_the_feed() -> None:
+    """``show`` opens it, and every way of closing goes through ``hide``."""
+    import flet as ft
+
+    from app.components.frontend.dashboard.modals.worker_modal.dialog import (
+        WorkerDetailDialog,
+    )
+
+    calls: list[str] = []
+    page = MagicMock(spec=ft.Page)
+    page.data = {
+        "worker_stream": MagicMock(
+            start=lambda: calls.append("start"), stop=lambda: calls.append("stop")
+        )
+    }
+    dialog = WorkerDetailDialog(
+        ComponentStatus(name="worker", status="healthy", message="ok"), page
+    )
+
+    dialog.show()
+    dialog.hide()
+
+    assert calls == ["start", "stop"]

@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run linting
+      run: uv run ruff check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run type checking
+      run: uv run ty check
+
+  # The suite in two parallel jobs (``--shard``, tests/_shard.py), each
+  # running a worker per CPU.
+  test-shard:
+    name: test ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run tests (fails on new N+1 query sites too)
+      run: uv run pytest --queryspy-strict --queryspy-baseline .queryspy-baseline.json --shard ${{ matrix.shard }}/2
+
+  # The required check stays ``test``: it passes only when every shard did,
+  # so splitting the suite changes nothing branch protection blocks on.
+  test:
+    if: always()
+    needs: [test-shard]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Every shard passed
+      run: test "${{ needs.test-shard.result }}" = success
+
+  # Illiana's review of a pull request: docs/services/ai/illiana.md
+  # ("Pull Request Review"). Nothing here fails a repository that has not
+  # set ILLIANA_BLOCKS.
+  illiana:
+    name: Illiana
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One review at a time per pull request, so a push never posts a second
+    # comment beside the first.
+    concurrency:
+      group: illiana-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write  # her comment
+      issues: write
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Set up Python
+      run: uv python install 3.13
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Known debt, from the base branch
+      # Its code, checked with this branch's environment. A base too old to
+      # check keeps the baseline this branch carries.
+      run: |
+        git worktree add "$RUNNER_TEMP/base" "origin/${{ github.base_ref }}"
+        if (cd "$RUNNER_TEMP/base" && "$GITHUB_WORKSPACE/.venv/bin/python" -m app.cli.main patterns check --update); then
+          cp "$RUNNER_TEMP/base/.patterns-baseline.json" .
+        fi
+
+    - name: New findings, annotated
+      id: findings
+      # Her verdict is held to the last step, so her comment still posts.
+      run: |
+        set +e
+        git diff --name-only "origin/${{ github.base_ref }}...HEAD" > "$RUNNER_TEMP/changed"
+        mapfile -t changed < "$RUNNER_TEMP/changed"
+        uv run python -m app.cli.main patterns check --strict "${changed[@]}"
+        echo "code=$?" >> "$GITHUB_OUTPUT"
+
+    - name: Illiana's verdict
+      if: vars.ILLIANA_BLOCKS == 'true'
+      run: exit "${{ steps.findings.outputs.code }}"

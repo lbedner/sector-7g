@@ -37,11 +37,17 @@ providers:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
     network: sector-7g_default
+    # The provider watches the whole Docker daemon, and every generated stack
+    # names its router and service "webserver": without this, another stack
+    # running on the same machine joins this one's load balancer.
+    constraints: "Label(`com.docker.compose.project`, `sector-7g`)"
 
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: admin@sector-7g.dev
+      # Filled in from ACME_EMAIL (.env.deploy, or what the deploy stamps)
+      # when the prod container starts: no email in a committed file.
+      email: __ACME_EMAIL__
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web

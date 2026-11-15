@@ -1,0 +1,116 @@
+/* Custom styles layered on top of Tailwind + DaisyUI.
+ *
+ * Served unhashed in dev (one-hour browser cache) and fingerprinted in
+ * production, where the asset build rewrites it into static/dist/ and
+ * static() points templates at the hashed URL.
+ */
+
+/* Alpine x-cloak — hide elements until Alpine initializes them.
+ * Load-bearing: without it, every x-show="false" element flashes visible
+ * on first paint and on each htmx swap before Alpine re-binds. */
+[x-cloak] {
+  display: none !important;
+}
+
+:root {
+  /* Native accent for checkboxes, radios and range inputs. The theme
+     blocks in input.css own color-scheme, so native controls follow the
+     active theme. */
+  accent-color: oklch(var(--p));
+}
+
+/* Native progress retains its semantics; these rules make its fill follow
+   the active Aegis theme in Chromium, Safari, and Firefox. */
+.aegis-progress {
+  appearance: none;
+  border: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: oklch(var(--b3));
+}
+.aegis-progress::-webkit-progress-bar {
+  background: oklch(var(--b3));
+  border-radius: 9999px;
+}
+.aegis-progress::-webkit-progress-value {
+  background: currentColor;
+  border-radius: 9999px;
+}
+.aegis-progress::-moz-progress-bar {
+  background: currentColor;
+  border-radius: 9999px;
+}
+/* Without a value (progress(none)): a band sweeping the track, still
+   where motion is reduced. */
+.aegis-progress:indeterminate {
+  background: linear-gradient(
+      90deg,
+      transparent 0 35%,
+      currentColor 45% 55%,
+      transparent 65% 100%
+    )
+    oklch(var(--b3));
+  background-size: 300% 100%;
+  animation: aegis-sweep 1.4s ease-in-out infinite;
+}
+.aegis-progress:indeterminate::-webkit-progress-bar {
+  background: transparent;
+}
+.aegis-progress:indeterminate::-moz-progress-bar {
+  background: transparent;
+}
+@keyframes aegis-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aegis-progress:indeterminate {
+    animation: none;
+    background-position: 50% 0;
+  }
+}
+
+/* The bar along the top while a page or an htmx request loads (app.js sets
+   is-loading). It creeps towards the end and holds there until the page
+   arrives; the delay keeps a quick request from flashing it. */
+.aegis-page-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  height: 2px;
+  width: 0;
+  opacity: 0;
+  background: oklch(var(--p));
+  pointer-events: none;
+}
+.aegis-page-progress.is-loading {
+  width: 90%;
+  opacity: 1;
+  transition:
+    width 8s cubic-bezier(0.1, 0.7, 0.2, 1) 150ms,
+    opacity 0s linear 150ms;
+}
+
+/* The drawer (macros/layout.html) slides in from the right when it opens. */
+.aegis-drawer[open] {
+  animation: aegis-drawer-in 180ms ease-out;
+}
+
+@keyframes aegis-drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+/* A drawer whose content asks for room (``data-drawer-wide``: a meeting
+   or a series, read at length) opens wider, the list still beside it. */
+@media (min-width: 640px) {
+  .aegis-drawer:has([data-drawer-wide]) {
+    width: min(64rem, 90vw);
+  }
+}

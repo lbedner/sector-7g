@@ -1,111 +1,115 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents working in sector-7g, an application
+generated with Aegis Stack. This file loads every session; task procedures live
+in `.claude/skills/` and load on demand.
 
-## Project Overview
+## What this project is
 
-sector-7g is a production-ready async Python 3.13 application built with the Aegis Stack template. It runs as a Docker Compose multi-service architecture with FastAPI backend, Flet frontend dashboard, arq workers (Redis-backed), APScheduler, PostgreSQL, and Traefik reverse proxy.
+sector-7g (`sector-7g`) is an Aegis Stack project: an async
+Python application with a FastAPI backend, a full test suite, and Docker
+containerization. Change the stack with the `aegis` CLI, never by hand.
 
-## Common Commands
+Selected capabilities:
 
-### Development Workflow
-```bash
-make serve          # Build and start all services (Docker)
-make rebuild        # Rebuild image then serve
-make refresh        # Nuclear reset: clean everything, rebuild, serve
-make restart        # Stop and serve (no rebuild)
-make stop           # Gracefully stop all services
-```
+- Backend (FastAPI): the HTTP API and application wiring.
+- Web frontend (htmx + Alpine.js + DaisyUI): server-rendered pages.
+- Database (postgres): SQLModel models and alembic migrations.
+- Worker (taskiq): background job processing.
+- Scheduler (postgres): periodic and scheduled jobs.
+- Redis: cache and message broker.
+- Deploy (compose): the socket-proxy service gives `app.core.runtime` read-only Docker access.
+- Observability: metrics and tracing.
+- Ingress: reverse proxy and TLS.
 
-### Code Quality
-```bash
-make lint           # Ruff linting (ruff check .)
-make fix            # Auto-fix lint + format (ruff check --fix && ruff format)
-make typecheck      # Type checking with ty
-make check          # All checks: lint + typecheck + test
-```
+## Daily commands
 
-### Testing
-```bash
-make test           # Run pytest
-make test-verbose   # Verbose pytest output
-uv run pytest tests/test_core.py           # Single test file
-uv run pytest tests/test_core.py::test_fn  # Single test function
-```
+- `make test` - run the test suite
+- `make lint` - lint with ruff
+- `make typecheck` - type-check
+- `make check` - lint, typecheck, and test; run before considering work done
+- `make serve` - run the stack locally
 
-### Database
-```bash
-make migrate        # Apply Alembic migrations (runs inside Docker)
-make migrate-check  # Show migration status
-make db-fresh       # Nuclear DB reset (drops volume + restarts)
-```
+Every target above also runs as `uv run poe <target>` (`uv run poe test`,
+`uv run poe check`, ...) for platforms without `make`, such as Windows, once
+dev dependencies are installed (`uv sync`).
 
-### Logs & Debugging
-```bash
-make logs           # Follow all service logs
-make logs-web       # Webserver logs only
-make logs-worker    # Worker logs only
-make shell          # Bash inside webserver container
-```
+Host-side commands that talk to services resolve dynamic ports through
+`.env.ports`; use the Makefile targets (or source that file) so the CLI reaches
+the right port.
 
-### Dependencies
-```bash
-uv sync --all-extras   # Install all deps (dev, docs)
-```
+## Layout
 
-### CLI
-```bash
-sector-7g health check --detailed   # Component health status
-sector-7g --help                    # All available commands
-```
+- `app/components/` is infrastructure (backend, frontend, worker, scheduler,
+  database, redis) and defines WHEN and WHERE.
+- `app/services/` is business logic (auth, AI, and the rest) and defines WHAT.
+  Each service keeps one layout: its standard files at the top (`service.py`,
+  `models.py`, `queries.py`, `health.py`...), its logic in packages under
+  `domains/`, what it talks to under `adapters/`; callers outside a service,
+  and its own router, tools, jobs and pages, import from its `service.py`. The `patterns` command flags a module that
+  strays. Before finishing a change, run
+  `uv run sector-7g patterns check` and fix each new finding it
+  lists; `--update` drops the fixed ones from `.patterns-baseline.json`, the
+  known debt.
+- `tests/` mirrors the app layout: unit tests beside the code they cover, API
+  tests under `tests/api/`.
 
-## Architecture
+## Changing the stack: use the CLI
 
-### Service Composition (Docker)
-All services run via Docker Compose with dev/prod profiles:
-- **webserver** (port 8000) — FastAPI + Flet dashboard mounted at `/dashboard`
-- **scheduler** — APScheduler with PostgreSQL-persisted jobs
-- **worker-inanimate-rod** — arq worker for Inanimate Carbon Rod (system maintenance + simulation)
-- **worker-homer** — arq worker for Homer's tasks (low concurrency, CPU-bound)
-- **worker-lenny** — arq worker for Lenny's tasks (high concurrency, I/O-bound)
-- **worker-carl** — arq worker for Carl's tasks (high concurrency, I/O-bound)
-- **worker-charlie** — arq worker for Charlie's tasks (moderate concurrency, I/O-bound)
-- **worker-grimey** — arq worker for Frank Grimes (deceased, one task at a time)
-- **postgres** — PostgreSQL 16
-- **redis** — Redis 7 (task queue + cache)
-- **traefik** — Reverse proxy (port 80, dashboard at 8080)
+Add or remove capabilities with the `aegis` CLI, never by hand-scaffolding:
 
-### Code Layout
-```
-app/
-├── core/              # Settings (Pydantic), DB engines, logging, security
-├── models/            # SQLModel table definitions
-├── components/
-│   ├── backend/       # FastAPI app: api/, middleware/, startup/, shutdown/
-│   ├── frontend/      # Flet UI: dashboard cards, modals, diagram views
-│   ├── scheduler/     # APScheduler initialization + job definitions
-│   └── worker/        # arq queues/ (WorkerSettings per queue) + tasks/
-├── services/          # Business logic: auth, scheduler, system monitoring
-├── cli/               # Typer CLI (health, auth, tasks, docs)
-├── integrations/      # App composition (creates integrated Flet+FastAPI app)
-└── entrypoints/       # Process entry points: webserver.py, scheduler.py
-```
+- `aegis add <name>` - add a component or service
+- `aegis remove <name>` - remove one
+- `aegis update` - pull framework updates into this project
 
-### Key Patterns
+Hand-rolling a component or service leaves it unregistered and unmanaged; the
+CLI wires routes, tests, health checks, and dependencies for you.
 
-**Configuration**: `app/core/config.py` uses Pydantic `BaseSettings` loaded from `.env`. Docker service hostnames (redis, postgres, traefik) auto-translate to localhost when running outside Docker.
+## Working rules
 
-**Database**: Dual engine setup in `app/core/db.py` — sync engine for Alembic/CLI, async engine (asyncpg) for web requests. Use `db_session()` for sync, `get_async_session()` for async.
+- TDD: write the failing test first, confirm it fails for the right reason, then
+  implement.
+- Types are mandatory: annotate every function's parameters and return type; use
+  `str | None`, `dict[str, Any]`, `list[str]`.
+- No emojis in code, docs, or output.
+- Keep changes minimal and focused; do not scope-creep.
+- DRY: before writing a new component, endpoint, or helper, search for an
+  existing one that already does it (or most of it) and extend/reuse that
+  instead of duplicating logic.
+- Duplication is a bug, not a nice-to-have. Agents work safely only when
+  each thing has one home: a change to a core thing cannot miss a second
+  copy that does not exist. So any review finding of a second copy (markup,
+  logic, a selector, an attribute recipe, a label computed in both Python
+  and JS) is fixed in the same session, never deferred or offered as
+  optional. Logic shared with the browser is sent from the server; markup a
+  script needs lives in a `<template>` in the page, never in JS strings.
 
-**Workers**: Pure arq patterns — each queue has its own `WorkerSettings` class in `app/components/worker/queues/`. Tasks are plain async functions in `worker/tasks/`. See `app/components/worker/CLAUDE.md` for detailed worker development guide.
+## Database
 
-**API routes**: Registered in `app/components/backend/api/routing.py`. Endpoints live under `api/health.py`, `api/auth/`, `api/worker.py`, `api/scheduler.py`.
+Models are SQLModel classes; every schema change goes through an alembic
+migration. Never query inside a loop (N+1); batch with `WHERE id IN (...)` or
+eager-load with `selectinload()`/`joinedload()`. `make check-queries` runs
+the test suite under queryspy and fails on any repeated-query site that is
+not already in `.queryspy-baseline.json` (CI's test job runs the same
+flags); the baseline is the known debt, shrink it, never add to it. A
+statement is known by its shape (its SQL with the selected columns collapsed,
+`tests/_queryspy_shape.py`), so adding a column changes no entry.
+`make check-queries-baseline` rewrites it after a fix. See the `add-model-and-migration` skill.
 
-**Frontend**: Flet dashboard with three views (Stack, Cards, Diagram). Auto-refreshes from `/health/` endpoint every 30 seconds.
+## Worker
 
-**Logging**: Structlog — colored console in dev, JSON in prod. Configured in `app/core/log.py`.
+Background jobs run on the taskiq backend. Enqueue long-running
+work instead of blocking a request. See the `add-background-job` skill.
 
-### Ruff Configuration
-- Line length: 88
-- Rules: E, F, I, N, W, UP (pyupgrade for modern Python syntax)
-- First-party package: `app`
+## Scheduler
+
+Periodic and scheduled jobs run on the postgres backend, and
+execution history is recorded. See the `add-scheduled-job` skill.
+
+## Skills
+
+Task procedures live in `.claude/skills/<name>/SKILL.md` and load on demand when
+the task matches. Reach for one when adding an API endpoint, a model, a job, or
+a CLI command, or when changing the stack. Before planning any change to the
+code, run it past the twin (the app's model of itself): the
+`plan-with-the-twin` skill.

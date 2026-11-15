@@ -1,0 +1,36 @@
+{# The snapshot (ui_resources.overview) below the charts: the containers
+   not well and the servers outside Docker; the
+   split is in the CPU and memory charts' headers (``_split.html``). #}
+{% from "components/macros/layout.html" import card %}
+{% from "pages/overseer/_glance_macros.html" import state %}
+{# The charts draw every running container but cannot say one is stopped
+   or failing (overseer_resources._view: ``unwell``), so it is named here,
+   with what is wrong and the way to its part's page. Nothing shows while
+   every one is well. #}
+{% set unwell = resources.unwell %}
+<div class="space-y-4">
+  {% if resources.note or unwell %}
+  {% call card("Needs attention" if unwell else "Containers", id="resources-containers") %}
+    {% if resources.note %}<p class="text-sm text-aegis-muted">{{ resources.note }}</p>
+    {% else %}
+    <ul class="space-y-2 text-sm">
+      {% for row in unwell %}
+      <li id="container-{{ row.name }}" class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <a href="{{ row.url }}" {{ hx_replace(row.url, "#overseer-main") }} class="text-aegis-text hover:text-aegis-teal">{{ row.title }}</a>
+        <span data-container class="font-mono text-xs text-aegis-muted">{{ row.short }}</span>
+        {% if row.state_status != "healthy" %}{{ state(row) }}
+        {% else %}<span class="text-aegis-amber">{{ row.troubles|join("; ") }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  {% endcall %}
+  {% endif %}
+  {% if resources.outside %}
+  {% call card("Outside Docker") %}
+    <ul class="space-y-2 text-sm">
+      {% for o in resources.outside %}<li data-outside="{{ o.page }}"><span class="text-aegis-text">{{ o.title }}</span> <span class="text-aegis-muted">{{ o.note }}</span></li>{% endfor %}
+    </ul>
+  {% endcall %}
+  {% endif %}
+</div>

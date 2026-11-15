@@ -1,0 +1,86 @@
+"""HTTP surface for HTTP load-test result storage.
+
+Reads the recent-runs index and per-test detail produced by
+``APILoadTestService``. Auth-gated when the auth service is present
+(same pattern as ``/api/v1/metrics/*``); open in auth-less projects.
+
+When Redis is not configured (e.g. base stacks without the ``redis``
+component), the endpoints return empty / 404 rather than erroring — the
+dashboard tab degrades to an empty-state placeholder.
+"""
+
+from collections.abc import Callable
+from typing import Any
+
+from fastapi import APIRouter, FastAPI, HTTPException, Query, status
+
+from app.services.load_test.api.models import (
+    APILoadTestConfiguration,
+    APILoadTestResult,
+)
+from app.services.load_test.api.service import APILoadTestService
+from app.services.load_test.api.store import with_store
+from app.services.load_test.common.storage import RedisResultStore
+
+router = APIRouter(prefix="/load-tests/api", tags=["load-tests"])
+
+
+async def recent_runs(limit: int) -> list[dict[str, Any]]:
+    """Recent HTTP load-test runs, newest first: the endpoint's, and
+    Overseer's Server page's."""
+
+    async def _op(
+        store: RedisResultStore[APILoadTestResult] | None,
+    ) -> list[APILoadTestResult]:
+        if store is None:
+            return []
+        return await store.list_recent(limit)
+
+    items = await with_store(_op)
+    return [r.model_dump() for r in items]
+
+
+async def run_and_store(
+    config: APILoadTestConfiguration,
+    app: FastAPI | None,
+    progress: Callable[[int, int], None] | None = None,
+) -> APILoadTestResult:
+    """Run ``config`` and keep the result with the CLI's runs: Overseer's
+    way in to the same service and store."""
+
+    async def _op(
+        store: RedisResultStore[APILoadTestResult] | None,
+    ) -> APILoadTestResult:
+        service = APILoadTestService(store=store)
+        return await service.run(config, app=app, progress_callback=progress)
+
+    return await with_store(_op)
+
+
+@router.get("/recent")
+async def list_recent_runs(
+    limit: int = Query(20, ge=1, le=100, description="Max runs to return"),
+) -> list[dict[str, Any]]:
+    """Recent HTTP load-test runs, newest first."""
+    return await recent_runs(limit)
+
+
+@router.get("/{test_id}")
+async def get_run(
+    test_id: str,
+) -> dict[str, Any]:
+    """Fetch a single HTTP load-test result by ID."""
+
+    async def _op(
+        store: RedisResultStore[APILoadTestResult] | None,
+    ) -> APILoadTestResult | None:
+        if store is None:
+            return None
+        return await store.get(test_id)
+
+    result = await with_store(_op)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Result not found"
+        )
+    return result.model_dump()

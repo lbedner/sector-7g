@@ -1,0 +1,73 @@
+"""Web frontend component - Jinja2 + htmx + Alpine.js.
+
+Pages are served at ``/`` by the same webserver that hosts the API and the
+Flet dashboard at ``/dashboard``. The pieces live beside this module:
+``assets.py`` (fingerprinted URLs, cache policy), ``filters.py`` (Jinja
+filters), ``rendering.py`` (the environment, ``render``, ``with_toast``).
+Route modules import from those: full-page handlers live in
+``routes/pages.py``, fragment handlers in ``routes/partials/``.
+"""
+
+import importlib.util
+
+from fastapi import APIRouter, FastAPI
+from fastapi.routing import APIRoute
+
+CHANGES = "app.components.web_frontend.routes.partials.changes"
+OVERSEER_CHAT = "app.components.web_frontend.routes.partials.overseer_ai_chat"
+SITE = "app.components.web_frontend.routes.site"
+MEETINGS = "app.components.web_frontend.routes.meetings"
+
+
+def create_web_frontend_app() -> APIRouter:
+    """Create the web frontend router with page and partial routes.
+
+    None of them belong in the API's OpenAPI schema. Each is tagged
+    ``overseer`` or ``web``, so route lists group them apart from the API.
+    """
+    router = APIRouter()
+
+    from app.components.web_frontend.routes.pages import router as pages_router
+
+    # The framework's landing at the root, where the project has no public
+    # site of its own; with one (routes/site.py, mounted last below), the
+    # root is the site's.
+    if importlib.util.find_spec(SITE) is None:
+        from app.components.web_frontend.routes.landing import router as landing_router
+
+        router.include_router(landing_router, include_in_schema=False)
+    router.include_router(pages_router, include_in_schema=False)
+    # The change queue's approval cards (the signed-in user's, not the
+    # Overseer's alone), on the stacks that ship the queue.
+    if importlib.util.find_spec(CHANGES) is not None:
+        changes = importlib.import_module(CHANGES)
+        router.include_router(changes.router, include_in_schema=False)
+    # The Meetings page (an app page, each meeting its owner's), on the
+    # stacks with the meetings service.
+    if importlib.util.find_spec(MEETINGS) is not None:
+        meetings = importlib.import_module(MEETINGS)
+        router.include_router(meetings.router, include_in_schema=False)
+    # The Overseer chat's live call: a socket, outside the pages' gate,
+    # behind its own (routes/partials/overseer_ai_chat.py).
+    if importlib.util.find_spec(OVERSEER_CHAT) is not None:
+        sockets = importlib.import_module(OVERSEER_CHAT).sockets
+        if sockets is not None:
+            router.include_router(sockets)
+    # The project's own public site, when it has one (routes/site.py):
+    # last, so no route of its can stand in front of the framework's.
+    if importlib.util.find_spec(SITE) is not None:
+        site = importlib.import_module(SITE)
+        router.include_router(site.router, include_in_schema=False)
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            route.tags = ["overseer" if "/overseer" in route.path else "web"]
+
+    return router
+
+
+def add_error_pages(app: FastAPI) -> None:
+    """The pages an exception renders instead of JSON: Overseer's "admins
+    only" refusal, where the stack has auth (``overseer_access``)."""
+    from app.components.web_frontend.overseer_access import add_refusal_page
+
+    add_refusal_page(app)

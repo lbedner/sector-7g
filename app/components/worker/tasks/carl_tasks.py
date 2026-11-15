@@ -1,5 +1,5 @@
 """
-Carl Carlson worker tasks for arq.
+Carl Carlson worker tasks.
 
 Thin wrappers around services/springfield/carl.py and burns.py functions.
 """
@@ -14,28 +14,26 @@ from app.services.springfield.carl import (
 )
 
 
-async def handle_inspector_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def handle_inspector_task(**kwargs: Any) -> dict[str, Any]:
     """Carl handles the NRC inspector."""
     return await handle_inspector()
 
 
-async def file_afternoon_reports_task(
-    ctx: dict[str, Any], **kwargs: Any
-) -> dict[str, Any]:
+async def file_afternoon_reports_task(**kwargs: Any) -> dict[str, Any]:
     """Carl files afternoon reports."""
     return await file_afternoon_reports()
 
 
-async def shift_handoff_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def shift_handoff_task(**kwargs: Any) -> dict[str, Any]:
     """Carl does shift handoff."""
     return await shift_handoff()
 
 
-async def make_announcement_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def make_announcement_task(**kwargs: Any) -> dict[str, Any]:
     """Burns makes a plant-wide announcement (dispatched to Carl's queue)."""
     return await make_announcement()
 
 
-async def morning_briefing_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def morning_briefing_task(**kwargs: Any) -> dict[str, Any]:
     """Smithers preps Burns' morning briefing (dispatched to Carl's queue)."""
     return await morning_briefing()

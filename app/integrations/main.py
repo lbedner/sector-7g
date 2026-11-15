@@ -1,14 +1,45 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
 import flet.fastapi as flet_fastapi
 
-from app.components.backend.hooks import backend_hooks
-from app.components.backend.main import create_backend_app
-from app.components.frontend.main import create_frontend_app
-from app.core.config import settings
-from app.core.log import logger, setup_logging
+# Observability bootstrap BEFORE the app imports: auto-tracing installs an
+# import hook, so it must run while app.services is still unimported. This
+# module is uvicorn's factory target, so reload workers pass through here.
+try:
+    from app.components.backend.middleware.logfire_tracing import (
+        install_auto_tracing,
+    )
+except ImportError:  # observability component not installed
+    pass
+else:
+    install_auto_tracing("app.components.frontend")
+
+from fastapi import Depends, FastAPI  # noqa: E402
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html  # noqa: E402
+from fastapi.openapi.utils import get_openapi  # noqa: E402
+from fastapi.responses import HTMLResponse  # noqa: E402
+
+from app.components.backend.hooks import backend_hooks  # noqa: E402
+from app.components.backend.main import create_backend_app  # noqa: E402
+from app.components.backend.middleware.paste_capture import (  # noqa: E402
+    PasteCaptureMiddleware,
+)
+from app.components.backend.security.operator_auth import require_operator  # noqa: E402
+from app.components.backend.security.trusted_proxies import (  # noqa: E402
+    TrustedProxyMiddleware,
+)
+from app.components.frontend.main import create_frontend_app  # noqa: E402
+from app.components.web_frontend.assets import CachedStaticFiles  # noqa: E402
+from app.components.web_frontend.main import (  # noqa: E402
+    add_error_pages,
+    create_web_frontend_app,
+)
+from app.core import ontology  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.constants import DASHBOARD_PATH, dashboard_upload_dir  # noqa: E402
+from app.core.log import logger, setup_logging  # noqa: E402
 
 
 @asynccontextmanager
@@ -32,6 +63,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Execute backend startup hooks
     await backend_hooks.execute_startup_hooks()
 
+    # Every part has registered: build the system model now, off the loop,
+    # so its first reader (a map, a flow card) never parses the source
+    # mid-request, holding the server.
+    await ontology.warm()
+
     logger.info("--- Application startup complete ---")
 
     yield
@@ -53,13 +89,74 @@ def create_integrated_app() -> FastAPI:
     Creates the integrated Flet+FastAPI application using the officially
     recommended pattern and component-specific hooks.
     """
-    app = FastAPI(lifespan=lifespan)
+    app = FastAPI(
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
+
+    @app.get("/openapi.json", include_in_schema=False)
+    def _openapi_json(_: None = Depends(require_operator)) -> dict:
+        return get_openapi(title=app.title, version=app.version, routes=app.routes)
+
+    @app.get("/docs", include_in_schema=False)
+    def _swagger_ui(_: None = Depends(require_operator)) -> HTMLResponse:
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title=f"{app.title} - Swagger UI",
+        )
+
+    @app.get("/redoc", include_in_schema=False)
+    def _redoc_ui(_: None = Depends(require_operator)) -> HTMLResponse:
+        return get_redoc_html(
+            openapi_url="/openapi.json",
+            title=f"{app.title} - ReDoc",
+        )
 
     create_backend_app(app)
+    # Server-rendered pages at /. Registered as routes rather than a mount so
+    # API paths (/health, /docs) keep resolving; Flet still owns /dashboard.
+    app.include_router(create_web_frontend_app())
+    add_error_pages(app)
+    # CachedStaticFiles applies the fingerprint-aware cache policy: hashed
+    # build output is immutable for a year, plain sources get an hour.
+    web_static = Path(__file__).resolve().parents[2] / settings.WEB_STATIC_DIR
+    app.mount(
+        "/static",
+        CachedStaticFiles(directory=str(web_static)),
+        name="static",
+    )
     # Create and mount the Flet app using the flet.fastapi module
     # First, get the actual session handler function from the factory
     session_handler = create_frontend_app()
-    flet_app = flet_fastapi.app(session_handler, assets_dir=settings.FLET_ASSETS_DIR)
+    # ``assets_dir`` MUST be absolute. ``flet_web/fastapi/flet_static_files.py``
+    # silently nulls relative paths (logs a warning, then falls back to the
+    # bundled stock web dir). Resolve from the project root so anything in
+    # the assets dir (custom favicon, app-icon, override index.html) actually
+    # wins over the bundled defaults.
+    flet_assets = Path(__file__).resolve().parents[2] / settings.FLET_ASSETS_DIR
+    # FilePicker uploads (browser -> server) need a landing directory and a
+    # signing key for the upload URLs; without both, pick-and-upload flows
+    # (the finance file import) cannot work in web mode.
+    flet_uploads = dashboard_upload_dir()
+    flet_uploads.mkdir(parents=True, exist_ok=True)
+    flet_app = flet_fastapi.app(
+        session_handler,
+        assets_dir=str(flet_assets),
+        upload_dir=str(flet_uploads),
+        max_upload_size=10 * 1024 * 1024,  # matches the finance import cap
+        secret_key=settings.SECRET_KEY,
+    )
     # Mount Flet at /dashboard to avoid intercepting FastAPI routes like /health
-    app.mount("/dashboard", flet_app)
+
+    app.mount(DASHBOARD_PATH, flet_app)
+    # Splice the paste-capture script into the dashboard page: pasted
+    # images post to /api/v1/pastebox, where consumer surfaces (chat's
+    # attachment bar) drain them. Flet has no clipboard-image API of its
+    # own, so this is caught in the browser.
+    app.add_middleware(PasteCaptureMiddleware)
+    # Last added, so outermost: every middleware and route below it reads the
+    # client the trusted proxy named.
+    app.add_middleware(TrustedProxyMiddleware)
     return app

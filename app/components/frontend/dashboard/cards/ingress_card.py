@@ -7,9 +7,11 @@ Top-down layout matching the service card pattern.
 
 import flet as ft
 
+from app.core.constants import ComponentName
 from app.services.system.models import ComponentStatus
 
 from .card_container import CardContainer
+from .card_metadata import metadata_number, metadata_text
 from .card_utils import (
     create_header_row,
     create_metric_container,
@@ -35,23 +37,26 @@ class IngressCard:
 
     def _get_routers_display(self) -> str:
         """Get formatted routers count for display."""
-        enabled = self.metadata.get("enabled_routers", 0)
-        total = self.metadata.get("total_routers", 0)
+        enabled = int(metadata_number(self.metadata, "enabled_routers"))
+        total = int(metadata_number(self.metadata, "total_routers"))
         if total > 0 and enabled != total:
             return f"{enabled}/{total}"
         return str(enabled)
 
     def _get_services_display(self) -> str:
         """Get formatted services count for display."""
-        enabled = self.metadata.get("enabled_services", 0)
-        total = self.metadata.get("total_services", 0)
+        enabled = int(metadata_number(self.metadata, "enabled_services"))
+        total = int(metadata_number(self.metadata, "total_services"))
         if total > 0 and enabled != total:
             return f"{enabled}/{total}"
         return str(enabled)
 
     def _get_entrypoints_display(self) -> str:
         """Get formatted entrypoints for display."""
-        entrypoints = self.metadata.get("entrypoints", [])
+        raw = self.metadata.get("entrypoints", [])
+        entrypoints = (
+            [ep for ep in raw if isinstance(ep, dict)] if isinstance(raw, list) else []
+        )
         if not entrypoints:
             return "0"
         # Show count and common ports
@@ -98,7 +103,7 @@ class IngressCard:
 
     def _create_card_content(self) -> ft.Container:
         """Create the full card content with header and metrics."""
-        version = self.metadata.get("version", "")
+        version = metadata_text(self.metadata, "version")
         subtitle = (
             f"Traefik {version}" if version and version != "unknown" else "Traefik"
         )
@@ -127,5 +132,5 @@ class IngressCard:
             content=self._create_card_content(),
             border_color=border_color,
             component_data=self.component_data,
-            component_name="ingress",
+            component_name=ComponentName.INGRESS,
         )

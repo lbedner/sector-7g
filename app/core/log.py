@@ -11,11 +11,14 @@ from collections.abc import Generator
 from contextlib import contextmanager
 import logging
 import sys
+from typing import TextIO
 
 import structlog
 from structlog.types import Processor
 
 from app.core.config import settings
+from app.core.log_attribution import add_service_attribution
+from app.core.run_log import record_run_line
 
 # A global logger instance for easy access throughout the application
 logger: structlog.stdlib.BoundLogger = structlog.get_logger()
@@ -24,7 +27,13 @@ logger: structlog.stdlib.BoundLogger = structlog.get_logger()
 _logging_configured = False
 
 
-def setup_logging() -> None:
+def apply_log_level() -> None:
+    """``LOG_LEVEL`` on the root logger: at setup, and again once saved
+    settings apply (``app.core.boot``), so a saved level takes effect."""
+    logging.getLogger().setLevel(getattr(logging, settings.LOG_LEVEL.upper()))
+
+
+def setup_logging(stream: TextIO = sys.stdout) -> None:
     """
     Configures logging for the entire application.
 
@@ -39,17 +48,27 @@ def setup_logging() -> None:
     _logging_configured = True
     # Type hint for the list of processors
     shared_processors: list[Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.CallsiteParameterAdder(
+            parameters={structlog.processors.CallsiteParameter.PATHNAME},
+        ),
+        add_service_attribution,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        # Last: a line logged inside a run, rendered whole, to its run's log.
+        record_run_line,
     ]
 
     # Configure structlog
     structlog.configure(
-        processors=shared_processors
+        # First: a structlog line under the level does no work and reaches no
+        # sink (a standard-library line is filtered before its formatter).
+        processors=[structlog.stdlib.filter_by_level]
+        + shared_processors
         + [
             # Prepare event dict for `ProcessorFormatter`.
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
@@ -63,7 +82,16 @@ def setup_logging() -> None:
     if settings.APP_ENV == "dev":
         formatter = structlog.stdlib.ProcessorFormatter(
             # The final processor formats the log entry for console output.
-            processor=structlog.dev.ConsoleRenderer(colors=True),
+            # No locals: structlog's default renders every frame's
+            # variables, and a pydantic-ai agent is thousands of lines,
+            # formatted while the request waits.
+            processor=structlog.dev.ConsoleRenderer(
+                colors=True,
+                exception_formatter=structlog.dev.RichTracebackFormatter(
+                    show_locals=False
+                ),
+            ),
+            foreign_pre_chain=shared_processors,
         )
     else:
         formatter = structlog.stdlib.ProcessorFormatter(
@@ -74,7 +102,7 @@ def setup_logging() -> None:
         )
 
     # Configure the root logger
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(stream)
     handler.setFormatter(formatter)
     root_logger = logging.getLogger()
 
@@ -83,8 +111,7 @@ def setup_logging() -> None:
 
     # CRITICAL: Set log level BEFORE adding handler
     # This ensures all loggers (including import-time loggers) respect the level
-    log_level = settings.LOG_LEVEL.upper()
-    root_logger.setLevel(getattr(logging, log_level))
+    apply_log_level()
 
     # Add handler after level is set
     root_logger.addHandler(handler)
@@ -98,6 +125,13 @@ def setup_logging() -> None:
         logging.WARNING
     )  # Suppress HTTP request logs from health checks
 
+    # Stripe SDK logs every API call at INFO ("Request to Stripe api" /
+    # "Stripe API response"). The 60s health-probe cache keeps real
+    # call rate to ~1/min/process, but each call is two lines and dev
+    # restarts wipe the cache, so the log is still chatty. Errors
+    # still surface at WARNING+.
+    logging.getLogger("stripe").setLevel(logging.WARNING)
+
     # Suppress RAG service logs (CLI uses progress bar instead)
     logging.getLogger("app.services.rag").setLevel(logging.WARNING)
 
@@ -107,7 +141,7 @@ def setup_logging() -> None:
     log_format = "DEV" if settings.APP_ENV == "dev" else "JSON"
     logger.debug(
         "Logging setup complete",
-        level=log_level,
+        level=settings.LOG_LEVEL.upper(),
         log_format=log_format,
         root_level=root_logger.level,
         effective_level=root_logger.getEffectiveLevel(),

@@ -1,0 +1,283 @@
+"""One rule for what a worker queue's state means, shared by every backend.
+
+A queue nobody is consuming is a problem, and the more is waiting the
+bigger the problem; the check used to file both as Info, which is how a
+crash-looping worker read as a blue dot while jobs piled up.
+"""
+
+import pytest
+
+from app.services.system.health_worker_rules import queue_status
+from app.services.system.models import ComponentStatusType
+
+
+def test_waiting_work_and_no_consumer_is_unhealthy() -> None:
+    status, note = queue_status(worker_alive=False, has_functions=True, waiting=3)
+
+    assert status == ComponentStatusType.UNHEALTHY
+    assert note == "no worker consuming, 3 waiting"
+
+
+def test_no_consumer_and_nothing_waiting_is_a_warning() -> None:
+    status, note = queue_status(worker_alive=False, has_functions=True, waiting=0)
+
+    assert status == ComponentStatusType.WARNING
+    assert note == "no worker consuming"
+
+
+def test_a_queue_with_no_functions_is_only_information() -> None:
+    status, note = queue_status(worker_alive=False, has_functions=False, waiting=0)
+
+    assert status == ComponentStatusType.INFO
+    assert note == "configured - no functions defined"
+
+
+def test_a_live_consumer_is_healthy_until_failures_pile_up() -> None:
+    assert queue_status(worker_alive=True, has_functions=True, waiting=5)[0] == (
+        ComponentStatusType.HEALTHY
+    )
+    assert (
+        queue_status(
+            worker_alive=True, has_functions=True, waiting=0, failure_rate=15.0
+        )[0]
+        == ComponentStatusType.WARNING
+    )
+    assert (
+        queue_status(
+            worker_alive=True, has_functions=True, waiting=0, failure_rate=40.0
+        )[0]
+        == ComponentStatusType.UNHEALTHY
+    )
+
+
+def test_stream_with_no_consumer_group_has_every_entry_waiting() -> None:
+    from app.services.system.health_worker_rules import taskiq_group_stats
+
+    consumers, pending, read, lag = taskiq_group_stats([], stream_length=3)
+    assert (consumers, pending, read, lag) == (0, 0, 0, 3)
+
+
+def test_taskiq_group_reports_its_own_lag() -> None:
+    from app.services.system.health_worker_rules import taskiq_group_stats
+
+    groups = [
+        {"name": b"other", "consumers": 9, "lag": 9},
+        {"name": b"taskiq", "consumers": 2, "pending": 1, "entries-read": 4, "lag": 2},
+    ]
+    assert taskiq_group_stats(groups, stream_length=6) == (2, 1, 4, 2)
+
+
+def test_taskiq_group_with_unknown_lag_counts_the_stream() -> None:
+    from app.services.system.health_worker_rules import taskiq_group_stats
+
+    groups = [
+        {
+            "name": "taskiq",
+            "consumers": 1,
+            "pending": 0,
+            "entries-read": None,
+            "lag": None,
+        }
+    ]
+    assert taskiq_group_stats(groups, stream_length=5) == (1, 0, 0, 5)
+
+
+def test_only_consumers_seen_lately_count_as_live() -> None:
+    """Redis keeps a consumer in the group after its process dies (every
+    worker restart leaves one); live ones poll constantly, so idle time
+    tells them apart. Counting the dead inflates the queue's slots."""
+    from app.services.system.health_worker_rules import live_consumers
+
+    consumers = [
+        {"name": "restarted-away", "idle": 69_420},
+        {"name": "running", "idle": 168},
+    ]
+    assert live_consumers(consumers) == 1
+    assert live_consumers([]) == 0
+
+
+def test_a_worker_busy_on_its_batch_still_serves_the_queue() -> None:
+    """A worker reads nothing while it works through what it claimed, so
+    its consumer goes idle; it keeps reporting itself all the while."""
+    from app.services.system.health_worker_rules import live_workers
+
+    busy = [{"name": "busy", "idle": 45_000}]
+    assert live_workers(busy, reports=1) == 1
+    assert live_workers(busy, reports=0) == 0
+    assert live_workers([{"idle": 100}, {"idle": 120}], reports=1) == 2
+
+
+def test_the_oldest_waiting_job_is_the_first_entry_past_the_last_delivered() -> None:
+    """A stream id starts with its arrival time in ms, so its age is free."""
+    from app.services.system.health_worker_rules import last_delivered, stream_age
+
+    groups = [{"name": b"taskiq", "last-delivered-id": b"1790528194881-0"}]
+    assert last_delivered(groups) == "1790528194881-0"
+    assert last_delivered([]) == "0-0"  # never consumed: everything waits
+    assert stream_age(b"1790528194881-3", now_ms=1790528204881) == 10.0
+
+
+def test_running_is_what_the_workers_report() -> None:
+    """Task history keeps a "running" record for each job a worker reload
+    dropped; the workers' own busy counts do not (2026-11-07)."""
+    from app.services.system.health_worker_rules import reported_busy
+
+    reports = [
+        {"queue": "system", "busy": "2"},
+        {"queue": "system", "busy": "1"},
+        {"queue": "system"},
+        {"queue": "other", "busy": "4"},
+    ]
+    assert reported_busy(reports, "system") == 3
+    assert reported_busy(reports, "absent") is None
+
+
+def test_the_last_start_is_the_latest_read_by_any_consumer() -> None:
+    """``inactive`` is how long since a consumer last got entries, so the
+    smallest is how long since the queue handed out a job. Redis says -1
+    for a consumer that never got one, and older Redis has no field."""
+    from app.services.system.health_worker_rules import last_start
+
+    consumers = [{"inactive": 2_272_802}, {"inactive": 174_953}, {"inactive": -1}]
+    assert last_start(consumers) == 175.0
+    assert last_start([{"inactive": 0}]) == 0.0
+    assert last_start([{"idle": 100}]) is None
+    assert last_start([]) is None
+
+
+class TestBrokenQueues:
+    """A queue file that exists but cannot import is broken, not absent:
+    a missing broker library must not read as a healthy worker with no
+    queues."""
+
+    def test_a_missing_dependency_is_reported_with_its_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.components.worker import queue_discovery
+
+        def fail(name: str) -> None:
+            raise ModuleNotFoundError(
+                "No module named 'taskiq_redis'", name="taskiq_redis"
+            )
+
+        monkeypatch.setattr(queue_discovery.importlib, "import_module", fail)
+        broken = queue_discovery.broken_queues()
+        assert "grimey" in broken
+        assert "taskiq_redis" in broken["grimey"]
+
+    def test_a_file_that_is_not_a_module_is_not_broken(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.components.worker import queue_discovery
+
+        def absent(name: str) -> None:
+            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+
+        monkeypatch.setattr(queue_discovery.importlib, "import_module", absent)
+        assert queue_discovery.broken_queues() == {}
+
+    @pytest.mark.asyncio
+    async def test_the_health_check_says_so(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.components.worker import queue_discovery
+        from app.services.system.health_worker import check_worker_health
+
+        monkeypatch.setattr(
+            queue_discovery,
+            "broken_queues",
+            lambda: {"system": "No module named 'taskiq_redis'"},
+        )
+        status = await check_worker_health()
+        assert status.status == ComponentStatusType.UNHEALTHY
+        assert "system" in status.message and "taskiq_redis" in status.message
+
+
+class TestBackedUp:
+    """A queue whose oldest job has waited past its limit is backed up."""
+
+    def test_an_old_waiting_job_backs_the_queue_up(self) -> None:
+        from app.services.system.health_worker_rules import queue_verdict
+
+        verdict = queue_verdict(
+            worker_alive=True,
+            has_functions=True,
+            waiting=40,
+            oldest_waiting=720,
+            max_wait=300,
+        )
+        assert verdict.status == ComponentStatusType.WARNING
+        assert verdict.state == "backed_up"
+        assert "12m" in verdict.lead
+
+    def test_a_queue_still_starting_jobs_is_not_backed_up(self) -> None:
+        """A batch of 49 on 6 slots keeps its last job waiting for minutes
+        while every slot works; it is busy, not backed up (2026-11-07)."""
+        from app.services.system.health_worker_rules import queue_verdict
+
+        verdict = queue_verdict(
+            worker_alive=True,
+            has_functions=True,
+            waiting=8,
+            oldest_waiting=313,
+            max_wait=300,
+            last_started=40,
+        )
+        assert verdict.state == "healthy"
+
+    def test_nothing_started_lately_backs_it_up_and_says_so(self) -> None:
+        """A view shows the reason beside its "Backed up" label; the health
+        message leads with the state too."""
+        from app.services.system.health_worker_rules import queue_verdict
+
+        verdict = queue_verdict(
+            worker_alive=True,
+            has_functions=True,
+            waiting=8,
+            oldest_waiting=720,
+            max_wait=300,
+            last_started=400,
+        )
+        assert verdict.state == "backed_up"
+        assert verdict.lead == (
+            "backed up, oldest waiting 12m, nothing started for 6m 40s"
+        )
+        assert verdict.reason == "oldest waiting 12m, nothing started for 6m 40s"
+
+    def test_within_the_limit_is_healthy(self) -> None:
+        from app.services.system.health_worker_rules import queue_verdict
+
+        verdict = queue_verdict(
+            worker_alive=True,
+            has_functions=True,
+            waiting=3,
+            oldest_waiting=20,
+            max_wait=300,
+        )
+        assert verdict.state == "healthy"
+
+    def test_failures_outrank_a_backlog(self) -> None:
+        from app.services.system.health_worker_rules import queue_verdict
+
+        verdict = queue_verdict(
+            worker_alive=True,
+            has_functions=True,
+            waiting=40,
+            failure_rate=30,
+            oldest_waiting=720,
+            max_wait=300,
+        )
+        assert verdict.state == "failing"
+
+
+class TestWhatAQueueRuns:
+    """Asked which tasks a queue runs, an agent had its concurrency and
+    timeout but not one task name (2026-10-24)."""
+
+    def test_each_queue_names_its_tasks(self) -> None:
+        from app.components.worker import queue_discovery
+
+        queues = {"system": queue_discovery.build_metadata("system", ["cleanup"])}
+        (told,) = queue_discovery.configuration(queues).values()
+        assert told["tasks"] == ["cleanup"]
+        assert told["timeout_seconds"] == queues["system"]["timeout"]

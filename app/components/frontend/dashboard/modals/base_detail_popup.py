@@ -8,11 +8,22 @@ including title, status badge, scrollable sections, and close button.
 import flet as ft
 
 from app.components.frontend.controls import H2Text, SecondaryText, StatusTag
+from app.components.frontend.controls.buttons import PulseButton
+from app.components.frontend.controls.tabs import OVERVIEW, PulseTabs, fills, part_tab
 from app.components.frontend.theme import AegisTheme as Theme
+from app.services.system import ui_runtime
 from app.services.system.models import ComponentStatus, ComponentStatusType
 
 from .base_popup import BasePopup
+from .container_section import ContainerSection
+from .logs_section import LogsSection
 from .modal_constants import ModalLayout
+
+# What every component with a container behind it shows, in order.
+RUNTIME_SECTIONS = (("Container", ContainerSection), ("Logs", LogsSection))
+# How wide a modal with those tabs opens, at least: the Container table's
+# fixed columns leave its name the room to be read.
+RUNTIME_WIDTH = ModalLayout.LARGE_WIDTH
 
 
 class BaseDetailPopup(BasePopup):
@@ -61,10 +72,11 @@ class BaseDetailPopup(BasePopup):
             sections: List of section controls to display in modal body
             subtitle_text: Optional subtitle text (e.g., "Web Framework")
             status_detail: Optional detail text for status badge (e.g., "2/3 online")
-            width: Modal width in pixels (default: 900)
-            height: Modal height in pixels (default: 700)
+            width: Modal width in pixels (default: ``ModalLayout.DEFAULT_WIDTH``)
+            height: Modal height in pixels (default: ``ModalLayout.DEFAULT_HEIGHT``)
             scrollable: Whether to wrap sections in scrollable container
-                        (default: True). Set to False for tabs with own scrolling.
+                        (default: True). Set to False for tabs with own scrolling;
+                        a modal with a container behind it is always tabs.
         """
         self.component_data = component_data
         self.title_text = title_text
@@ -73,24 +85,32 @@ class BaseDetailPopup(BasePopup):
         self._status_tag: StatusTag | None = None
         self._title_row: ft.Row | None = None
 
-        # Build sections container - scrollable or direct based on parameter
-        if scrollable:
-            sections_container = ft.Container(
-                content=ft.Column(
-                    sections,
-                    spacing=0,
-                    scroll=ft.ScrollMode.AUTO,
-                ),
-                expand=True,
+        # Every component with a container behind it shows that container and
+        # its logs as tabs: beside its own where its body is a tab bar, else
+        # beside its sections as its first tab; the modal at least the size
+        # their columns and lines are drawn for.
+        if (key := ui_runtime.page_of(component_data.name)) is not None:
+            if not (sections and isinstance(sections[0], ft.Tabs)):
+                sections = [PulseTabs(tabs=[part_tab(OVERVIEW, sections)])]
+            sections[0].tabs.extend(
+                part_tab(title, [section(key)]) for title, section in RUNTIME_SECTIONS
             )
-        else:
-            # For tabs or content that manages its own scrolling
-            sections_container = ft.Container(
-                content=sections[0]
-                if len(sections) == 1
-                else ft.Column(sections, spacing=0),
-                expand=True,
+            scrollable = False
+            width = max(width, RUNTIME_WIDTH)
+            height = max(height, ModalLayout.DEFAULT_HEIGHT)
+
+        # The sections, scrolled here unless they scroll themselves: one that
+        # fills the popup (tabs, the logs: ``fills``), or ``scrollable`` off.
+        body = (
+            sections[0]
+            if fills(sections) or (not scrollable and len(sections) == 1)
+            else ft.Column(
+                sections,
+                spacing=0,
+                scroll=ft.ScrollMode.AUTO if scrollable else None,
             )
+        )
+        sections_container = ft.Container(content=body, expand=True)
 
         # Build modal content with title, sections, and close button
         modal_content = ft.Column(
@@ -103,12 +123,11 @@ class BaseDetailPopup(BasePopup):
                 ft.Container(
                     content=ft.Row(
                         [
-                            ft.TextButton(
-                                "Close",
-                                on_click=self._handle_close_click,
-                                style=ft.ButtonStyle(
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                ),
+                            PulseButton(
+                                on_click_callable=self._handle_close,
+                                text="Close",
+                                variant="muted",
+                                compact=True,
                             )
                         ],
                         alignment=ft.MainAxisAlignment.END,
@@ -123,7 +142,7 @@ class BaseDetailPopup(BasePopup):
         # Wrap in container with padding
         content_container = ft.Container(
             content=modal_content,
-            padding=20,
+            padding=ModalLayout.CONTENT_PADDING,
             width=width,
             height=height,
         )
@@ -203,3 +222,49 @@ class BaseDetailPopup(BasePopup):
         self.hide()
         if e.page:
             e.page.update()
+
+    async def _handle_close(self) -> None:
+        """Close the popup (PulseButton's async no-arg contract)."""
+        self.hide()
+        if self.page:
+            self.page.update()
+
+
+class PagePopup(BaseDetailPopup):
+    """An Overseer page outside the health tree (Logs, Deployments) as a
+    popup the header opens (``open_on``): a subclass names it (``TITLE``,
+    ``SUBTITLE``) and builds its one section; no status badge, since no
+    health check stands behind it."""
+
+    TITLE: str
+    SUBTITLE: str
+    WIDTH = ModalLayout.DEFAULT_WIDTH
+    HEIGHT = ModalLayout.DEFAULT_HEIGHT
+
+    def __init__(self, page: ft.Page) -> None:
+        super().__init__(
+            page=page,
+            component_data=ComponentStatus(
+                name=self.TITLE.lower(), status=ComponentStatusType.INFO, message=""
+            ),
+            title_text=self.TITLE,
+            subtitle_text=self.SUBTITLE,
+            sections=[self.section()],
+            width=self.WIDTH,
+            height=self.HEIGHT,
+        )
+        if self._status_tag is not None:
+            self._status_tag.visible = False
+
+    def section(self) -> ft.Control:
+        raise NotImplementedError
+
+    @classmethod
+    def open_on(cls, page: ft.Page) -> None:
+        """Show the page's one popup of this kind, adding it the first time."""
+        popup = next((c for c in page.overlay if isinstance(c, cls)), None)
+        if popup is None:
+            popup = cls(page)
+            page.overlay.append(popup)
+        popup.show()
+        page.update()

@@ -1,17 +1,25 @@
 # sector-7g
 
-![Mr. Burns watches sector 7G](docs/images/burns.png)
-
 A production-ready async Python application built with Aegis Stack
 
-## Components
+## What It Is Made Of
 
-This Aegis Stack project includes the following components:
+<!-- what-it-has -->
+### Components
 
-- **Backend**: FastAPI-based async web server
-- **Frontend**: Flet-based Python UI framework
-- **Scheduler**: APScheduler-based async task scheduling
-- **Database**: SQLite database with SQLModel ORM
+- **Backend**: FastAPI on uvicorn or granian, lifecycle hooks, in-memory request metrics, API load testing for every route (FastAPI on PORT (default 8000); OpenAPI docs at /docs)
+- **Frontend**: Flet, ships with the Overseer system dashboard (Flet dashboard at /dashboard)
+- **Worker**: Pluggable Arq, Taskiq, or Dramatiq (`make logs-worker`; tasks under app/worker, CLI group `tasks`)
+- **Scheduler**: APScheduler with persistent jobs (Runs in-process; jobs listed on the dashboard)
+- **Database**: Postgres (self-hosted or Neon serverless) or SQLite + SQLModel ORM (`make migrate` runs Alembic; models under app/models)
+- **Redis**: Redis for caching, sessions, pub/sub (redis:6379 in the compose network; REDIS_URL from the host)
+- **Ingress**: Traefik v3 reverse proxy with TLS (Traefik in front of the app; routes from docker-compose labels)
+- **Observability**: Pydantic Logfire tracing + metrics + logging (Logfire tracing; `make logs` for the raw stream)
+- **Web Frontend**: Server-rendered pages at `/`: Jinja2 + htmx + Alpine, Tailwind/DaisyUI styling (Server-rendered pages at /)
+- **Deploy**: Deployment target (Docker Compose), read by the Overseer (`aegis deploy`; the socket-proxy service answers the Overseer's read-only Docker queries)
+
+Each part's routes, jobs and tables: the docs' *What It Is Made Of* page (`stack.md`), read from the code when the docs are built.
+<!-- /what-it-has -->
 
 ## Getting Started
 
@@ -25,35 +33,43 @@ This Aegis Stack project includes the following components:
 1. **Install dependencies:**
    ```bash
    uv sync                    # Core dependencies only
-   # Or for development: uv sync --all-extras  (includes testing, linting, docs)
+   # Or for development: uv sync  (includes testing, linting, docs)
    ```
 
 2. **Activate virtual environment:**
    ```bash
-   source .venv/bin/activate
+   source .venv/bin/activate        # Windows: .venv\Scripts\activate
    ```
 
-3. **Set up environment:**
+3. **No `make`?** Every `make <target>` in this README also runs as
+   `uv run poe <target>` — same tasks, no make needed, which is how
+   Windows gets through the rest of this page. `uv run poe -h` lists
+   them.
+
+4. **Set up environment:**
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
-4. **Set up database:**
+5. **Set up database:**
    ```bash
-   # Create data directory for SQLite database
-   mkdir -p data
-
-   # Database will be created automatically on first run
-   # Default location: data/app.db
+   # The postgres service starts with `make serve` (docker compose).
+   # Tables are created via Alembic migrations on first run.
    ```
 
-5. **Run the application:**
+6. **Run the application:**
    ```bash
    make serve
    ```
 
-The application will be available at `http://127.0.0.1:8000`.
+The application will be available at `http://127.0.0.1:8000`. If port 8000 is
+already taken, `make serve` picks the next free port and prints the URL it
+chose, so two stacks can run side by side without editing any config.
+
+Every command in this README also works as `uv run poe <target>` (for
+example `uv run poe serve`), once the dev dependencies are installed
+(`uv sync`); run `uv run poe -h` for the full list.
 
 ## Development
 
@@ -119,11 +135,11 @@ docker compose --profile prod up
 
 ### Database Settings
 
-The database component uses SQLite with the following default configuration:
+The database component uses PostgreSQL with the following default configuration:
 
 ```bash
 # Environment variables (add to .env file)
-DATABASE_URL=sqlite:///data/app.db          # Database file location
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sector-7g
 DATABASE_ENGINE_ECHO=false                  # Enable SQL query logging
 ```
 

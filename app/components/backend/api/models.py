@@ -6,22 +6,12 @@ task management, status tracking, and response formatting.
 """
 
 from datetime import datetime
-from typing import Any
-
-from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.core.constants import QueueName
 from app.services.scheduler.models import ScheduledTask, TaskStatistics
-
-
-class LoadTestTypes(StrEnum):
-    """Load test task types."""
-
-    CPU_INTENSIVE = "cpu_intensive"
-    IO_SIMULATION = "io_simulation"
-    MEMORY_OPERATIONS = "memory_operations"
-    FAILURE_TESTING = "failure_testing"
 
 
 class TaskRequest(BaseModel):
@@ -29,7 +19,7 @@ class TaskRequest(BaseModel):
 
     task_name: str = Field(..., description="Name of the task function to execute")
     queue_type: str = Field(
-        "system", description="Functional queue type: media or system"
+        QueueName.SYSTEM, description="The queue to send the task to"
     )
     args: list[Any] = Field(
         default_factory=list, description="Positional arguments for the task"
@@ -97,164 +87,6 @@ class TaskResultResponse(BaseModel):
     finish_time: datetime | None = Field(None, description="When the task completed")
 
 
-class LoadTestRequest(BaseModel):
-    """Request model for orchestrating load tests that measure queue throughput."""
-
-    num_tasks: int = Field(
-        100,
-        description="Number of tasks to spawn for the load test",
-        ge=1,
-    )
-    task_type: LoadTestTypes = Field(
-        LoadTestTypes.CPU_INTENSIVE,
-        description="Type of worker task to spawn for load testing",
-    )
-    batch_size: int = Field(
-        10,
-        description="How many tasks to send concurrently per batch",
-        ge=1,
-        le=100
-    )
-    delay_ms: int = Field(
-        0,
-        description="Delay between batches in milliseconds",
-        ge=0,
-        le=5000
-    )
-    target_queue: str = Field(
-        "load_test",
-        description="Which queue to test (system, media, or load_test)",
-        pattern="^(system|media|load_test)$"
-    )
-
-    class Config:
-        schema_extra = {
-            "examples": [
-                {
-                    "description": (
-                        "Quick CPU load test - fibonacci calculations and operations"
-                    ),
-                    "num_tasks": 50,
-                    "task_type": "cpu_intensive",
-                    "batch_size": 10,
-                    "delay_ms": 0,
-                    "target_queue": "system",
-                    "expected_work": (
-                        "Computational: fibonacci, prime checking, math operations"
-                    ),
-                    "expected_metrics": [
-                        "fibonacci_result",
-                        "math_operations_sum",
-                        "operations_per_ms",
-                    ]
-                },
-                {
-                    "description": (
-                        "I/O stress test - async operations and concurrent handling"
-                    ),
-                    "num_tasks": 200,
-                    "task_type": "io_simulation",
-                    "batch_size": 20,
-                    "delay_ms": 50,
-                    "target_queue": "system",
-                    "expected_work": (
-                        "Async I/O: network delays, concurrent operations, files"
-                    ),
-                    "expected_metrics": [
-                        "concurrent_operations",
-                        "io_efficiency_percent",
-                        "concurrency_benefit",
-                    ]
-                },
-                {
-                    "description": (
-                        "Memory allocation test - data structures and GC pressure"
-                    ),
-                    "num_tasks": 500,
-                    "task_type": "memory_operations",
-                    "batch_size": 25,
-                    "delay_ms": 0,
-                    "target_queue": "media",
-                    "expected_work": (
-                        "Memory: allocation patterns, data manipulation, cleanup"
-                    ),
-                    "expected_metrics": [
-                        "estimated_peak_memory_mb",
-                        "memory_throughput_mb_per_sec",
-                        "memory_operations_count",
-                    ]
-                },
-                {
-                    "description": (
-                        "Failure resilience test - ~20% random failures for errors"
-                    ),
-                    "num_tasks": 100,
-                    "task_type": "test_task_failure",
-                    "batch_size": 15,
-                    "delay_ms": 0,
-                    "target_queue": "system",
-                    "expected_work": (
-                        "Failure testing: random errors, recovery patterns, resilience"
-                    ),
-                    "expected_metrics": [
-                        "failure_roll",
-                        "failure_threshold",
-                        "would_have_failed",
-                    ]
-                }
-            ]
-        }
-
-
-class LoadTestStatus(BaseModel):
-    """Status model for monitoring active load tests."""
-
-    test_id: str = Field(..., description="Unique load test identifier")
-    status: str = Field(..., description="Test status: running, completed, failed")
-    tasks_sent: int = Field(..., description="Number of tasks sent to queue")
-    tasks_completed: int = Field(..., description="Number of tasks completed")
-    tasks_failed: int = Field(0, description="Number of tasks that failed")
-    elapsed_seconds: float = Field(..., description="Time elapsed since test start")
-    current_throughput: float = Field(..., description="Current tasks per second")
-    estimated_completion: datetime | None = Field(
-        None, description="Estimated completion time"
-    )
-    queue_depth: int = Field(0, description="Current queue depth")
-
-
-class LoadTestResults(BaseModel):
-    """Final results model for completed load tests."""
-
-    test_id: str = Field(..., description="Unique load test identifier")
-    status: str = Field(..., description="Final test status")
-    configuration: LoadTestRequest = Field(..., description="Test configuration used")
-
-    # Task metrics
-    tasks_sent: int = Field(..., description="Total tasks sent")
-    tasks_completed: int = Field(..., description="Total tasks completed")
-    tasks_failed: int = Field(..., description="Total tasks failed")
-
-    # Timing metrics
-    start_time: datetime = Field(..., description="Test start time")
-    end_time: datetime | None = Field(None, description="Test end time")
-    total_duration_seconds: float = Field(..., description="Total test duration")
-
-    # Performance metrics
-    overall_throughput: float = Field(..., description="Overall tasks per second")
-    peak_throughput: float = Field(..., description="Peak throughput achieved")
-    failure_rate: float = Field(..., description="Percentage of tasks that failed")
-
-    # Queue metrics
-    final_queue_metrics: dict[str, Any] = Field(
-        ..., description="Final arq queue health data"
-    )
-
-    # Summary
-    performance_summary: str = Field(
-        ..., description="Human readable performance summary"
-    )
-
-
 class TaskHistoryRecord(BaseModel):
     """A single task history record from Redis."""
 
@@ -304,3 +136,62 @@ class ScheduledTaskStatisticsResponse(BaseModel):
     """Response model for scheduled task statistics."""
 
     statistics: TaskStatistics = Field(..., description="Task statistics summary")
+
+
+class JobExecutionRead(BaseModel):
+    """A single scheduled-job run for the history list.
+
+    ``traceback`` is intentionally omitted here to keep list payloads small;
+    ``error_message`` carries the short failure reason.
+    """
+
+    id: int
+    job_id: str
+    job_name: str
+    scheduled_run_time: datetime | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    duration_ms: float | None = None
+    status: str
+    error_message: str | None = None
+
+
+class ScheduledExecutionListResponse(BaseModel):
+    """Response model for paginated job execution history."""
+
+    executions: list[JobExecutionRead] = Field(
+        ..., description="Job execution records, newest first"
+    )
+    total: int = Field(..., description="Total executions matching the filters")
+
+
+class JobRunSummary(BaseModel):
+    """Compact summary of a single run (used for ``last_run``)."""
+
+    status: str
+    started_at: datetime | None = None
+    duration_ms: float | None = None
+
+
+class JobExecutionStatsResponse(BaseModel):
+    """Aggregate execution stats for one scheduled job."""
+
+    total_runs: int = Field(..., description="Total recorded runs")
+    success_count: int = Field(..., description="Successful runs")
+    failure_count: int = Field(..., description="Failed runs")
+    success_rate: float = Field(..., description="Success percentage (0-100)")
+    avg_duration_ms: float | None = Field(
+        None, description="Average run duration in ms"
+    )
+    last_run: JobRunSummary | None = Field(None, description="Most recent run")
+
+
+class TriggerJobResponse(BaseModel):
+    """Response for a manual job trigger (Run Now)."""
+
+    job_id: str = Field(..., description="The triggered job id")
+    status: str = Field("triggered", description="Trigger outcome")
+    message: str = Field(..., description="Human-readable status")
+    ran_in: Literal["worker", "webserver"] = Field(
+        ..., description="Where the job itself runs"
+    )

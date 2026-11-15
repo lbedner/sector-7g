@@ -1,5 +1,5 @@
 """
-Simulation task wrappers for Homer, Lenny, Carl, and Charlie.
+Simulation task wrappers, one per character.
 
 Thin wrappers that pick a random activity and call the simulation service function.
 """
@@ -9,31 +9,30 @@ from typing import Any
 
 from app.services.springfield.carl import CARL_SIM_ACTIVITIES, carl_simulation
 from app.services.springfield.charlie import CHARLIE_SIM_ACTIVITIES, charlie_simulation
+from app.services.springfield.grimey import GRIMEY_SIM_ACTIVITIES, grimey_simulation
 from app.services.springfield.homer import HOMER_SIM_ACTIVITIES, homer_simulation
+from app.services.springfield.inanimate_rod import (
+    ROD_SIM_ACTIVITIES,
+    rod_simulation,
+)
 from app.services.springfield.lenny import LENNY_SIM_ACTIVITIES, lenny_simulation
 
 
-async def homer_sim_task(
-    ctx: dict[str, Any], activity: str | None = None, **kwargs: Any
-) -> dict[str, Any]:
+async def homer_sim_task(activity: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Homer simulation — random activity, slow, 10% failure rate."""
     if activity is None:
         activity = random.choice(HOMER_SIM_ACTIVITIES)
     return await homer_simulation(activity)
 
 
-async def lenny_sim_task(
-    ctx: dict[str, Any], activity: str | None = None, **kwargs: Any
-) -> dict[str, Any]:
+async def lenny_sim_task(activity: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Lenny simulation — random activity, fast, 2% failure rate."""
     if activity is None:
         activity = random.choice(LENNY_SIM_ACTIVITIES)
     return await lenny_simulation(activity)
 
 
-async def carl_sim_task(
-    ctx: dict[str, Any], activity: str | None = None, **kwargs: Any
-) -> dict[str, Any]:
+async def carl_sim_task(activity: str | None = None, **kwargs: Any) -> dict[str, Any]:
     """Carl simulation — random activity, fast, 1% failure rate."""
     if activity is None:
         activity = random.choice(CARL_SIM_ACTIVITIES)
@@ -41,9 +40,25 @@ async def carl_sim_task(
 
 
 async def charlie_sim_task(
-    ctx: dict[str, Any], activity: str | None = None, **kwargs: Any
+    activity: str | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     """Charlie simulation — random activity, moderate speed, 3% failure rate."""
     if activity is None:
         activity = random.choice(CHARLIE_SIM_ACTIVITIES)
     return await charlie_simulation(activity)
+
+
+async def inanimate_rod_sim_task(
+    activity: str | None = None, **kwargs: Any
+) -> dict[str, Any]:
+    """Inanimate Rod simulation — random activity, steady, 1% failure rate."""
+    if activity is None:
+        activity = random.choice(ROD_SIM_ACTIVITIES)
+    return await rod_simulation(activity)
+
+
+async def grimey_sim_task(activity: str | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Grimey simulation — random activity, meticulous, 0% failure rate."""
+    if activity is None:
+        activity = random.choice(GRIMEY_SIM_ACTIVITIES)
+    return await grimey_simulation(activity)

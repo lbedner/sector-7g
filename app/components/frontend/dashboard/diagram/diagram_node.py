@@ -9,24 +9,9 @@ import flet as ft
 
 from app.components.frontend.theme import AegisTheme as Theme
 from app.services.system.models import ComponentStatus, ComponentStatusType
-from app.services.system.ui import get_component_label, get_component_subtitle
+from app.services.system.ui import get_component_subtitle, get_component_title
 
 from ..cards.card_utils import _open_modal, get_ai_engine_display
-
-# Component configuration: display names and modal routing
-# Subtitles are generated dynamically via get_component_label()
-COMPONENT_CONFIG: dict[str, dict[str, str]] = {
-    "backend": {"name": "Server", "modal_name": "backend"},
-    "database": {"name": "Database", "modal_name": "database"},
-    "cache": {"name": "Cache", "modal_name": "redis"},
-    "worker": {"name": "Worker", "modal_name": "worker"},
-    "ingress": {"name": "Ingress", "modal_name": "ingress"},
-    "scheduler": {"name": "Scheduler", "modal_name": "scheduler"},
-    "service_ai": {"name": "AI Service", "modal_name": "ai"},
-    "service_auth": {"name": "Auth Service", "modal_name": "auth"},
-    "service_comms": {"name": "Comms Service", "modal_name": "comms"},
-    "frontend": {"name": "Frontend", "modal_name": "frontend"},
-}
 
 
 def get_status_color(status: ComponentStatusType) -> str:
@@ -85,17 +70,8 @@ class DiagramNode(ft.Container):
         self._component_data = component_data
         self._size = size
 
-        # Get configuration for this component
-        config = COMPONENT_CONFIG.get(
-            component_name,
-            {
-                "name": component_name.replace("_", " ").title(),
-                "modal_name": component_name,
-            },
-        )
-        self._display_name = config["name"]
+        self._display_name = get_component_title(component_name)
         self._subtitle = self._get_subtitle(component_name, component_data)
-        self._modal_name = config["modal_name"]
 
         # Status colors
         self._status_color = get_status_color(component_data.status)  # For dot
@@ -115,11 +91,10 @@ class DiagramNode(ft.Container):
             return get_ai_engine_display(metadata)
         elif component_name == "service_auth":
             return "JWT Authentication"
-        elif component_name in ("ingress", "worker"):
-            return get_component_subtitle(component_name, metadata)
-
-        # Fall back to static label
-        return get_component_label(component_name)
+        # Everything else, plugins included, takes its name from the
+        # health metadata when it declares one and the static label
+        # otherwise.
+        return get_component_subtitle(component_name, metadata)
 
     def _build(self) -> None:
         """Build the node visual content."""
@@ -204,7 +179,7 @@ class DiagramNode(ft.Container):
         if not e.page:
             return
 
-        _open_modal(self._modal_name, self._component_data, e.page)
+        _open_modal(self._component_name, self._component_data, e.page)
 
     def update_data(self, component_data: ComponentStatus) -> None:
         """

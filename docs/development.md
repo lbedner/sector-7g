@@ -20,8 +20,12 @@ uv sync
 cp .env.example .env
 
 # Start development server
-make run
+make run                 # or: uv run poe run
 ```
+
+Every `make <target>` below also runs as `uv run poe <target>`. Same tasks,
+no `make` needed - which is how Windows gets through the rest of this page.
+`uv run poe -h` lists them.
 
 ## Development Commands
 
@@ -29,6 +33,101 @@ make run
 ```bash
 make run          # Start with Docker
 ```
+
+### Choosing the ASGI server
+
+The webserver runs on uvicorn by default. Granian, a Rust-backed server,
+ships alongside it and is selected per run:
+
+```bash
+make serve ENGINE=granian   # this run only
+make serve                  # back to uvicorn
+```
+
+Deployments set `WEBSERVER_ENGINE=granian` in the env file instead, the
+same way any other deploy setting is set, or pick it (and the loop) in
+Overseer > Settings under the Server: a saved choice applies on the next
+restart, only where the env file does not set it, and only one this
+environment can start is offered.
+
+### Choosing the event loop
+
+A second, independent axis. `WEBSERVER_LOOP` defaults to `auto`, which
+resolves to uvloop when it is installed and asyncio otherwise:
+
+```bash
+make serve LOOP=rloop       # granian only
+make serve                  # auto: uvloop when installed
+```
+
+`auto` is resolved by the app, not handed to the server, and it will never
+select rloop on its own. Granian's own `auto` prefers rloop the moment it
+is importable, so a transitive dependency could otherwise move a
+deployment onto an alpha event loop with no code change and nothing in the
+logs.
+
+Not every loop works with every engine:
+
+| | asyncio | uvloop | rloop |
+| --- | --- | --- | --- |
+| uvicorn | yes | yes | no |
+| granian | yes | yes | yes |
+
+A combination that cannot work fails at startup naming what the running
+engine accepts. Only uvloop is installed by default; rloop is opt-in and
+Unix-only, and on the endpoints measured so far it performs the same as
+uvloop under granian, so there is no reason to reach for it yet.
+
+Worth knowing about the loop generally: it matters far more under uvicorn
+than under granian. Granian handles HTTP in Rust and only touches the
+Python loop at the application's await points, so swapping the loop
+underneath it moves very little.
+
+To see which is faster for your endpoints:
+
+```bash
+make bench-engines                      # /health/, the default
+make bench-engines ARGS="--list"        # what this app exposes
+```
+
+It boots the app once per engine and drives the same load at each. Point
+it at any route your app serves, with the same flags `api-load-test run`
+takes:
+
+```bash
+# Path parameters
+make bench-engines ARGS="--path /api/v1/jobs/{job_id} --path-param job_id=abc-123"
+
+# A POST with a body
+make bench-engines ARGS="--method POST --path /api/v1/things --payload '{\"name\":\"x\"}'"
+
+# An auth-gated route (a token is minted for you; --as-user, --anon also work)
+make bench-engines ARGS="--path /api/v1/private/ --as-admin"
+
+# Heavier load
+make bench-engines ARGS="--path /api/v1/things/ -n 10000 -c 100 --rounds 3"
+```
+
+Pick the routes that carry your traffic. The ratio is a property of your
+app, not of the server: the more work the handler does, the less the
+engine matters. A trivial route can show granian well ahead while a route
+that waits on the database shows the two within noise of each other.
+
+It prefers ApacheBench (`ab`, bundled on macOS, `apt install
+apache2-utils` on Debian) and falls back to the project's own
+`api-load-test` for methods `ab` cannot issue, or when `ab` is missing.
+That fallback client tops out below what either engine serves, so it
+reports them as equal; the output always says which driver ran and why.
+
+Two behavioral differences are worth knowing:
+
+- Granian sends no server-initiated WebSocket keepalive ping, so the
+  ping-timeout settings the uvicorn path carries have no equivalent and
+  are not needed.
+- Granian offers the `http.response.pathsend` extension, which hands
+  static files to the server to send directly. Any middleware that
+  rewrites a response body has to handle that message, not just
+  `http.response.body`.
 
 ### Health Monitoring
 ```bash
@@ -139,21 +238,23 @@ class WorkerSettings:
 ```
 
 ### 4. Add Scheduled Tasks
-Add jobs to the scheduler component:
+List it in the service's own `app/services/my_service/scheduled_jobs.py`:
 
 ```python
-# In app/components/scheduler/main.py
-from app.services.my_service import process_data
+from app.core.schedule import ServiceJob
+from app.services.my_service.jobs import process_data_job
 
-# Add to create_scheduler function
-scheduler.add_job(
-    func=lambda: process_data("scheduled"),
-    trigger="cron",
-    hour=2,  # Run at 2 AM daily
-    id="daily_processing",
-    name="Daily Data Processing"
+JOBS: tuple[ServiceJob, ...] = (
+    ServiceJob(
+        process_data_job,  # an async function taking no arguments
+        "daily_processing",
+        "Daily Data Processing",
+        {"trigger": "cron", "hour": 2},  # 2 AM daily
+    ),
 )
 ```
+
+The scheduler enqueues it and the worker runs it.
 
 ## Testing
 

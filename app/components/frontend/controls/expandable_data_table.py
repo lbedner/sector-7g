@@ -10,15 +10,19 @@ from typing import Any
 import flet as ft
 
 from app.components.frontend.controls.data_table import (
+    HOVER_TINT,
     DataTableColumn,
-    get_alignment,
+    build_cell,
+    header_cell,
+    holds_a_field,
     style_cell,
 )
-from app.components.frontend.controls.expand_arrow import ExpandArrow
+from app.components.frontend.controls.expand_arrow import (
+    EXPAND_ICON_WIDTH,
+    ExpandArrow,
+)
 from app.components.frontend.controls.text import SecondaryText
 from app.components.frontend.theme import AegisTheme as Theme
-
-EXPAND_ICON_WIDTH = 24  # Fixed width for expand arrow column
 
 
 @dataclass
@@ -42,15 +46,7 @@ class ExpandableTableHeader(ft.Container):
 
         # Space for arrow + column headers
         cells: list[ft.Control] = [ft.Container(width=EXPAND_ICON_WIDTH)]
-        cells.extend(
-            ft.Container(
-                content=SecondaryText(col.header, size=Theme.Typography.BODY_SMALL),
-                width=col.width,
-                expand=col.width is None,
-                alignment=get_alignment(col.alignment),
-            )
-            for col in columns
-        )
+        cells.extend(header_cell(col) for col in columns)
 
         self.content = ft.Row(cells, spacing=Theme.Spacing.MD)
         self.padding = ft.padding.symmetric(
@@ -80,14 +76,7 @@ class ExpandableTableRow(ft.Container):
         ]
         for i, value in enumerate(row.cells):
             col = columns[i] if i < len(columns) else DataTableColumn("")
-            cells.append(
-                ft.Container(
-                    content=style_cell(value, col.style),
-                    width=col.width,
-                    expand=col.width is None,
-                    alignment=get_alignment(col.alignment),
-                )
-            )
+            cells.append(build_cell(col, style_cell(value, col.style)))
 
         # Row container with hover
         row_container = ft.Container(
@@ -98,7 +87,7 @@ class ExpandableTableRow(ft.Container):
             ),
             bgcolor=ft.Colors.SURFACE,
             padding=ft.padding.symmetric(horizontal=Theme.Spacing.MD, vertical=10),
-            on_hover=self._on_hover,
+            on_hover=None if holds_a_field(row.cells) else self._on_hover,
             # Animation disabled for debugging
             # animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
         )
@@ -129,7 +118,7 @@ class ExpandableTableRow(ft.Container):
     def _on_hover(self, e: ft.ControlEvent) -> None:
         """Handle hover state change."""
         if e.data == "true":
-            e.control.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
+            e.control.bgcolor = HOVER_TINT
         else:
             e.control.bgcolor = ft.Colors.SURFACE
         if e.control.page:  # Guard: only update if control is on page

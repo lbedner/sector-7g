@@ -1,15 +1,15 @@
-
 """Server-Sent Events endpoint for real-time worker event streaming."""
 
 import asyncio
-import json
 from collections.abc import AsyncGenerator
+import json
 
-import redis.asyncio as aioredis
 from fastapi import APIRouter, Request
+import redis.asyncio as aioredis
 from starlette.responses import StreamingResponse
 
 from app.components.worker.events import WORKER_EVENT_STREAM, read_queue_totals
+from app.core.concurrency import until_closing
 from app.core.config import settings
 from app.core.log import logger
 
@@ -23,7 +23,6 @@ _XREAD_BLOCK_MS = 5000
 _XREAD_COUNT = 500
 
 
-
 @router.get("/worker/stream")
 async def worker_event_stream(request: Request) -> StreamingResponse:
     """
@@ -34,12 +33,8 @@ async def worker_event_stream(request: Request) -> StreamingResponse:
     events as deltas. The frontend is responsible for batching UI updates.
     """
 
-    async def event_generator() -> AsyncGenerator[str, None]:
-        redis_url = (
-            settings.redis_url_effective
-            if hasattr(settings, "redis_url_effective")
-            else settings.REDIS_URL
-        )
+    async def event_generator() -> AsyncGenerator[str]:
+        redis_url = settings.redis_url_effective
         redis_client: aioredis.Redis = aioredis.from_url(
             redis_url, decode_responses=True
         )
@@ -90,7 +85,7 @@ async def worker_event_stream(request: Request) -> StreamingResponse:
             await redis_client.aclose()
 
     return StreamingResponse(
-        event_generator(),
+        until_closing(event_generator()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

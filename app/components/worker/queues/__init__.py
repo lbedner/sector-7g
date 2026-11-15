@@ -1,1 +1,1 @@
-"""Worker queue configurations using native arq WorkerSettings."""
+"""The plant's queues: one module per character, each with its ``broker``."""

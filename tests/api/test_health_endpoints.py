@@ -6,11 +6,14 @@ ensuring API responses match expected CLI input format and handle errors correct
 """
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 from httpx import ASGITransport, AsyncClient
 import pytest
 
 from app.integrations.main import create_integrated_app
+from app.services.system import ComponentStatus, ComponentStatusType, SystemStatus
 
 
 class TestHealthEndpoints:
@@ -33,6 +36,17 @@ class TestHealthEndpoints:
 
         # Clean up after test
         await backend_hooks.execute_shutdown_hooks()
+
+        # Dispose the global async engine so its asyncpg connection pool
+        # doesn't carry pending operations into the next test (which would
+        # otherwise see "another operation is in progress" when a sync
+        # TestClient-based test reuses the same connection).
+        try:
+            from app.core.db import async_engine
+
+            await async_engine.dispose()
+        except ImportError:
+            pass
 
     @pytest.mark.asyncio
     async def test_basic_health_endpoint_accessible(
@@ -204,8 +218,8 @@ class TestHealthEndpoints:
                         if "sub_components" in queues_component:
                             queue_sub_components = queues_component["sub_components"]
 
-                            # Should have rod and homer queues
-                            for queue_name in ["inanimate_rod", "homer"]:
+                            # Should have system and load_test queues
+                            for queue_name in ["system", "load_test"]:
                                 if queue_name in queue_sub_components:
                                     queue_comp = queue_sub_components[queue_name]
                                     assert "name" in queue_comp
@@ -219,12 +233,12 @@ class TestHealthEndpoints:
                                         assert metadata["queue_type"] == queue_name
 
     @pytest.mark.asyncio
-    async def test_basic_health_includes_worker_in_components(
+    async def test_detailed_health_includes_worker_in_components(
         self, async_client: AsyncClient
     ) -> None:
-        """Test that basic health endpoint includes worker in components dict."""
+        """Test that detailed health endpoint includes worker in components dict."""
 
-        response = await async_client.get("/health/")
+        response = await async_client.get("/health/detailed")
         assert response.status_code in [200, 503]
 
         data = response.json()
@@ -255,6 +269,28 @@ class TestHealthEndpoints:
                 )
                 assert worker_component["name"] == "worker"
                 assert isinstance(worker_component["healthy"], bool)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["/health/detailed", "/health/dashboard"])
+    async def test_a_warning_is_reported_as_a_warning(
+        self, async_client: AsyncClient, path: str
+    ) -> None:
+        """Not healthy, and not "unhealthy" either: the CLI reads this field."""
+        root = ComponentStatus(
+            name="aegis", status=ComponentStatusType.WARNING, message="has issues"
+        )
+        warned = SystemStatus(
+            components={"aegis": root},
+            overall_healthy=False,
+            timestamp=datetime.now(UTC),
+        )
+        with patch(
+            "app.components.backend.api.health.get_system_status",
+            AsyncMock(return_value=warned),
+        ):
+            response = await async_client.get(path)
+
+        assert response.json()["status"] == "warning"
 
     @pytest.mark.asyncio
     async def test_dashboard_endpoint_accessible(
@@ -309,3 +345,30 @@ class TestHealthEndpoints:
         else:
             # For 503 responses, check error structure
             assert "detail" in data
+
+
+class TestLivenessProbe:
+    """/health/ is a constant-time liveness probe: no component walk."""
+
+    @pytest.mark.asyncio
+    async def test_basic_health_skips_component_walk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import app.components.backend.api.health as health_api
+
+        async def _walk_forbidden() -> None:
+            raise AssertionError("liveness probe must not run the component walk")
+
+        monkeypatch.setattr(health_api, "get_system_status", _walk_forbidden)
+
+        # No startup hooks on purpose: liveness must answer even before
+        # (or without) health-check registration.
+        app = create_integrated_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["healthy"] is True
+        assert data["components"] == {}

@@ -5,85 +5,157 @@ Command-line interface for sector-7g management tasks.
 """
 
 import asyncio
+from collections.abc import Coroutine
 import importlib
 import inspect
 import sys
-from typing import TYPE_CHECKING
+from typing import Any, TypeVar
 
 import click
 import typer
+from typer.core import TyperGroup
 
-from app.cli import docs, health
+from app.cli import theme
+import app.cli._i18n_click  # noqa: F401 — translate Click's built-in --help text
+from app.core.log import setup_logging
+from app.i18n import detect_locale, lazy_t, set_locale, t
+from app.i18n.locales import AVAILABLE_LOCALES
 
-if TYPE_CHECKING:
-    pass
+T = TypeVar("T")
+
+# Theme the rich ``--help`` output to the brand palette (teal = typeable tokens,
+# neutral = prose, dim = annotations/chrome). Must run before the Typer app is
+# built so every help panel — this CLI and all subcommands — inherits it.
+theme.apply_help_theme()
+
+# Each command group: its name, the module it lives in and the Typer app
+# (or, for ``mcp``, the one command) there. A module this stack does not
+# have is skipped.
+GROUPS: dict[str, tuple[str, str]] = {
+    "health": ("app.cli.health", "app"),
+    "docs": ("app.cli.docs", "app"),
+    "dns": ("app.cli.dns", "app"),
+    "patterns": ("app.cli.patterns", "app"),
+    "ontology": ("app.cli.ontology", "app"),
+    "settings": ("app.cli.settings_cli", "app"),
+    "api-load-test": ("app.cli.api_load_test", "app"),
+    "bench": ("app.cli.bench", "app"),
+    "tasks": ("app.cli.tasks", "app"),
+    "auth": ("app.cli.auth", "app"),
+    "ai": ("app.cli.ai", "app"),
+    "storage": ("app.cli.storage_cli", "app"),
+    "secrets": ("app.cli.secrets_cli", "app"),
+    "mcp": ("app.cli.mcp_cli", "serve"),
+    "mcp-tokens": ("app.cli.mcp_tokens_cli", "app"),
+    "deploy": ("app.cli.deploy_cli", "app"),
+    "comms": ("app.cli.comms", "app"),
+    "insights": ("app.cli.insights", "app"),
+    "payment": ("app.cli.payment", "app"),
+    "finance": ("app.cli.finance", "app"),
+    "blog": ("app.cli.blog", "app"),
+    "research": ("app.cli.research", "app"),
+    "meetings": ("app.cli.meetings", "app"),
+    "rag": ("app.cli.rag", "app"),
+    "llm": ("app.cli.llm", "app"),
+    "agents": ("app.cli.agents", "app"),
+    "context-modules": ("app.cli.agents", "modules_app"),
+}
+
+
+def _group(name: str) -> click.Command | None:
+    """The command group ``name``, imported now; None when this stack does
+    not have it."""
+    module, attribute = GROUPS[name]
+    try:
+        found = getattr(importlib.import_module(module), attribute)
+    except (ImportError, AttributeError):
+        return None
+    if not isinstance(found, typer.Typer):  # one command, not a group
+        single = typer.Typer(add_completion=False)
+        single.command(name, help=lazy_t(f"{name}.help"))(found)
+        return typer.main.get_command(single)
+    command = typer.main.get_group(found)
+    command.name = name
+    return command
+
+
+class LazyGroups(TyperGroup):
+    """The command groups, each imported only when it is the one run: a
+    command pays for its own imports, not every group's (the AI chat's
+    alone took 1.9s of every server read). Listing them (``--help``)
+    imports them all."""
+
+    loaded: dict[str, click.Command | None] = {}
+
+    def _loaded(self, name: str) -> click.Command | None:
+        if name not in self.loaded:
+            self.loaded[name] = _group(name)
+        return self.loaded[name]
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        return [n for n in GROUPS if self._loaded(n) is not None]
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        if cmd_name not in GROUPS:
+            return super().get_command(ctx, cmd_name)
+        return self._loaded(cmd_name)
+
 
 app = typer.Typer(
+    cls=LazyGroups,
     name="sector-7g",
-    help="sector-7g management CLI",
+    help=lazy_t("main.help"),
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    add_completion=False,
 )
 
-# Register sub-commands
-app.add_typer(health.app, name="health")
-app.add_typer(docs.app, name="docs")
 
-# Conditionally register tasks command if scheduler components are available
-try:
-    tasks_module = importlib.import_module("app.cli.tasks")
-    app.add_typer(tasks_module.app, name="tasks")
-except (ImportError, AttributeError):
-    # Scheduler components not available or tasks module incomplete, skip tasks commands
-    pass
+@app.callback()
+def main_callback(
+    lang: str | None = typer.Option(
+        None,
+        "--lang",
+        help=lazy_t("main.opt_lang"),
+        envvar="SECTOR_7G_LANG",
+    ),
+) -> None:
+    normalized = lang.lower().replace("-", "_").split("_")[0] if lang else None
+    if normalized and normalized not in AVAILABLE_LOCALES:
+        theme.bad(
+            t(
+                "main.unsupported_lang",
+                lang=lang,
+                available=", ".join(sorted(AVAILABLE_LOCALES)),
+            ),
+            err=True,
+        )
+        raise typer.Exit(1)
+    set_locale(lang if lang else detect_locale())
 
-# Conditionally register auth command if auth service is available
-try:
-    auth_module = importlib.import_module("app.cli.auth")
-    app.add_typer(auth_module.app, name="auth")
-except ImportError:
-    # Auth service not available, skip auth commands
-    pass
 
-# Conditionally register ai command if ai service is available
-try:
-    ai_module = importlib.import_module("app.cli.ai")
-    app.add_typer(ai_module.app, name="ai")
-except ImportError:
-    # AI service not available, skip ai commands
-    pass
+async def run_command(command: Coroutine[Any, Any, T]) -> T:
+    """Run an async command, then close the process-shared cache on the same
+    loop: closed after the loop is gone, its Redis pool is torn down by the
+    garbage collector and prints "Event loop is closed" at exit."""
+    from app.core.cache import get_cache
 
-# Conditionally register comms command if comms service is available
-try:
-    comms_module = importlib.import_module("app.cli.comms")
-    app.add_typer(comms_module.app, name="comms")
-except ImportError:
-    # Comms service not available, skip comms commands
-    pass
-
-# Conditionally register rag command if ai_rag is enabled
-try:
-    rag_module = importlib.import_module("app.cli.rag")
-    app.add_typer(rag_module.app, name="rag")
-except ImportError:
-    # RAG not available, skip rag commands
-    pass
-
-# Conditionally register llm command if ai service is available
-try:
-    llm_module = importlib.import_module("app.cli.llm")
-    app.add_typer(llm_module.app, name="llm")
-except ImportError:
-    # LLM ETL service not available, skip llm commands
-    pass
+    try:
+        return await command
+    finally:
+        await get_cache().aclose()
 
 
 def main() -> None:
     """Entry point for the CLI application."""
+    # Logs to stderr: stdout is a command's output, which a script reads
+    # (unconfigured, structlog prints to stdout).
+    setup_logging(sys.stderr)
     try:
         result = app(standalone_mode=False)
         # Handle async commands - standalone_mode=False returns coroutines unawaited
         if inspect.iscoroutine(result):
-            asyncio.run(result)
+            asyncio.run(run_command(result))
     except click.exceptions.UsageError as e:
         # Show help automatically on usage errors instead of just "try --help"
         if e.ctx is not None:
@@ -91,8 +163,9 @@ def main() -> None:
             click.echo()
         click.echo(f"Error: {e.format_message()}", err=True)
         sys.exit(2)
-    except click.exceptions.Abort:
-        # User cancelled (e.g., Ctrl+C)
+    except (click.exceptions.Abort, KeyboardInterrupt):
+        # User cancelled (e.g., Ctrl+C): Click's Abort for a sync command,
+        # the loop's own KeyboardInterrupt for an async one
         sys.exit(1)
     except click.exceptions.Exit as e:
         # Normal exit requested (e.g., after showing error message)

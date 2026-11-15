@@ -11,6 +11,24 @@ import flet as ft
 
 
 @dataclass(frozen=True)
+class BrandPalette:
+    """Canonical Aegis brand accents — the single source for teal/amber/red.
+
+    Everything that renders a brand accent derives from here: ``PulseColors``
+    below, and ``DarkColorPalette`` in ``theme.py`` (which imports this — the
+    dependency runs theme -> styles, so the source has to live here). The tool
+    CLI (``aegis/cli/brand.py``) mirrors these literals because a generated app
+    can't import the aegis tool; ``tests/cli/test_brand_palette_parity.py`` fails
+    if the two ever drift.
+    """
+
+    TEAL: str = "#17CCBF"  # Primary teal/cyan accent (and success state)
+    TEAL_DARK: str = "#248F87"  # Secondary/darker teal
+    AMBER: str = "#F5A623"  # Warning amber
+    RED: str = "#E23E3E"  # Destructive/error red
+
+
+@dataclass(frozen=True)
 class ColorPalette:
     """
     Dark mode color palette for modern, sleek UI.
@@ -50,10 +68,46 @@ class ButtonColors:
 
 
 @dataclass(frozen=True)
+class PulseColors:
+    """Aegis Pulse palette — shared with the server-rendered web frontend.
+
+    Kept distinct from ``ColorPalette`` because Pulse is a deliberate
+    restyle (flat, monochrome-first, teal-accented) rather than a drop-in
+    replacement. New visuals that match the Pulse look should pull from
+    here; legacy styles keep using ``ColorPalette``.
+    """
+
+    BG: str = "#000000"  # the web frontend's dark page background
+    CARD: str = "#111418"
+    BORDER: str = "#272C36"
+    TEXT: str = "#EEF1F4"
+    MUTED: str = "#7E8A9A"
+    TEAL: str = BrandPalette.TEAL
+    AMBER: str = BrandPalette.AMBER  # brand amber (was drifted to #F59E0B)
+    STOP: str = BrandPalette.RED
+
+
+@dataclass(frozen=True)
 class FontConfig:
     """Typography configuration for consistent text styling."""
 
     FAMILY_PRIMARY: str = "Roboto"
+    # Figures only: money, counts, percentages, axis ticks.
+    #
+    # Roboto's digits are proportional, so a "1" is narrower than a "0" and a
+    # right-aligned column of amounts shifts as the digits change. A tabular
+    # (monospaced) face gives every digit the same advance width, which is
+    # what makes a column of numbers sit still and read as a column.
+    #
+    # Flet 0.28 exposes only ``font_family`` on Text, with no access to the
+    # OpenType ``tnum`` feature, so tabular figures have to come from the
+    # typeface itself rather than from a font-feature setting. ``monospace``
+    # resolves to the platform's default fixed-width face with no bundled
+    # asset and no network. To pin a specific typeface instead, drop the file
+    # in ``assets/fonts/`` and register it on the page with
+    # ``page.fonts = {"Aegis Numeric": "/fonts/<file>.ttf"}``, then set this
+    # to that name.
+    FAMILY_NUMERIC: str = "monospace"
     SIZE_PRIMARY: int = 16
     SIZE_SECONDARY: int = 14
     SIZE_TERTIARY: int = 12
@@ -285,4 +339,85 @@ ELEVATED_BUTTON_LOGOUT_STYLE = create_button_style(
     hover_bgcolor=ButtonColors.DELETE_BORDER_HOVERED,
     focus_bgcolor=ButtonColors.DELETE_DEFAULT,
     active_bgcolor=ft.Colors.with_opacity(0.8, ButtonColors.DELETE_DEFAULT),
+)
+
+
+# -- Pulse buttons -----------------------------------------------------------
+# Flat, outlined, tinted-fill buttons matching the Aegis Pulse web frontend.
+# Differ from ``create_button_style`` above: no drop-shadow / elevation,
+# visible border, translucent accent fill. Use for new surfaces that should
+# feel "intentional and modern" rather than Material-elevated.
+
+
+PulseButtonTextStyle = ButtonTextStyle(size=13)
+"""Pulse uses text-sm (13px); body-weight, not bold."""
+
+
+def create_pulse_button_style(accent: str) -> ft.ButtonStyle:
+    """Build a flat, accent-tinted Pulse button style.
+
+    Mirrors the Tailwind recipe
+    ``bg-{accent}/10 border border-{accent} hover:bg-{accent}/20``
+    used in the Pulse templates (see ``components/landing/hero.html``).
+    """
+    return ft.ButtonStyle(
+        color={
+            ft.ControlState.DEFAULT: PulseColors.TEXT,
+            ft.ControlState.HOVERED: ft.Colors.WHITE,
+            ft.ControlState.FOCUSED: ft.Colors.WHITE,
+            ft.ControlState.PRESSED: ft.Colors.WHITE,
+            ft.ControlState.DISABLED: PulseColors.MUTED,
+        },
+        bgcolor={
+            ft.ControlState.DEFAULT: ft.Colors.with_opacity(0.10, accent),
+            ft.ControlState.HOVERED: ft.Colors.with_opacity(0.20, accent),
+            ft.ControlState.FOCUSED: ft.Colors.with_opacity(0.15, accent),
+            ft.ControlState.PRESSED: ft.Colors.with_opacity(0.25, accent),
+            ft.ControlState.DISABLED: ft.Colors.with_opacity(0.05, accent),
+        },
+        side={
+            ft.ControlState.DEFAULT: ft.BorderSide(1, accent),
+            ft.ControlState.HOVERED: ft.BorderSide(1, accent),
+            ft.ControlState.DISABLED: ft.BorderSide(
+                1, ft.Colors.with_opacity(0.4, accent)
+            ),
+        },
+        shape=ft.RoundedRectangleBorder(radius=8),
+        padding=ft.padding.symmetric(horizontal=20, vertical=10),
+        elevation=0,
+        overlay_color=ft.Colors.TRANSPARENT,
+        animation_duration=150,
+    )
+
+
+PULSE_BUTTON_TEAL_STYLE = create_pulse_button_style(PulseColors.TEAL)
+PULSE_BUTTON_AMBER_STYLE = create_pulse_button_style(PulseColors.AMBER)
+PULSE_BUTTON_STOP_STYLE = create_pulse_button_style(PulseColors.STOP)
+
+
+PULSE_BUTTON_MUTED_STYLE = ft.ButtonStyle(
+    # Matches the "Dashboard" header link in Pulse's base.html:
+    # ``text-aegis-muted border border-aegis-border hover:text-white
+    # hover:border-aegis-muted`` — a subtle neutral button for secondary
+    # actions (Cancel, Copy) that shouldn't compete with the primary CTA.
+    color={
+        ft.ControlState.DEFAULT: PulseColors.MUTED,
+        ft.ControlState.HOVERED: ft.Colors.WHITE,
+        ft.ControlState.FOCUSED: ft.Colors.WHITE,
+        ft.ControlState.PRESSED: ft.Colors.WHITE,
+        ft.ControlState.DISABLED: ft.Colors.with_opacity(0.4, PulseColors.MUTED),
+    },
+    bgcolor=ft.Colors.TRANSPARENT,
+    side={
+        ft.ControlState.DEFAULT: ft.BorderSide(1, PulseColors.BORDER),
+        ft.ControlState.HOVERED: ft.BorderSide(1, PulseColors.MUTED),
+        ft.ControlState.DISABLED: ft.BorderSide(
+            1, ft.Colors.with_opacity(0.4, PulseColors.BORDER)
+        ),
+    },
+    shape=ft.RoundedRectangleBorder(radius=8),
+    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+    elevation=0,
+    overlay_color=ft.Colors.TRANSPARENT,
+    animation_duration=150,
 )

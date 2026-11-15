@@ -7,7 +7,6 @@ validates the API contract.
 """
 
 from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from httpx import ASGITransport, AsyncClient
 import pytest
@@ -20,7 +19,11 @@ class TestWorkerEndpoints:
 
     @pytest.fixture
     async def async_client(self) -> AsyncIterator[AsyncClient]:
-        """Async HTTP client for testing."""
+        """Async HTTP client for testing.
+
+        No auth or no DB in this stack, so no override needed — the
+        endpoints are reachable without a bearer token.
+        """
         app = create_integrated_app()
 
         # Manually trigger startup for health check registration
@@ -33,100 +36,24 @@ class TestWorkerEndpoints:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             yield client
 
-    @patch("app.components.worker.pools.create_pool")
-    async def test_enqueue_task_with_kwargs(self, mock_create_pool, async_client):
-        """Test task enqueueing with task_kwargs field."""
-        # Clear cache to ensure fresh mock
-        from app.components.worker.pools import clear_pool_cache
+        # Clean up after test: what the startup hooks began, stopped (left
+        # running, the test's loop waits 300s for it as it closes).
+        await backend_hooks.execute_shutdown_hooks()
 
-        await clear_pool_cache()
-
-        # Mock pool and job
-        mock_pool = AsyncMock()
-        mock_job = MagicMock()
-        mock_job.job_id = "test-job-123"
-        mock_pool.enqueue_job.return_value = mock_job
-
-        # Mock the get_queue_pool function to return our mocked pool
-        mock_create_pool.return_value = mock_pool
-
-        # Test data with task_kwargs
-        task_request = {
-            "task_name": "eat_donut_task",
-            "queue_type": "inanimate_rod",
-            "args": ["arg1", "arg2"],
-            "task_kwargs": {"keyword_arg": "value", "another_kwarg": 123},
-            "delay_seconds": None,
-        }
-
-        # Make the API call
-        response = await async_client.post("/api/v1/tasks/enqueue", json=task_request)
-
-        # Verify response
-        assert response.status_code == 200
-        response_data = response.json()
-        assert response_data["task_id"] == "test-job-123"
-        assert response_data["task_name"] == "eat_donut_task"
-        assert response_data["queue_type"] == "inanimate_rod"
-
-        # Verify that enqueue_job was called with task_kwargs unpacked
-        mock_pool.enqueue_job.assert_called_once_with(
-            "eat_donut_task",
-            "arg1",
-            "arg2",
-            _queue_name="arq:queue:inanimate_rod",
-            _defer_by=None,
-            keyword_arg="value",
-            another_kwarg=123,
-        )
-
-    @patch("app.components.worker.pools.create_pool")
-    async def test_enqueue_task_without_kwargs(self, mock_create_pool, async_client):
-        """Test task enqueueing without task_kwargs (empty dict)."""
-        # Clear cache to ensure fresh mock
-        from app.components.worker.pools import clear_pool_cache
-
-        await clear_pool_cache()
-
-        # Mock pool and job
-        mock_pool = AsyncMock()
-        mock_job = MagicMock()
-        mock_job.job_id = "test-job-456"
-        mock_pool.enqueue_job.return_value = mock_job
-        mock_create_pool.return_value = mock_pool
-
-        # Test data without task_kwargs (should default to empty dict)
-        task_request = {
-            "task_name": "run_diagnostics_task",
-            "queue_type": "inanimate_rod",
-            "args": [],
-        }
-
-        # Make the API call
-        response = await async_client.post("/api/v1/tasks/enqueue", json=task_request)
-
-        # Verify response
-        assert response.status_code == 200
-        response_data = response.json()
-        assert response_data["task_id"] == "test-job-456"
-
-        # Verify enqueue_job called with no extra kwargs
-        mock_pool.enqueue_job.assert_called_once_with(
-            "run_diagnostics_task",
-            _queue_name="arq:queue:inanimate_rod",
-            _defer_by=None,
-        )
-
-    async def test_enqueue_task_invalid_queue_type(self, async_client):
+    async def test_enqueue_task_invalid_queue_type(self, async_client, auth_headers):
         """Test error handling for invalid queue type."""
         task_request = {
-            "task_name": "eat_donut_task",
+            "task_name": "system_health_check",
             "queue_type": "invalid_queue",
             "args": [],
             "task_kwargs": {},
         }
 
-        response = await async_client.post("/api/v1/tasks/enqueue", json=task_request)
+        response = await async_client.post(
+            "/api/v1/tasks/enqueue",
+            json=task_request,
+            headers=auth_headers,
+        )
 
         # Should return 400 for invalid queue type
         assert response.status_code == 400
@@ -134,13 +61,15 @@ class TestWorkerEndpoints:
         assert "detail" in response_data
         assert response_data["detail"]["error"] == "invalid_queue_type"
 
-    async def test_task_request_model_validation(self, async_client):
+    async def test_task_request_model_validation(self, async_client, auth_headers):
         """Test TaskRequest model validation."""
         # Missing required task_name field
-        invalid_request = {"queue_type": "inanimate_rod", "args": [], "task_kwargs": {}}
+        invalid_request = {"queue_type": "system", "args": [], "task_kwargs": {}}
 
         response = await async_client.post(
-            "/api/v1/tasks/enqueue", json=invalid_request
+            "/api/v1/tasks/enqueue",
+            json=invalid_request,
+            headers=auth_headers,
         )
 
         # Should return 422 for validation error

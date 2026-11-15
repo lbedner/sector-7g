@@ -1,0 +1,212 @@
+"""Cross-platform port resolution for ``make serve`` / ``uv run poe serve``.
+
+Picks free host ports so a busy default (another stack, a local Postgres on
+5432, etc.) doesn't kill the run with "bind: address already in use". Only
+the HOST publish is ever shifted; containers keep their fixed internal ports
+and reach each other by service name inside the compose network.
+
+Used directly (in-process) by ``scripts/dev_tasks.py``, which both the
+Makefile and the ``uv run poe`` tasks call into, so there is exactly one
+port-resolution implementation shared by both interfaces.
+"""
+
+from __future__ import annotations
+
+import errno
+import os
+from pathlib import Path
+import socket
+import sys
+
+_PERSISTED_KEYS = {
+    "WEBSERVER_HOST_PORT",
+    "POSTGRES_HOST_PORT",
+    "REDIS_HOST_PORT",
+    "OLLAMA_HOST_PORT",
+    "BROWSER_HOST_PORT",
+    "INGRESS_DASHBOARD_PORT",
+}
+
+_DEFAULT_PORTS_FILE = Path(__file__).resolve().parent.parent / ".env.ports"
+
+
+def _attempt(port: int) -> int:
+    """Probe by connecting rather than binding, so ports below 1024 need no root.
+
+    Returns 0 (free), 1 (busy), or -1 (ambiguous: a self-connect EINVAL
+    collision right after a recent bind, seen on macOS; not a real "in use"
+    signal, so the caller retries rather than trusting it).
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1.0)
+    try:
+        sock.connect(("127.0.0.1", port))
+    except ConnectionRefusedError:
+        return 0
+    except OSError as exc:
+        return -1 if exc.errno == errno.EINVAL else 1
+    else:
+        return 1
+    finally:
+        sock.close()
+
+
+def _is_free(port: int) -> bool:
+    for _ in range(3):
+        verdict = _attempt(port)
+        if verdict >= 0:
+            return verdict == 0
+    return False  # persistent EINVAL: treat as unavailable, don't hand it out
+
+
+def _find_free_port(start: int, max_attempts: int = 20) -> int:
+    for port in range(start, start + max_attempts):
+        if _is_free(port):
+            return port
+    raise RuntimeError(
+        f"find_free_port: no free port in {start}..{start + max_attempts - 1}"
+    )
+
+
+def _remembered(path: Path) -> dict[str, int]:
+    """The ports the last run published (``.env.ports``), by key."""
+    if not path.exists():
+        return {}
+    found: dict[str, int] = {}
+    for line in path.read_text().splitlines():
+        key, sep, value = line.partition("=")
+        if sep and value.strip().isdigit():
+            found[key.strip()] = int(value)
+    return found
+
+
+def _choose(base: int, last: int | None = None) -> int:
+    """``last`` (the port the last run had) while it is still free, so a
+    restart lands where a saved URL expects it; else the base, or the next
+    free one after it."""
+    if last is not None and last != base and _is_free(last):
+        return last
+    return _find_free_port(base)
+
+
+def _resolve_one(
+    base: int, label: str, scheme: str = "http://", last: int | None = None
+) -> int:
+    """The port ``_choose`` picks, said."""
+    port = _choose(base, last)
+    if port == last and port != base:
+        print(f">> {label}: {scheme}127.0.0.1:{port} (as last run)", file=sys.stderr)
+    elif port == base:
+        print(f">> {label}: {scheme}127.0.0.1:{port}", file=sys.stderr)
+    else:
+        print(
+            f">> port {base} in use - {label} on {scheme}127.0.0.1:{port}",
+            file=sys.stderr,
+        )
+    return port
+
+
+def _base_and_last(env: str, base: str, last: int | None) -> tuple[int, int | None]:
+    """A port's base (``env`` when set), and the last run's port unless a
+    base was asked for in the environment, which wins."""
+    return int(os.environ.get(env, base)), None if env in os.environ else last
+
+
+def webserver_port(ports_file: Path | None = None) -> int:
+    """The port ``make serve`` will publish the webserver on, by the same
+    rule and unsaid: what a host-side tool prints a link to."""
+    last = _remembered(ports_file or _DEFAULT_PORTS_FILE).get("WEBSERVER_HOST_PORT")
+    return _choose(*_base_and_last("WEBSERVER_PORT_BASE", "8000", last))
+
+
+def docs_port(base: int | None = None) -> int:
+    """The host port ``make docs-serve`` should bind.
+
+    Same rule as every other host publish: take the base if it is free,
+    otherwise the next one that is. 8001 was hardcoded, which is exactly
+    the port a second stack's webserver resolves to, so previewing docs
+    beside a running app failed to bind.
+    """
+    if base is None:
+        base = int(os.environ.get("DOCS_PORT_BASE", "8001"))
+    return _resolve_one(base, "docs")
+
+
+def resolve_ports(
+    *,
+    ingress: bool,
+    postgres: bool,
+    redis: bool,
+    ollama: bool,
+    browser: bool,
+    storage: bool,
+    ports_file: Path | None = None,
+) -> dict[str, int]:
+    """Resolve host ports for the requested services and persist them.
+
+    Everything ``Settings`` has a field for is written to ``.env.ports``,
+    which it loads as a strict dotenv (``extra="forbid"``). That now
+    includes ``WEBSERVER_HOST_PORT``: host-side CLI commands call this
+    app's own API, so they need the port compose published, not the one
+    the container listens on. ``INGRESS_HTTP_PORT`` stays out -- it has
+    no field, and only ``docker compose``'s environment needs it, which
+    the caller supplies directly from the returned dict.
+
+    A port the last run published is kept while it is free (a base asked
+    for in the environment wins), so a URL saved for this stack, an MCP
+    client's say, survives a restart beside other stacks.
+    """
+    target = ports_file or _DEFAULT_PORTS_FILE
+    last = _remembered(target)
+
+    def pick(key: str, env: str, base: str, label: str, scheme: str = "http://") -> int:
+        port, remembered = _base_and_last(env, base, last.get(key))
+        return _resolve_one(port, label, scheme, remembered)
+
+    ports: dict[str, int] = {
+        "WEBSERVER_HOST_PORT": pick(
+            "WEBSERVER_HOST_PORT", "WEBSERVER_PORT_BASE", "8000", "webserver"
+        )
+    }
+    if ingress:
+        ports["INGRESS_HTTP_PORT"] = pick(
+            "INGRESS_HTTP_PORT", "INGRESS_PORT_BASE", "80", "ingress"
+        )
+        ports["INGRESS_DASHBOARD_PORT"] = pick(
+            "INGRESS_DASHBOARD_PORT",
+            "INGRESS_DASHBOARD_BASE",
+            "8080",
+            "traefik dashboard",
+        )
+    if postgres:
+        ports["POSTGRES_HOST_PORT"] = pick(
+            "POSTGRES_HOST_PORT", "POSTGRES_PORT_BASE", "5432", "postgres", ""
+        )
+    if redis:
+        ports["REDIS_HOST_PORT"] = pick(
+            "REDIS_HOST_PORT", "REDIS_PORT_BASE", "6379", "redis", ""
+        )
+    if ollama:
+        ports["OLLAMA_HOST_PORT"] = pick(
+            "OLLAMA_HOST_PORT", "OLLAMA_PORT_BASE", "11434", "ollama", ""
+        )
+    if browser:
+        ports["BROWSER_HOST_PORT"] = pick(
+            "BROWSER_HOST_PORT", "BROWSER_PORT_BASE", "3000", "browser", ""
+        )
+    if storage:
+        ports["SEAWEEDFS_HOST_PORT"] = pick(
+            "SEAWEEDFS_HOST_PORT", "SEAWEEDFS_PORT_BASE", "8333", "storage (S3)"
+        )
+
+    lines = [
+        "# Auto-generated by make serve / uv run poe serve.",
+        "# Host publish ports for this run. Ephemeral and gitignored;",
+        "# read by app/core/config.py for host-side service URLs.",
+    ]
+    lines.extend(
+        f"{key}={value}" for key, value in ports.items() if key in _PERSISTED_KEYS
+    )
+    target.write_text("\n".join(lines) + "\n")
+
+    return ports

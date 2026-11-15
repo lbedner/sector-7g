@@ -1,0 +1,363 @@
+"""Tests for the pause-aware TaskIQ broker used during rolling deploys."""
+
+from __future__ import annotations
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+# ``broker_taskiq.py`` is renamed to ``broker.py`` during post-generation
+# (only the selected backend's files survive), so this import resolves in
+# the generated project.
+from app.components.worker import broker as broker_module
+from app.components.worker.broker import (
+    PAUSE_KEY,
+    PausableRedisStreamBroker,
+    QueueTimeout,
+)
+
+
+def _make_broker() -> PausableRedisStreamBroker:
+    b = PausableRedisStreamBroker.__new__(PausableRedisStreamBroker)
+    b.connection_pool = MagicMock()
+    b.consumer_group_name = "g"
+    b.consumer_name = "c"
+    b.queue_name = "q"
+    b.additional_streams = {}
+    b.block = 10
+    b.count = 1
+    b.idle_timeout = 1000
+    b.unacknowledged_batch_size = 1
+    b._claims = {}
+    b._keeping = {}
+    b._drop_due = float("inf")  # a test that wants the drop sets it due
+    return b
+
+
+class _RedisCtx:
+    """Async-context-manager wrapper around an AsyncMock redis."""
+
+    def __init__(self, conn: AsyncMock) -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> AsyncMock:
+        return self._conn
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
+
+
+@pytest.fixture
+def conn(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """The Redis every connection the broker opens leads to."""
+    conn = AsyncMock()
+    monkeypatch.setattr(broker_module.aioredis, "Redis", lambda **_: _RedisCtx(conn))
+    return conn
+
+
+@pytest.mark.asyncio
+async def test_listen_gates_while_paused(
+    monkeypatch: pytest.MonkeyPatch, conn: AsyncMock
+) -> None:
+    """While PAUSE_KEY is set, no xreadgroup/xautoclaim calls should fire."""
+    conn.get.return_value = b"1"  # paused
+    conn.xreadgroup.return_value = []
+    conn.xautoclaim.return_value = (b"0-0", [])
+
+    monkeypatch.setattr(broker_module, "PAUSE_POLL_SECONDS", 0.01)
+
+    b = _make_broker()
+
+    async def consume() -> None:
+        async for _msg in b.listen():
+            return
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):
+        pass
+
+    conn.get.assert_called_with(PAUSE_KEY)
+    conn.xreadgroup.assert_not_called()
+    conn.xautoclaim.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_listen_fetches_when_not_paused(conn: AsyncMock) -> None:
+    """With PAUSE_KEY unset, listen() yields the first message from xreadgroup."""
+    conn.get.return_value = None  # not paused
+    conn.xreadgroup.return_value = [
+        (b"q", [(b"1-0", {b"data": b"payload"})]),
+    ]
+
+    b = _make_broker()
+
+    with patch.object(b, "_ack_generator", return_value=AsyncMock()):
+        agen = b.listen()
+        msg = await asyncio.wait_for(agen.__anext__(), timeout=1.0)
+        await agen.aclose()
+
+    assert msg.data == b"payload"
+    conn.xreadgroup.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Poison-message guard — _is_poison
+# ---------------------------------------------------------------------------
+
+
+def _pending(times_delivered: int) -> list[dict]:
+    """Shape XPENDING range returns: one entry with a delivery counter."""
+    return [{"message_id": b"1-0", "times_delivered": times_delivered}]
+
+
+@pytest.mark.asyncio
+async def test_is_poison_drops_over_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Past the redelivery cap, the message is ACKed (dropped) and skipped."""
+    monkeypatch.setattr(broker_module.settings, "WORKER_MAX_REDELIVERIES", 5)
+    conn = AsyncMock()
+    conn.xpending_range.return_value = _pending(6)  # over cap
+    b = _make_broker()
+
+    assert await b._is_poison(conn, "q", b"1-0") is True
+    conn.xack.assert_awaited_once_with("q", "g", b"1-0")  # xack(stream, group, id)
+
+
+@pytest.mark.asyncio
+async def test_is_poison_keeps_under_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """At or under the cap, the message is kept (no ack, not skipped)."""
+    monkeypatch.setattr(broker_module.settings, "WORKER_MAX_REDELIVERIES", 5)
+    conn = AsyncMock()
+    conn.xpending_range.return_value = _pending(5)  # == cap, still allowed
+    b = _make_broker()
+
+    assert await b._is_poison(conn, "q", b"1-0") is False
+    conn.xack.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_is_poison_disabled_when_cap_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """cap <= 0 disables the guard entirely (no XPENDING call, never drops)."""
+    monkeypatch.setattr(broker_module.settings, "WORKER_MAX_REDELIVERIES", 0)
+    conn = AsyncMock()
+    b = _make_broker()
+
+    assert await b._is_poison(conn, "q", b"1-0") is False
+    conn.xpending_range.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_is_poison_fails_open_on_redis_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Redis error during the check delivers the message (never drops work)."""
+    monkeypatch.setattr(broker_module.settings, "WORKER_MAX_REDELIVERIES", 5)
+    conn = AsyncMock()
+    conn.xpending_range.side_effect = RuntimeError("redis down")
+    b = _make_broker()
+
+    assert await b._is_poison(conn, "q", b"1-0") is False
+    conn.xack.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# One consumer per worker host, and the ones that left are forgotten
+# ---------------------------------------------------------------------------
+
+
+def test_a_worker_keeps_one_consumer_name_across_restarts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """taskiq names a consumer with a fresh uuid each start, so every
+    restart and every dev reload joined the group anew and none ever left.
+    The host's name (a container's id) stays the same across restarts."""
+    monkeypatch.setattr(broker_module.socket, "gethostname", lambda: "0c132f87156d")
+    url = "redis://localhost:6379"
+    assert PausableRedisStreamBroker(url=url).consumer_name == "0c132f87156d"
+    named = PausableRedisStreamBroker(url=url, consumer_name="mine")
+    assert named.consumer_name == "mine"
+
+
+@pytest.mark.asyncio
+async def test_startup_forgets_consumers_that_left(conn: AsyncMock) -> None:
+    """A consumer that has read nothing for an hour and holds no job is
+    gone; one still holding jobs stays until ``xautoclaim`` takes them,
+    since deleting it would drop them."""
+    hour = broker_module.STALE_CONSUMER_MS
+    conn.xinfo_consumers.return_value = [
+        {"name": b"c", "pending": 0, "idle": hour * 9},  # this worker
+        {"name": b"old", "pending": 0, "idle": hour + 1},
+        {"name": b"holding", "pending": 2, "idle": hour * 9},
+        {"name": b"live", "pending": 0, "idle": 500},
+    ]
+    pipe = MagicMock(execute=AsyncMock())
+    conn.pipeline = MagicMock(return_value=pipe)
+    await _make_broker().forget_stale_consumers()
+    pipe.xgroup_delconsumer.assert_called_once_with("q", "g", b"old")  # one trip
+    pipe.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_no_group_yet_is_nothing_to_forget(conn: AsyncMock) -> None:
+    conn.xinfo_consumers.side_effect = broker_module.aioredis.ResponseError("no key")
+    await _make_broker().forget_stale_consumers()
+    conn.pipeline.assert_not_called()
+
+
+def test_a_new_consumer_group_starts_at_the_beginning_of_the_stream() -> None:
+    """Work enqueued before the worker ever ran must still be delivered.
+
+    A group created at "$" starts at the tail, so every message already in
+    the stream is skipped forever: the job sits queued, the queue reports
+    nothing waiting, and no worker ever sees it.
+    """
+    from app.components.worker.queues.grimey import broker as system_broker
+
+    assert system_broker.consumer_id == "0"
+
+
+# ---------------------------------------------------------------------------
+# A running job keeps its claim; a queue claims only what it runs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_running_job_keeps_its_claim_until_it_finishes(conn: AsyncMock) -> None:
+    """``xautoclaim`` hands a job unacked past ``idle_timeout`` to another
+    worker, for a worker that died. A job still running refreshes its
+    claim (``XCLAIM ... JUSTID``: no delivery counted) so it is never run
+    twice; once it finishes, the refreshing stops."""
+    b = _make_broker()
+    b.idle_timeout = 150  # ms: refreshed every 50 ms
+    b._claims["task-1"] = ("q", b"1-0")
+
+    b.keep_claim("task-1")
+    await asyncio.sleep(0.2)
+    conn.xclaim.assert_awaited_with(
+        "q", "g", "c", min_idle_time=0, message_ids=[b"1-0"], justid=True
+    )
+    b.release_claim("task-1")
+    refreshed = conn.xclaim.await_count
+    await asyncio.sleep(0.2)
+    assert conn.xclaim.await_count == refreshed
+    assert "task-1" not in b._claims
+
+
+@pytest.mark.asyncio
+async def test_listen_remembers_each_messages_claim(conn: AsyncMock) -> None:
+    """The job's task id leads back to its stream entry, for the claim."""
+    from taskiq import TaskiqMessage
+    from taskiq.formatters.json_formatter import JSONFormatter
+
+    message = TaskiqMessage(
+        task_id="task-7", task_name="t", labels={}, args=[], kwargs={}
+    )
+    data = JSONFormatter().dumps(message).message
+    conn.get.return_value = None
+    conn.xreadgroup.return_value = [(b"q", [(b"7-0", {b"data": data})])]
+    b = _make_broker()
+    b.formatter = JSONFormatter()
+    with patch.object(b, "_ack_generator", return_value=AsyncMock()):
+        agen = b.listen()
+        await asyncio.wait_for(agen.__anext__(), timeout=1.0)
+        await agen.aclose()
+    assert b._claims["task-7"] == (b"q", b"7-0")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("held", "oldest_held", "floor"),
+    [
+        (2, b"5-0", b"5-0"),  # jobs held: up to the oldest of them
+        (0, None, "9-0"),  # none held: up to the last one delivered
+        (1, None, None),  # the last held job just finished: next round
+    ],
+)
+async def test_finished_jobs_leave_the_stream(
+    conn: AsyncMock, held: int, oldest_held: bytes | None, floor: bytes | str | None
+) -> None:
+    """Everything older than the oldest job still held is finished."""
+    conn.xinfo_groups.return_value = [
+        {"name": b"other", "pending": 7, "last-delivered-id": b"99-0"},
+        {"name": b"g", "pending": held, "last-delivered-id": b"9-0"},
+    ]
+    conn.xpending.return_value = {"pending": held, "min": oldest_held}
+    await _make_broker().drop_finished_jobs()
+    if floor is None:
+        conn.xtrim.assert_not_called()
+    else:
+        conn.xtrim.assert_awaited_once_with("q", minid=floor, approximate=True)
+    assert conn.xpending.await_count == bool(held)  # idle: one read, not two
+
+
+@pytest.mark.asyncio
+async def test_no_stream_yet_is_nothing_to_drop(conn: AsyncMock) -> None:
+    conn.xinfo_groups.side_effect = broker_module.aioredis.ResponseError("no key")
+    await _make_broker().drop_finished_jobs()
+    conn.xtrim.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_listening_worker_drops_finished_jobs_as_it_goes(
+    monkeypatch: pytest.MonkeyPatch, conn: AsyncMock
+) -> None:
+    """Not only at startup, and not on every read: once each time it is due."""
+    conn.get.return_value = None  # not paused
+
+    async def nothing_new(*_a: object, **_k: object) -> list:
+        await asyncio.sleep(0)  # a real read blocks: let the loop turn
+        return []
+
+    conn.xreadgroup.side_effect = nothing_new
+    conn.lock = MagicMock(return_value=MagicMock(locked=AsyncMock(return_value=True)))
+    b = _make_broker()
+    drop = AsyncMock()
+    monkeypatch.setattr(b, "drop_finished_jobs", drop)
+    b._drop_due = 0.0
+    listening = asyncio.ensure_future(b.listen().__anext__())
+    await asyncio.sleep(0.01)  # many reads
+    listening.cancel()
+    drop.assert_awaited_once()
+
+
+@pytest.mark.parametrize("queue", ["grimey", "lenny"])
+def test_a_queue_claims_one_job_per_free_slot(queue: str) -> None:
+    """Claimed jobs belong to one worker. taskiq asks for a message each
+    time a slot frees, so a read of more than one claims jobs that only
+    wait: up to twice the concurrency held, the waiting ones with no claim
+    kept alive, and starved neighbours. One per read claims what it starts."""
+    from importlib import import_module
+
+    broker = import_module(f"app.components.worker.queues.{queue}").broker
+    assert broker.count == 1
+
+
+def test_a_job_with_no_timeout_takes_its_queues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every queue's broker carries the rule, so no task is registered
+    without a limit; a task's own ``timeout`` stands."""
+    from taskiq import TaskiqMessage
+
+    from app.core.config import settings
+    from app.core.queue_workers import QueueWorker
+
+    monkeypatch.setattr(
+        settings, "WORKER_QUEUES", {"q": QueueWorker(timeout_seconds=7)}
+    )
+    broker = PausableRedisStreamBroker(url="redis://nowhere", queue_name="taskiq:q")
+    (rule,) = [m for m in broker.middlewares if isinstance(m, QueueTimeout)]
+
+    def job(**labels: int) -> TaskiqMessage:
+        return TaskiqMessage(
+            task_id="1", task_name="t", labels=labels, args=[], kwargs={}
+        )
+
+    assert rule.pre_execute(job()).labels["timeout"] == 7
+    assert rule.pre_execute(job(timeout=99)).labels["timeout"] == 99

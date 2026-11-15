@@ -9,6 +9,74 @@ Following 12-Factor App principles:
 - Configuration = environment (varies between dev/staging/production)
 """
 
+from enum import StrEnum
+from pathlib import Path
+import tempfile
+
+
+class AppEnv(StrEnum):
+    """Where the app runs (``settings.APP_ENV``)."""
+
+    DEV = "dev"
+    PROD = "prod"
+
+
+# What ``APP_ENV`` reads as development, in the spellings people use.
+DEV_ENVS = frozenset({AppEnv.DEV, "development", "local"})
+
+
+class ComponentName(StrEnum):
+    """Each infrastructure component's health check name: its key in the
+    name registry (``ui.get_component_title``), in status and on the map."""
+
+    BACKEND = "backend"
+    FRONTEND = "frontend"
+    WEB_FRONTEND = "web_frontend"
+    DATABASE = "database"
+    CACHE = "cache"
+    WORKER = "worker"
+    SCHEDULER = "scheduler"
+    INGRESS = "ingress"
+    STORAGE = "storage"
+    SECRETS = "secrets"
+    OBSERVABILITY = "observability"
+    MCP = "mcp"
+    BROWSER = "browser"
+    OLLAMA = "ollama"
+    DEPLOY = "deploy"
+
+
+class ServiceName(StrEnum):
+    """Application service names, kept in sync with the generator's ServiceSpecs."""
+
+    AUTH = "auth"
+    AI = "ai"
+    COMMS = "comms"
+    INSIGHTS = "insights"
+    PAYMENT = "payment"
+    BLOG = "blog"
+    FINANCE = "finance"
+    DOCUMENTS = "documents"
+    RESEARCH = "research"
+    MEETINGS = "meetings"
+
+
+class QueueName(StrEnum):
+    """The queue the stack's own work goes to (scheduled service jobs,
+    backups, maintenance); every other queue is discovered by name.
+
+    This plant has no ``system`` queue: Frank Grimes does that work,
+    unthanked, on his.
+    """
+
+    HOMER = "homer"
+    LENNY = "lenny"
+    CARL = "carl"
+    CHARLIE = "charlie"
+    INANIMATE_ROD = "inanimate_rod"
+    GRIMEY = "grimey"
+    SYSTEM = GRIMEY
+
 
 class APIEndpoints:
     """API endpoint paths - immutable across all environments."""
@@ -16,7 +84,8 @@ class APIEndpoints:
     HEALTH_BASIC = "/health/"
     HEALTH_DETAILED = "/health/detailed"
     HEALTH_DASHBOARD = "/health/dashboard"
-    AI_USAGE_STATS = "/ai/usage/stats"
+    AI_USAGE_STATS = "/api/v1/ai/usage/stats"
+    AI_SENTIMENT_STATS = "/api/v1/ai/sentiment/stats"
 
 
 class Defaults:
@@ -33,6 +102,120 @@ class Defaults:
     # Health check intervals (seconds)
     HEALTH_CHECK_INTERVAL = 30
     COMPONENT_CHECK_TIMEOUT = 2.0
+
+
+# Where the dashboard (Flet) is mounted, and so its socket's path.
+DASHBOARD_PATH = "/dashboard"
+
+
+def dashboard_upload_dir() -> Path:
+    """Directory where the dashboard's FilePicker uploads land.
+
+    In web mode a browser-picked file streams to the server via flet's
+    signed upload URL; the consuming feature (e.g. the finance file import)
+    reads it once and deletes it. Tempdir keeps that churn out of the
+    project tree and survives nothing - which is the point.
+    """
+    return Path(tempfile.gettempdir()) / "overseer-uploads"
+
+
+def country_flag(code: str) -> str:
+    """Flag emoji for a 2-letter ISO country code, or "" for anything else.
+
+    The flag is arithmetic on the code itself, so it exists for all ~249
+    codes rather than only the ones named below. A missing NAME is never a
+    reason to render a missing FLAG.
+    """
+    if len(code) != 2 or not code.isascii() or not code.isalpha():
+        return ""
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in code.upper())
+
+
+def country_parts(code: str) -> tuple[str, str]:
+    """``(flag, name)`` for a country code. Name falls back to the code.
+
+    COUNTRY_NAMES is a short list of familiar spellings ("South Korea", not
+    "Korea, Republic of"), not an ISO table: the other ~194 codes resolve
+    to themselves rather than to nothing.
+    """
+    upper = code.upper()
+    return country_flag(upper), COUNTRY_NAMES.get(upper, upper)
+
+
+def country_label(code: str) -> str:
+    """What a country renders as: flag and name, either alone, or "".
+
+    ``"US"`` -> ``"\U0001f1fa\U0001f1f8 United States"``, ``"KG"`` ->
+    ``"\U0001f1f0\U0001f1ec KG"`` (flagged, unnamed), ``""`` -> ``""``.
+    """
+    if not code:
+        return ""
+    flag, name = country_parts(code)
+    return f"{flag} {name}".strip()
+
+
+def _cn(code: str, name: str) -> tuple[str, str]:
+    return code, name
+
+
+COUNTRY_NAMES: dict[str, str] = dict(
+    [
+        _cn("US", "United States"),
+        _cn("GB", "United Kingdom"),
+        _cn("DE", "Germany"),
+        _cn("FR", "France"),
+        _cn("IN", "India"),
+        _cn("CN", "China"),
+        _cn("JP", "Japan"),
+        _cn("BR", "Brazil"),
+        _cn("CA", "Canada"),
+        _cn("AU", "Australia"),
+        _cn("RU", "Russia"),
+        _cn("KR", "South Korea"),
+        _cn("ES", "Spain"),
+        _cn("IT", "Italy"),
+        _cn("NL", "Netherlands"),
+        _cn("SE", "Sweden"),
+        _cn("MX", "Mexico"),
+        _cn("PL", "Poland"),
+        _cn("TW", "Taiwan"),
+        _cn("TH", "Thailand"),
+        _cn("ID", "Indonesia"),
+        _cn("TR", "Turkey"),
+        _cn("CH", "Switzerland"),
+        _cn("AR", "Argentina"),
+        _cn("CO", "Colombia"),
+        _cn("VN", "Vietnam"),
+        _cn("PH", "Philippines"),
+        _cn("EG", "Egypt"),
+        _cn("ZA", "South Africa"),
+        _cn("UY", "Uruguay"),
+        _cn("PE", "Peru"),
+        _cn("CL", "Chile"),
+        _cn("SG", "Singapore"),
+        _cn("MY", "Malaysia"),
+        _cn("HK", "Hong Kong"),
+        _cn("IL", "Israel"),
+        _cn("NO", "Norway"),
+        _cn("DK", "Denmark"),
+        _cn("FI", "Finland"),
+        _cn("AT", "Austria"),
+        _cn("BE", "Belgium"),
+        _cn("PT", "Portugal"),
+        _cn("CZ", "Czechia"),
+        _cn("RO", "Romania"),
+        _cn("UA", "Ukraine"),
+        _cn("NG", "Nigeria"),
+        _cn("KE", "Kenya"),
+        _cn("PK", "Pakistan"),
+        _cn("BD", "Bangladesh"),
+        _cn("SA", "Saudi Arabia"),
+        _cn("IE", "Ireland"),
+        _cn("NZ", "New Zealand"),
+        _cn("GR", "Greece"),
+        _cn("HU", "Hungary"),
+    ]
+)
 
 
 class CLI:
@@ -57,3 +240,8 @@ class HTTP:
     # Headers
     CONTENT_TYPE_JSON = "application/json"
     USER_AGENT = "AegisStack-CLI/1.0"
+
+
+# The chart ramp both UIs draw with (--aegis-chart-1..11, ChartColors.RAMP):
+# a logs page's services, a meeting's speakers.
+CHART_RAMP = 11

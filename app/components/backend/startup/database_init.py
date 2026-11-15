@@ -5,71 +5,102 @@ Creates tables and verifies connectivity
 when the backend starts up (only when database component is included).
 """
 
+from typing import Any
 
-
+from app.components.backend.startup.schema_recovery import (
+    _adoptable,
+    _create_missing_tables,
+    _existing_tables_by_schema,
+    _reflect_schema,
+    _revisions_oldest_first,
+    _signature_satisfied,
+)
 from app.core.log import logger
+from app.core.model_registry import import_all_models  # noqa: E402
 
-
-# Import models to register them with SQLModel metadata
-from app.models.user import User  # noqa: F401
-
-
+import_all_models()
 
 
 def _check_and_stamp_existing_tables() -> None:
     """
-    Detect when tables for a pending migration already exist.
+    Stamp the pending migrations whose objects already exist, oldest first,
+    stopping at the first that cannot prove it (``_adoptable``).
 
     This handles the case where:
     - Project regenerated with -f flag
     - Docker volume persisted with old tables
     - alembic_version is valid but behind (e.g., at 001 when 002 tables exist)
-
-    Fix: If signature table for a migration exists, stamp it as complete.
+    - another process built a later migration's objects first (APScheduler
+      creates its job table on boot), which must not move the version past
+      an earlier migration that never ran
     """
     try:
+        from pathlib import Path
+
         from alembic import command
         from alembic.config import Config
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
-        from sqlalchemy import inspect
-
+        from app.components.backend.startup.migration_signatures import (
+            SERVICE_MIGRATION_SIGNATURES,
+        )
         from app.core.db import db_session
 
         alembic_cfg = Config("alembic/alembic.ini")
         script = ScriptDirectory.from_config(alembic_cfg)
 
-        # Get existing tables and current revision
-        with db_session(autocommit=False) as session:
-            inspector = inspect(session.connection())
-            existing_tables = set(inspector.get_table_names())
+        service_signatures = SERVICE_MIGRATION_SIGNATURES
 
-            context = MigrationContext.configure(session.connection())
-            current_rev = context.get_current_revision()
-
-        # Signature table for each migration (first table created by that migration)
-        signature_tables = {
-            "001": "user",        # auth migration
-            "002": "llm_vendor",  # ai migration
-        }
-
-        # Walk revisions and stamp any with pre-existing tables
+        # A generated revision declares its own signature; the table by
+        # service name covers revisions written before it did.
+        signatures: dict[str, tuple[str, ...]] = {}
         for rev in script.walk_revisions():
-            # Skip if already applied
-            if current_rev and rev.revision <= current_rev:
+            carried = getattr(rev.module, "aegis_stamp_signature", None)
+            if carried:
+                signatures[rev.revision] = tuple(carried)
                 continue
+            # ``rev.path`` is a str in alembic 1.16; wrap so ``.stem``
+            # works (Path() accepts both str and Path).
+            parts = Path(rev.path).stem.split("_", 1)
+            if len(parts) > 1:
+                sig = service_signatures.get(parts[1])
+                if sig:
+                    signatures[rev.revision] = sig
 
-            sig_table = signature_tables.get(rev.revision)
-            if sig_table and sig_table in existing_tables:
-                logger.warning(
-                    f"Migration {rev.revision} tables already exist. "
-                    "Stamping as complete (Docker volume likely persisted)..."
-                )
-                command.stamp(alembic_cfg, rev.revision)
-                logger.info(f"Stamped migration {rev.revision}")
+        # One session for the whole pass. Reflection and the ``row`` form
+        # both need a live connection, and the inspector must not outlive it.
+        with db_session(autocommit=False) as session:
+            connection = session.connection()
+            facts = _reflect_schema(connection)
+            current_rev = MigrationContext.configure(connection).get_current_revision()
+
+            chain = [rev.revision for rev in _revisions_oldest_first(script)]
+            adopted = _adoptable(
+                chain,
+                current_rev,
+                lambda revision: bool(signatures.get(revision))
+                and _signature_satisfied(signatures[revision], facts, connection),
+            )
+
+        if adopted:
+            logger.warning(
+                f"Migrations {', '.join(adopted)} are already in the schema. "
+                "Stamping as complete (Docker volume likely persisted)..."
+            )
+            command.stamp(alembic_cfg, adopted[-1])
+            logger.info(f"Stamped migration {adopted[-1]}")
 
     except Exception as e:
-        logger.debug(f"Existing tables check skipped: {e}")
+        logger.warning(f"Existing tables check skipped: {e}")
+
+
+def _current_revision() -> str | None:
+    """The revision ``alembic_version`` records, or None on a fresh database."""
+    from alembic.runtime.migration import MigrationContext
+    from app.core.db import db_session
+
+    with db_session(autocommit=False) as session:
+        return MigrationContext.configure(session.connection()).get_current_revision()
 
 
 def _check_and_fix_stale_revision() -> None:
@@ -85,11 +116,12 @@ def _check_and_fix_stale_revision() -> None:
     and stamp to head (tables already exist, just need version sync).
     """
     try:
+        from sqlalchemy.exc import SQLAlchemyError
+        from sqlmodel import text
+
         from alembic import command
         from alembic.config import Config
         from alembic.script import ScriptDirectory
-        from sqlmodel import text
-
         from app.core.db import db_session
 
         alembic_cfg = Config("alembic/alembic.ini")
@@ -101,12 +133,16 @@ def _check_and_fix_stale_revision() -> None:
         # Check current database revision
         with db_session(autocommit=False) as session:
             try:
-                result = session.exec(
-                    text("SELECT version_num FROM alembic_version")
-                )
+                result = session.exec(text("SELECT version_num FROM alembic_version"))
                 db_revisions = [row[0] for row in result.fetchall()]
-            except Exception:
-                # Table doesn't exist or other error - let migrations handle it
+            except SQLAlchemyError as exc:
+                # A fresh database has no alembic_version yet and migrations
+                # create it, so this is usually nothing. Say it anyway: the
+                # same return also fires when the database could not answer,
+                # and then the stale-revision recovery below never runs.
+                logger.info(
+                    f"No usable alembic_version ({exc}); leaving it to migrations"
+                )
                 return
 
         # Check if any DB revision is stale (not in migration files)
@@ -126,7 +162,7 @@ def _check_and_fix_stale_revision() -> None:
             logger.info("Recovery complete: stamped database to head revision")
 
     except Exception as e:
-        logger.debug(f"Stale revision check skipped: {e}")
+        logger.warning(f"Stale revision check skipped: {e}")
         # Don't fail - let normal migration flow handle errors
 
 
@@ -140,21 +176,113 @@ def _run_migrations() -> bool:
     try:
         from alembic import command
         from alembic.config import Config
+        from alembic.script import ScriptDirectory
 
         # Check for stale revisions first (handles -f regeneration)
         _check_and_fix_stale_revision()
 
-        # Check for pre-existing tables (handles persisted Docker volumes)
-        _check_and_stamp_existing_tables()
-
         alembic_cfg = Config("alembic/alembic.ini")
-        command.upgrade(alembic_cfg, "head")
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head = script.get_current_head()
+
+        # Adopt what already exists, run ONE migration, and ask again: a
+        # migration whose objects another process built (APScheduler's job
+        # table) is adopted once the ones before it have run, instead of
+        # being replayed into "already exists" or stamped past them.
+        # Bounded by the chain's length: each pass moves at least one step.
+        for _ in range(len(list(script.walk_revisions())) + 1):
+            _check_and_stamp_existing_tables()
+            if _current_revision() == head:
+                break
+            command.upgrade(alembic_cfg, "+1")
+
+        # Safety net: the recovery above can stamp the DB to head without
+        # running a migration whose table is genuinely missing. Backfill any
+        # such tables so the schema is never left stamped-but-incomplete.
+        _create_missing_tables()
+
         logger.info("Database migrations applied successfully")
         return True
     except Exception as e:
-        logger.error(f"Failed to run migrations: {e}")
+        if "already exists" in str(e):
+            # Schema is ahead of alembic_version (a persisted volume, or a
+            # stamp that never landed). The startup stamp pass recovers this
+            # for every SIGNED migration - reaching here means one shipped
+            # without a signature. One actionable line, not a traceback per
+            # boot.
+            logger.error(
+                "Migrations replayed DDL that already exists - alembic_version "
+                f"is behind the actual schema ({e}). Fix: give the revision an "
+                "`aegis_stamp_signature`, or run "
+                "`python -m alembic -c alembic/alembic.ini stamp <revision>`."
+            )
+        else:
+            logger.error(f"Failed to run migrations: {e}")
         return False
 
+
+def schema_gaps(engine: Any = None, metadata: Any = None) -> dict[str, set[str]]:
+    """What the code's models expect that the database lacks: each table
+    missing columns, with them, and each missing table, with none. Empty
+    when the database is what the code reads; a rolling deploy restarts
+    nothing onto a gap (aegis-stack#1789). ``engine`` and ``metadata``
+    default to the app's own."""
+    from sqlalchemy import inspect as sa_inspect
+    from sqlmodel import SQLModel
+
+    if engine is None:
+        from app.core.db import engine
+    metadata = metadata if metadata is not None else SQLModel.metadata
+    inspector = sa_inspect(engine)
+    existing = _existing_tables_by_schema(inspector, metadata)
+    gaps: dict[str, set[str]] = {}
+    for key, table in metadata.tables.items():
+        if key == "alembic_version":
+            continue
+        if key not in existing:
+            gaps[key] = set()
+            continue
+        found = {
+            c["name"] for c in inspector.get_columns(table.name, schema=table.schema)
+        }
+        if missing := {c.name for c in table.columns} - found:
+            gaps[key] = missing
+    return gaps
+
+
+def _check_schema_mismatch() -> None:
+    """
+    Detect missing columns/tables and warn user (``schema_gaps``).
+
+    Compares SQLModel metadata (what the code expects) against
+    the actual database schema. Only checks tables registered
+    in SQLModel metadata — user-created tables are ignored.
+    """
+    try:
+        gaps = schema_gaps()
+        missing_tables = {table for table, cols in gaps.items() if not cols}
+        missing_columns = {table: cols for table, cols in gaps.items() if cols}
+
+        if missing_tables or missing_columns:
+            logger.error("=" * 60)
+            logger.error("SCHEMA MISMATCH DETECTED")
+            logger.error(
+                "Your database is missing columns/tables expected by the code."
+            )
+            if missing_tables:
+                logger.error(f"  Missing tables: {', '.join(sorted(missing_tables))}")
+            for table, cols in sorted(missing_columns.items()):
+                logger.error(
+                    f"  Missing columns in '{table}': {', '.join(sorted(cols))}"
+                )
+            logger.error("")
+            logger.error(
+                "  Fix: run 'make migrate-fix' to auto-generate a safe migration"
+            )
+            logger.error("=" * 60)
+
+    except Exception as e:
+        logger.warning(f"Schema mismatch check skipped: {e}")
 
 
 async def startup_database_init() -> None:
@@ -168,9 +296,6 @@ async def startup_database_init() -> None:
     3. Verify database schema is ready
     """
     try:
-
-
-
         # Run Alembic migrations (idempotent)
         migrations_ok = _run_migrations()
 
@@ -178,8 +303,8 @@ async def startup_database_init() -> None:
             logger.warning("Migrations failed - database may not be fully initialized")
             # Continue anyway to allow debugging
 
-
-
+        # Check for schema mismatches (e.g., after aegis update added new columns)
+        _check_schema_mismatch()
 
         # Verify database connectivity
         try:
@@ -195,19 +320,15 @@ async def startup_database_init() -> None:
                 inspector = inspect(session.connection())
                 table_names = inspector.get_table_names()
 
-
                 # Verify alembic_version table exists
                 if "alembic_version" in table_names:
                     logger.info(f"Database ready with {len(table_names)} tables")
                 else:
                     logger.warning("alembic_version table missing after migrations")
 
-
         except Exception as e:
             logger.warning(f"Database verification failed: {e}")
             # Don't fail startup - let the app run and show clear errors
-
-
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
@@ -216,4 +337,3 @@ async def startup_database_init() -> None:
 
 # Export the startup hook function
 startup_hook = startup_database_init
-

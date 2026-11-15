@@ -7,7 +7,9 @@ Top-down layout matching the service card pattern.
 
 import flet as ft
 
+from app.components.frontend.controls import status_dot
 from app.components.frontend.theme import AegisTheme as Theme
+from app.core.constants import ComponentName
 from app.services.system.models import ComponentStatus
 from app.services.system.ui import get_component_label
 
@@ -111,23 +113,19 @@ class WorkerCard:
                 if not worker_alive:
                     if "no functions" in message.lower():
                         # No tasks defined - grey
-                        status_icon = "⚪"
                         status_text = "N/A"
                         status_color = ft.Colors.GREY_600
                         row_opacity = 0.6
                     else:
                         # Offline - red
-                        status_icon = "🔴"
                         status_text = "Offline"
                         status_color = Theme.Colors.ERROR
                         row_opacity = 1.0
                 elif active > 0:
-                    status_icon = "🔵"
                     status_text = "Active"
                     status_color = Theme.Colors.INFO
                     row_opacity = 1.0
                 else:
-                    status_icon = "🟢"
                     status_text = "Online"
                     status_color = Theme.Colors.SUCCESS
                     row_opacity = 1.0
@@ -136,8 +134,9 @@ class WorkerCard:
                     content=ft.Row(
                         [
                             ft.Container(
-                                content=ft.Text(status_icon, size=12),
+                                content=status_dot(status_color),
                                 width=16,
+                                alignment=ft.alignment.center,
                             ),
                             ft.Container(
                                 content=ft.Text(queue_name, style=cell_style),
@@ -220,7 +219,7 @@ class WorkerCard:
                 [
                     create_header_row(
                         "Worker",
-                        get_component_label("worker"),
+                        get_component_label(ComponentName.WORKER),
                         self.component_data,
                     ),
                     self._create_queue_table(),
@@ -239,5 +238,5 @@ class WorkerCard:
             content=self._create_card_content(),
             border_color=border_color,
             component_data=self.component_data,
-            component_name="worker",
+            component_name=ComponentName.WORKER,
         )

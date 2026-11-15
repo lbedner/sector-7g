@@ -1,0 +1,171 @@
+{# The one table macro. A page declares columns and hands over rows; it
+   never writes a <table> by hand.
+
+       {% from "components/macros/table.html" import data_table %}
+       {{ data_table(columns, rows, empty="No transactions yet") }}
+
+   ``columns``: list of ``{"key", "label", "kind", "align", "signed"}``.
+   ``kind`` is ``text`` (default), ``money`` (minor units, honours the
+   row's ``currency`` when it has one; ``signed`` adds a leading ``+`` and
+   colours by sign, ``toned`` colours by sign without the plus), ``date``,
+   ``int``, ``status`` (the value is
+   ``{"label", "tone"}``, rendered as a ``badge``), ``code`` (monospace,
+   wrapping: a key, a rule, a command), ``file`` (the value is ``{"path",
+   "url"}``: the path as code after its type's icon, ``file_icon``, linked
+   when it has a ``url``) or ``link`` (the value is
+   ``{"label", "url"}``, and ``sub``, a muted second line under it; the
+   link replaces ``target``, default ``#app-content``, the way a list's
+   row opens its item), ``avatar`` (the
+   row's ``icon_url`` brand mark, or the initial, before the name); ``wrap`` lets a
+   long text cell wrap instead of running on. A row marked ``group`` reads as a
+   heading and the ``child`` rows after it are indented (a total and its
+   parts under one set of columns); ``render`` is a macro
+   taking the value (the whole row, with ``row`` set: a cell drawn from
+   more than one field), for a cell no kind covers; ``header`` is a macro
+   rendering the column's heading in place of ``label`` (a select-all
+   checkbox, say); ``align`` is ``left``
+   (default) or ``right``. Rows are objects or dicts; a blank value
+   renders as a dash. Zero rows render ``empty_state`` instead.
+
+   ``row_id`` names each ``<tr>`` (``row_id ~ "-" ~ row.id``) so an action
+   can swap one row back; a ``{% call(row) data_table(...) %}`` block, or a
+   macro passed as ``actions``, adds an actions column rendered per row
+   (``actions=none`` leaves it out, so one table serves both cases). ``detail`` is a macro taking the
+   row: each row then gets a toggle and a hidden full-width row under it
+   with that macro's output (the Flet expandable rows), shown from the
+   start where the row says ``open``. #}
+{% from "components/macros/feedback.html" import empty_state %}
+{% from "components/macros/icons.html" import file_icon %}
+{% from "components/macros/layout.html" import avatar, badge %}
+
+{# A key, a rule, a path: monospace, wrapping anywhere so a long one
+   never pushes the columns after it out of view. #}
+{% macro _code(text) %}<code class="font-mono text-xs whitespace-normal [overflow-wrap:anywhere]">{{ text }}</code>{% endmacro %}
+
+{% macro _cell(row, col) -%}
+{%- set value = row[col.key] if row is mapping or col.key is number else row|attr(col.key) -%}
+{%- if value is not defined or value is none or value == "" -%}
+-
+{%- elif col.render -%}
+{{ col.render(row if col.row else value) }}
+{%- elif col.kind == "money" -%}
+{%- set currency = (row["currency"] if row is mapping and "currency" in row else row|attr("currency")) -%}
+{{ "+" if col.signed and value > 0 }}{{ value|money(currency if currency is string else "USD") }}
+{%- elif col.kind == "status" -%}
+{{ badge(value.label, value.tone) }}
+{%- elif col.kind == "date" -%}
+{{ value|short_date }}
+{%- elif col.kind == "int" -%}
+{{ "{:,}".format(value) }}
+{%- elif col.kind == "avatar" -%}
+{%- set icon_url = row["icon_url"] if row is mapping and "icon_url" in row else row|attr("icon_url") -%}
+<span class="inline-flex items-center gap-2">{{ avatar(value, icon_url if icon_url is string else None) }}<span>{{ value }}</span></span>
+{%- elif col.kind == "code" -%}
+{{ _code(value) }}
+{%- elif col.kind == "file" -%}
+<span class="inline-flex items-start gap-2">{{ file_icon(value.path) }}{% if value.url %}<a href="{{ value.url }}" class="hover:text-aegis-teal">{{ _code(value.path) }}</a>{% else %}{{ _code(value.path) }}{% endif %}</span>
+{%- elif col.kind == "link" -%}
+{%- set link -%}{% if value.url %}<a href="{{ value.url }}" {{ hx_replace(value.url, col.target or "#app-content") }} class="text-aegis-text hover:text-aegis-teal">{{ value.label }}</a>{% else %}{{ value.label }}{% endif %}{%- endset -%}
+{%- if col.mark -%}
+{%- set icon_url = row["icon_url"] if row is mapping and "icon_url" in row else row|attr("icon_url") -%}
+<span class="inline-flex items-center gap-2">{{ avatar(value.label, icon_url if icon_url is string else None) }}{{ link }}</span>
+{%- else -%}{{ link }}{%- endif -%}
+{%- if value.sub %}<div class="text-xs text-aegis-muted">{{ value.sub }}</div>{% endif -%}
+{%- else -%}
+{{ value }}
+{%- endif -%}
+{%- endmacro %}
+
+{# The text colour of one cell: signed money reads by sign. #}
+{% macro _tone(row, col) -%}
+{%- set value = row[col.key] if row is mapping or col.key is number else row|attr(col.key) -%}
+{%- if col.kind == "money" and (col.signed or col.toned) and value is number and value != 0 -%}
+{{ "text-aegis-teal" if value > 0 else "text-error" }}
+{%- else -%}
+text-aegis-text
+{%- endif -%}
+{%- endmacro %}
+
+{# One row. ``id`` lets an action swap this row back by itself; ``oob``
+   marks it as an out-of-band answer (pattern 2); ``actions`` is a macro
+   (a call block's ``caller``) rendering the trailing actions cell. #}
+{% macro table_row(columns, row, id=None, oob=False, actions=None, expandable=False) %}
+{# A row swapped out of band travels wrapped: a bare <tr> at the top
+   of a response bound for anything but a table is thrown away by the
+   HTML parser, and its cells spill into whatever was being swapped — a
+   stray row loose in a dialog. htmx unwraps a template before it swaps,
+   so this is the way to send one anywhere. #}
+{% if oob %}<template{% if id %} id="{{ id }}-oob"{% endif %}>{% endif %}
+{# A ``group`` row heads the ``child`` rows after it (a total and its parts,
+   one set of columns); either flag rides on the row itself. #}
+{% set heading = row is mapping and row.get("group") %}
+{% set indented = row is mapping and row.get("child") %}
+<tr {% if id %}id="{{ id }}"{% endif %} {% if oob %}hx-swap-oob="outerHTML"{% endif %} {% if expandable %}@click="open = !open"{% endif %} {% if heading %}data-group{% endif %} class="group hover:bg-aegis-border/20 transition-colors{{ ' cursor-pointer' if expandable }}{{ ' font-semibold bg-aegis-border/10' if heading }}">
+  {% if expandable %}
+  <td class="pl-5 pr-0 py-2 w-4">
+    <button type="button" @click.stop="open = !open" aria-expanded="false" :aria-expanded="open.toString()" aria-label="Details"
+            class="text-aegis-muted hover:text-aegis-text"><span aria-hidden="true" class="inline-block transition-transform" :class="open && 'rotate-90'">›</span></button>
+  </td>
+  {% endif %}
+  {% for col in columns %}
+  <td class="{{ 'pl-10 pr-5' if indented and loop.first else 'px-5' }} py-2 {{ 'whitespace-normal' if col.wrap else 'whitespace-nowrap' }} {{ 'text-right tabular-nums' if col.align == 'right' else 'text-left' }} {{ _tone(row, col) }}">{{ _cell(row, col) }}</td>
+  {% endfor %}
+  {% if actions %}<td class="px-2 py-2 text-right">{{ actions(row) }}</td>{% endif %}
+</tr>
+{% if oob %}</template>{% endif %}
+{% endmacro %}
+
+{# ``flush`` is the card bleed: on by default, because a table spans its
+   card; off where the caller already bleeds (a drawn card's table). #}
+{% macro data_table(columns, rows, empty="Nothing here yet", row_id=None, detail=None, actions=None, flush=True) %}
+{% set actions = actions or (caller if caller is defined else None) %}
+{% if rows %}
+<div class="overflow-x-auto{{ " -mx-5" if flush }}">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="text-xxs text-aegis-muted caps border-b border-aegis-border">
+        {% if detail %}<th scope="col"><span class="sr-only">Details</span></th>{% endif %}
+        {% for col in columns %}
+        <th scope="col" class="px-5 py-2 font-medium {{ 'text-right' if col.align == 'right' else 'text-left' }}">{{ col.header() if col.header else col.label }}</th>
+        {% endfor %}
+        {% if actions %}<th scope="col"><span class="sr-only">Actions</span></th>{% endif %}
+      </tr>
+    </thead>
+    {% if detail %}
+    {% for row in rows %}
+    <tbody x-data="{ open: {{ 'true' if row is mapping and row.get('open') else 'false' }} }" class="border-b border-aegis-border/60 last:border-0">
+      {{ table_row(columns, row, id=(row_id ~ "-" ~ (row["id"] if row is mapping else row.id)) if row_id else None, actions=actions, expandable=True) }}
+      <tr data-detail x-show="open" x-cloak>
+        <td colspan="{{ columns|length + 1 + (1 if actions else 0) }}" class="px-5 pb-4 pt-2 bg-aegis-border/10">{{ detail(row) }}</td>
+      </tr>
+    </tbody>
+    {% endfor %}
+    {% else %}
+    <tbody class="divide-y divide-aegis-border/60">
+      {% for row in rows %}
+      {{ table_row(columns, row, id=(row_id ~ "-" ~ (row["id"] if row is mapping else row.id)) if row_id else None, actions=actions) }}
+      {% endfor %}
+    </tbody>
+    {% endif %}
+  </table>
+</div>
+{% else %}
+{{ empty_state(empty) }}
+{% endif %}
+{% endmacro %}
+
+
+{# Page navigation for a listed table. ``pager`` is the route's
+   ``{start, end, total, prev, next}`` (``None`` when one page); the links
+   re-request the same URL and swap ``target`` in place. #}
+{% macro pager(pager, target) %}
+{% if pager %}
+<nav aria-label="Pagination" class="flex items-center justify-between px-5 pt-3 text-xs text-aegis-muted">
+  <span>{{ pager.summary if pager.summary else pager.start ~ "-" ~ pager.end ~ " of " ~ pager.total }}</span>
+  <span class="flex items-center gap-2">
+    {% if pager.prev %}<a rel="prev" href="{{ pager.prev }}" {{ hx_replace(pager.prev, target) }} class="hover:text-aegis-text transition-colors">Previous</a>{% endif %}
+    {% if pager.next %}<a rel="next" href="{{ pager.next }}" {{ hx_replace(pager.next, target) }} class="hover:text-aegis-text transition-colors">Next</a>{% endif %}
+  </span>
+</nav>
+{% endif %}
+{% endmacro %}

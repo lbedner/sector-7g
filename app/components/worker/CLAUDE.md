@@ -1,151 +1,105 @@
 # Worker Component Development Guide
 
-This guide covers arq worker architecture patterns and development for the sector-7g worker component.
+How this plant's worker is built. The backend is **taskiq** on Redis streams.
 
-## Worker Architecture (arq)
+## Queues
 
-sector-7g uses pure **arq patterns** without custom wrappers, following native arq CLI and configuration patterns.
+One module per character in `app/components/worker/queues/`, each started as
+its own container (`worker-homer`, `worker-lenny`, ...):
 
-### Worker Configuration Structure
+- `homer.py`, `lenny.py`, `carl.py`, `charlie.py`, `inanimate_rod.py` - the
+  simulated workers.
+- `grimey.py` - Frank Grimes: his simulation, plus the stack's own work
+  (scheduled service jobs, backups, maintenance). There is no `system` or
+  `load_test` queue here; `QueueName.SYSTEM` is `QueueName.GRIMEY`.
 
-Each worker queue has its own `WorkerSettings` class:
-- `app/components/worker/queues/inanimate_rod.py` - Inanimate Carbon Rod (system maintenance + simulation)
-- `app/components/worker/queues/homer.py` - Homer Simpson worker (CPU-bound, low concurrency)
-- `app/components/worker/queues/lenny.py` - Lenny Leonard worker (I/O-bound, high concurrency)
-- `app/components/worker/queues/carl.py` - Carl Carlson worker (I/O-bound, high concurrency)
-- `app/components/worker/queues/charlie.py` - Charlie, plant worker (I/O-bound, moderate concurrency)
-- `app/components/worker/queues/grimey.py` - Frank Grimes, deceased (meticulous, max_jobs=1)
+Every queue module has the same three parts, and the registry finds a queue
+only by its module-level `broker`:
 
-### Worker Services in Docker
-
-Workers run as separate Docker services with specific names:
-- **`worker-inanimate-rod`** - Inanimate Carbon Rod: system maintenance + simulation (max_jobs=15)
-- **`worker-homer`** - Homer's tasks: donuts, naps, safety checks (max_jobs=3, CPU-bound)
-- **`worker-lenny`** - Lenny's tasks: diagnostics, inspections, reports (max_jobs=15, I/O-bound)
-- **`worker-carl`** - Carl's tasks: inspectors, reports, handoffs (max_jobs=15, I/O-bound)
-- **`worker-charlie`** - Charlie's tasks: gauges, restocking, shift notes (max_jobs=10, I/O-bound)
-- **`worker-grimey`** - Frank Grimes (deceased): meticulous audits (max_jobs=1)
-
-## Adding Worker Tasks
-
-### 1. Create Task Functions
-Tasks are pure async functions in `app/components/worker/tasks/`:
 ```python
-# app/components/worker/tasks/my_tasks.py
-async def my_background_task() -> dict[str, str]:
-    """My custom background task."""
-    logger.info("Running my background task")
+from app.components.worker.broker import bind, stream_broker
+from app.components.worker.tasks.lenny_tasks import file_report_task
+from app.core.constants import QueueName
 
-    # Your task logic here
-    await asyncio.sleep(1)  # Simulate work
+DESCRIPTION = "Lenny Leonard, Technical Supervisor"   # shown in the Overseer
 
-    return {
-        "status": "completed",
-        "timestamp": datetime.now(UTC).isoformat(),
-        "task": "my_background_task"
-    }
+broker = stream_broker(QueueName.LENNY)               # never build one by hand
+
+globals().update(bind(broker, file_report_task))      # its tasks, by name
 ```
 
-### 2. Register with Worker Queue
-Import and add to the appropriate `WorkerSettings`:
+`stream_broker` is the one place a broker is built; `bind` registers each
+function under its own name. The broker gives a job with no `timeout` of
+its own its queue's (`QueueTimeout`).
+
+## Adding a task
+
+1. Write a plain async function in `app/components/worker/tasks/` (no
+   context argument: taskiq passes only what was enqueued).
+2. Add it to the `bind(...)` call of the queue that should run it.
+3. Enqueue it with `await pools.enqueue_task("my_task", QueueName.LENNY)`
+   (`app/components/worker/pools.py`): the one way work reaches a queue, so
+   it lands in the Overseer's feed and history.
+
+`tests/components/test_plant_queues.py` fails if Springfield enqueues a name
+no queue registers.
+
+## Adding a queue
+
+Add its name to `QueueName` (`app/core/constants.py`), its concurrency and
+timeout to `_STACK_QUEUES` (`app/core/queue_workers.py`), its module here,
+and a `worker-<name>` service in `docker-compose.yml` and
+`docker-compose.dev.yml`.
+
+## Running one
+
+```bash
+docker compose exec worker-grimey /bin/bash
+uv run taskiq worker app.components.worker.queues.grimey:broker --workers 1
+```
+
+## Concurrency and timeouts
+
+How many jobs one worker process runs at once is a per-queue setting in
+`app/core/config.py`, validated by the `QueueWorker` model in
+`app/core/queue_workers.py`:
+
 ```python
-# app/components/worker/queues/rod.py
-from app.components.worker.tasks.my_tasks import my_background_task
-
-class WorkerSettings:
-    functions = [
-        system_health_check,
-        cleanup_temp_files,
-        rod_sim_task,
-        my_background_task,  # Add your task here
-    ]
-
-    # Standard arq configuration
-    redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
-    queue_name = "arq:queue:inanimate_rod"
-    max_jobs = 15
-    job_timeout = 300
+WORKER_QUEUES: dict[str, QueueWorker]   # {"lenny": QueueWorker(concurrency=50), ...}
+WORKER_QUEUE_DEFAULT: QueueWorker       # any queue not listed
 ```
 
-## Native arq CLI Usage
+Override from the environment as JSON:
 
-### Worker Health Checks
 ```bash
-# Check if workers can connect to Redis and validate configuration
-uv run python -m arq app.components.worker.queues.inanimate_rod.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.homer.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.lenny.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.carl.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.charlie.WorkerSettings --check
-uv run python -m arq app.components.worker.queues.grimey.WorkerSettings --check
+WORKER_QUEUES='{"lenny": {"concurrency": 100}}'
 ```
 
-### Local Worker Development
-```bash
-# Run worker locally with auto-reload for development
-uv run python -m arq app.components.worker.queues.inanimate_rod.WorkerSettings --watch app/
-
-# Run worker in burst mode (process all jobs and exit)
-uv run python -m arq app.components.worker.queues.inanimate_rod.WorkerSettings --burst
-```
-
-## Key Differences from Custom Worker Systems
-
-### What We Do (Pure arq):
-- Use native arq CLI: `python -m arq WorkerSettings`
-- Standard `WorkerSettings` classes with `functions` list
-- Direct task imports into worker configurations
-- Native arq health checking and monitoring
-
-### What We Don't Do (Avoided custom patterns):
-- Custom worker wrapper classes
-- Central worker registry systems
-- Custom CLI commands for workers
-- Configuration-driven task discovery
-
-This approach keeps workers transparent and lets developers use arq exactly as documented in the official arq documentation.
+The entrypoint passes it to taskiq as `--max-async-tasks`. A name in `WORKER_QUEUES` that matches no
+queue stops the worker at startup. Each worker reports what it actually
+runs with to Redis, and the Overseer's Worker > Runtime section shows it,
+flagging any worker running off its setting.
 
 ## Docker Worker Debugging Commands
 
 ### View Worker Logs
 ```bash
 # View specific worker logs
-docker compose logs worker-inanimate-rod
-docker compose logs worker-homer
-docker compose logs worker-lenny
-docker compose logs worker-carl
-docker compose logs worker-charlie
-docker compose logs worker-grimey
-
-# Follow workers in real-time
-docker compose logs -f worker-homer
+docker compose logs worker-grimey             # System worker logs
+docker compose logs -f worker-grimey          # Follow system worker in real-time
 
 # View all workers at once
-docker compose logs -f worker-inanimate-rod worker-homer worker-lenny worker-carl worker-charlie worker-grimey
+docker compose logs -f worker-grimey worker-lenny
 
-# Filter for errors
-docker compose logs worker-homer | grep "ERROR\|failed\|TypeError"
-
-# Monitor resource usage
-docker stats worker-inanimate-rod worker-homer worker-lenny worker-carl worker-charlie worker-grimey
-docker compose restart worker-homer
+# Monitor worker processes and resources
+docker compose exec worker-grimey ps aux      # Check system worker processes
+docker stats worker-grimey worker-lenny   # Monitor resource usage
+docker compose restart worker-grimey          # Restart specific worker
 ```
 
-### Essential Docker Log Monitoring
-
-```bash
-# View real-time worker logs
-docker compose logs -f worker-homer worker-lenny worker-carl
-
-# View logs with timestamps
-docker compose logs --timestamps worker-homer
-
-# Search logs for specific errors
-docker compose logs worker-homer | grep "TypeError\|failed"
-
-# Check all service logs
-docker compose logs -f
-```
+**Common Error Patterns:**
+- `TypeError: function() got an unexpected keyword argument 'param'` - Parameter mismatch between orchestrator and task function
+- `Redis connection failed` - Infrastructure connectivity problems
 
 **System Health Verification:**
 ```bash
@@ -165,12 +119,13 @@ docker compose logs redis
 1. **Pure Functions** - Tasks should be self-contained with minimal dependencies
 2. **Error Handling** - Always include try/catch with proper logging
 3. **Return Values** - Return structured data for monitoring and debugging
-4. **Timeouts** - Set appropriate timeouts for different task types
-5. **Retry Logic** - Use arq's built-in retry mechanisms
+4. **Timeouts** - A task takes its queue's `timeout_seconds` (`_STACK_QUEUES`, `app/core/queue_workers.py`)
+5. **Retries** - Nothing is retried: a failed job stays failed. A job cut off by a worker restart is redelivered
+6. **CPU Work Off The Loop** - Run CPU-bound work through `cpu_bound` (`app.core.concurrency`): a task that computes without awaiting holds the worker's event loop, and its claim keep-alive and heartbeat with it. A queue that is mostly CPU work wants concurrency near its process count
 
 ### Queue Management
 1. **Separate Concerns** - Use different queues for different types of work
-2. **Concurrency Limits** - Set appropriate max_jobs for each queue type
+2. **Concurrency Limits** - Set each queue's concurrency in `WORKER_QUEUES`
 3. **Priority Queues** - Use different queues for different priorities
 4. **Dead Letter Queues** - Monitor failed jobs and implement recovery
 

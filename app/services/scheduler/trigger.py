@@ -1,0 +1,70 @@
+"""Shared manual-trigger logic for scheduled jobs.
+
+Used by both the backend API (``POST /api/v1/scheduler/jobs/{job_id}/run``) and the CLI
+(``tasks trigger``) so the import + run + record path lives in exactly one
+place instead of being duplicated per entry point.
+"""
+
+from collections.abc import Callable, Sequence
+import importlib
+import inspect
+import traceback
+from typing import Any
+
+from starlette.concurrency import run_in_threadpool
+
+from app.core import run_log
+from app.core.log import logger
+
+from .execution_log import record_job_finished, record_job_started
+
+
+def import_job_function(func_ref: str) -> Callable[..., Any] | None:
+    """Import an APScheduler ``module:callable`` reference, or None."""
+    try:
+        module_name, _, attr = func_ref.partition(":")
+        if not module_name or not attr:
+            return None
+        func = getattr(importlib.import_module(module_name), attr, None)
+        return func if callable(func) else None
+    except Exception as e:
+        logger.error(f"Failed to import job function '{func_ref}': {e}")
+        return None
+
+
+async def run_triggered_job(
+    func: Callable[..., Any],
+    job_id: str,
+    job_name: str,
+    args: Sequence[Any] = (),
+) -> bool:
+    """Run a manually-triggered job with its stored ``args`` and record it.
+
+    The stored call is repeated as scheduled: in a stack with a worker that
+    is an enqueue, so the job itself runs on the worker, not in this process.
+    Async jobs are awaited; sync jobs go to a threadpool. The run is written
+    to the same execution history as scheduled runs, so it shows up in the
+    History view. Returns ``True`` on success, ``False`` if the job raised
+    (the failure is recorded either way).
+    """
+    execution_id = await run_in_threadpool(record_job_started, job_id, job_name)
+    try:
+        # Bound as its row, like a scheduled run, so the row keeps its log.
+        with run_log.bind_run(str(execution_id) if execution_id is not None else None):
+            if inspect.iscoroutinefunction(func):
+                await func(*args)
+            else:
+                await run_in_threadpool(func, *args)
+        await run_in_threadpool(record_job_finished, execution_id, job_id, success=True)
+        return True
+    except Exception as e:
+        await run_in_threadpool(
+            record_job_finished,
+            execution_id,
+            job_id,
+            success=False,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
+        logger.error(f"Triggered job '{job_id}' failed: {e}")
+        return False

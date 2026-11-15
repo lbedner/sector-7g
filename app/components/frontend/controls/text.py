@@ -9,11 +9,36 @@ from typing import Any
 
 import flet as ft
 
+from ..styles import FontConfig
 from ..theme import AegisTheme as Theme
 from ..theme import DarkColorPalette
 
 
-class PrimaryText(ft.Text):
+class NumericText(ft.Text):  # type: ignore[misc]
+    """Text for figures: money, counts, percentages, axis ticks.
+
+    Uses the tabular face from ``FontConfig.FAMILY_NUMERIC`` so every digit
+    takes the same width. In a proportional face a right-aligned column of
+    amounts shifts sideways as the digits change, which is the thing that
+    makes a table of money feel subtly unsettled.
+
+    Takes the same keyword arguments as ``ft.Text``; pass ``size``, ``weight``,
+    and ``color`` to match whatever it sits beside.
+    """
+
+    def __init__(self, value: str, **kwargs: Any) -> None:
+        defaults = {
+            "font_family": FontConfig.FAMILY_NUMERIC,
+            "size": Theme.Typography.BODY,
+            "weight": Theme.Typography.WEIGHT_REGULAR,
+            "color": DarkColorPalette.TEXT_PRIMARY_DEFAULT,
+            "selectable": False,
+        }
+        defaults.update(kwargs)
+        super().__init__(value=value, **defaults)
+
+
+class PrimaryText(ft.Text):  # type: ignore[misc]
     """
     Primary text component using theme-aware text colors.
 
@@ -27,13 +52,13 @@ class PrimaryText(ft.Text):
             "font_family": "Roboto",
             "size": Theme.Typography.BODY_LARGE,
             "weight": Theme.Typography.WEIGHT_REGULAR,
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SecondaryText(ft.Text):
+class SecondaryText(ft.Text):  # type: ignore[misc]
     """
     Secondary text component using theme-aware secondary text colors.
 
@@ -50,13 +75,13 @@ class SecondaryText(ft.Text):
             "size": Theme.Typography.BODY,
             "weight": Theme.Typography.WEIGHT_REGULAR,
             "color": DarkColorPalette.TEXT_SECONDARY_DEFAULT,
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class TitleText(ft.Text):
+class TitleText(ft.Text):  # type: ignore[misc]
     """
     Title text component for headings and prominent labels.
 
@@ -69,7 +94,7 @@ class TitleText(ft.Text):
             "font_family": "Roboto",
             "size": Theme.Typography.H2,
             "weight": Theme.Typography.WEIGHT_BOLD,
-            "selectable": True,
+            "selectable": False,
         }
         # Update defaults with any provided kwargs
         defaults.update(kwargs)
@@ -81,7 +106,7 @@ class TitleText(ft.Text):
         )
 
 
-class ConfirmationText(ft.Text):
+class ConfirmationText(ft.Text):  # type: ignore[misc]
     """
     Confirmation/error text component with error coloring.
 
@@ -94,31 +119,30 @@ class ConfirmationText(ft.Text):
             "font_family": "Roboto",
             "size": Theme.Typography.BODY,
             "weight": Theme.Typography.WEIGHT_REGULAR,
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class MetricText(ft.Text):
+class MetricText(NumericText):  # type: ignore[misc]
     """
     Specialized text for displaying metrics and numerical values.
 
-    Uses bold weight and primary color for emphasis on data points.
+    ``NumericText`` at emphasis weight: the tabular figures come from the
+    parent, this only sets the size and weight a headline number wants.
     """
 
     def __init__(self, value: str, opacity: float = 1.0, **kwargs: Any) -> None:
         defaults = {
-            "font_family": "Roboto",
             "size": Theme.Typography.BODY_LARGE,
             "weight": Theme.Typography.WEIGHT_BOLD,
-            "selectable": True,
         }
         defaults.update(kwargs)
-        super().__init__(value=value, opacity=opacity, **defaults)
+        super().__init__(value, opacity=opacity, **defaults)
 
 
-class LabelText(ft.Text):
+class LabelText(ft.Text):  # type: ignore[misc]
     """
     Label text component for form labels and small descriptive text.
 
@@ -131,7 +155,7 @@ class LabelText(ft.Text):
             "font_family": "Roboto",
             "size": Theme.Typography.BODY_SMALL,
             "weight": Theme.Typography.WEIGHT_SEMIBOLD,
-            "selectable": True,
+            "selectable": False,
         }
         # Update defaults with any provided kwargs
         defaults.update(kwargs)
@@ -148,7 +172,7 @@ class LabelText(ft.Text):
 # ============================================================================
 
 
-class DisplayText(ft.Text):
+class DisplayText(ft.Text):  # type: ignore[misc]
     """
     Hero display text - largest emphasis.
 
@@ -160,13 +184,13 @@ class DisplayText(ft.Text):
             "size": Theme.Typography.DISPLAY,
             "weight": Theme.Typography.WEIGHT_BOLD,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class H1Text(ft.Text):
+class H1Text(ft.Text):  # type: ignore[misc]
     """
     H1 heading text for page titles.
 
@@ -178,13 +202,13 @@ class H1Text(ft.Text):
             "size": Theme.Typography.H1,
             "weight": Theme.Typography.WEIGHT_BOLD,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class H2Text(ft.Text):
+class H2Text(ft.Text):  # type: ignore[misc]
     """
     H2 heading text for major section headers.
 
@@ -196,13 +220,13 @@ class H2Text(ft.Text):
             "size": Theme.Typography.H2,
             "weight": Theme.Typography.WEIGHT_BOLD,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class H3Text(ft.Text):
+class H3Text(ft.Text):  # type: ignore[misc]
     """
     H3 heading text for subsection headers.
 
@@ -214,13 +238,13 @@ class H3Text(ft.Text):
             "size": Theme.Typography.H3,
             "weight": Theme.Typography.WEIGHT_SEMIBOLD,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class BodyText(ft.Text):
+class BodyText(ft.Text):  # type: ignore[misc]
     """
     Standard body text for general content.
 
@@ -232,13 +256,13 @@ class BodyText(ft.Text):
             "size": Theme.Typography.BODY,
             "weight": Theme.Typography.WEIGHT_REGULAR,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class AccentText(ft.Text):
+class AccentText(ft.Text):  # type: ignore[misc]
     """
     Accent-colored text for emphasis and highlights.
 
@@ -251,13 +275,13 @@ class AccentText(ft.Text):
             "weight": Theme.Typography.WEIGHT_MEDIUM,
             "color": Theme.Colors.ACCENT,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SuccessText(ft.Text):
+class SuccessText(ft.Text):  # type: ignore[misc]
     """
     Success-colored text for positive feedback.
 
@@ -270,13 +294,13 @@ class SuccessText(ft.Text):
             "weight": Theme.Typography.WEIGHT_MEDIUM,
             "color": Theme.Colors.SUCCESS,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class WarningText(ft.Text):
+class WarningText(ft.Text):  # type: ignore[misc]
     """
     Warning-colored text for caution messages.
 
@@ -289,13 +313,13 @@ class WarningText(ft.Text):
             "weight": Theme.Typography.WEIGHT_MEDIUM,
             "color": Theme.Colors.WARNING,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class ErrorText(ft.Text):
+class ErrorText(ft.Text):  # type: ignore[misc]
     """
     Error-colored text for error messages and critical feedback.
 
@@ -308,7 +332,7 @@ class ErrorText(ft.Text):
             "weight": Theme.Typography.WEIGHT_MEDIUM,
             "color": Theme.Colors.ERROR,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
@@ -319,7 +343,7 @@ class ErrorText(ft.Text):
 # ============================================================================
 
 
-class ModalText(ft.Text):
+class ModalText(ft.Text):  # type: ignore[misc]
     """
     Modal title text with bold emphasis.
 
@@ -331,13 +355,13 @@ class ModalText(ft.Text):
             "size": Theme.Typography.BODY_LARGE,
             "weight": Theme.Typography.WEIGHT_BOLD,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class ModalSubtitleText(ft.Text):
+class ModalSubtitleText(ft.Text):  # type: ignore[misc]
     """
     Modal subtitle text for supporting information.
 
@@ -349,13 +373,13 @@ class ModalSubtitleText(ft.Text):
             "size": Theme.Typography.BODY,
             "weight": Theme.Typography.WEIGHT_REGULAR,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SidebarLabelText(ft.Text):
+class SidebarLabelText(ft.Text):  # type: ignore[misc]
     """
     Sidebar label text with ellipsis overflow.
 
@@ -375,13 +399,13 @@ class SidebarLabelText(ft.Text):
             "font_family": "Roboto",
             "overflow": ft.TextOverflow.ELLIPSIS,
             "width": width,
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)
 
 
-class SidebarLabelHeadingText(ft.Text):
+class SidebarLabelHeadingText(ft.Text):  # type: ignore[misc]
     """
     Sidebar heading text for section headers.
 
@@ -393,7 +417,7 @@ class SidebarLabelHeadingText(ft.Text):
             "size": Theme.Typography.BODY,
             "weight": Theme.Typography.WEIGHT_BOLD,
             "font_family": "Roboto",
-            "selectable": True,
+            "selectable": False,
         }
         defaults.update(kwargs)
         super().__init__(value=value, opacity=opacity, **defaults)

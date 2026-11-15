@@ -1,0 +1,281 @@
+"""Durable bytes, addressed by their own content.
+
+The seam between "something needs to keep a file" and wherever files
+actually live. One protocol, and backends that implement it: a local
+filesystem here, a bucket in ``app.components.storage.s3`` when the
+storage component is selected.
+
+Keys are derived from the payload's SHA-256, never from a filename or a
+path. That is the whole reason the backend can change later without a
+migration: ``sha256/ab/cd/<digest>`` resolves identically on a disk, in
+a bucket, and anywhere else, so adopting object storage is a byte copy
+with no database change and no key rewriting. Rows that reference stored
+bytes keep the key and the backend name; nothing outside a backend ever
+builds a path.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import os
+from pathlib import Path
+import re
+import tempfile
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from app.core.constants import ComponentName
+
+if TYPE_CHECKING:
+    from sqlmodel.ext.asyncio.session import AsyncSession
+
+# The component this client fronts (``ownership``, ``ontology.calls``).
+FRONTS = ComponentName.STORAGE
+
+DIGEST_ALGORITHM = "sha256"
+# A key is exactly what ``content_key`` produces. Keys arrive from
+# database columns and API payloads, so they are validated rather than
+# trusted: a traversal in one must not reach a file it was never given.
+_KEY_PATTERN = re.compile(r"^sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}$")
+# The same key, found inside a JSON document that names it.
+_KEY_IN_TEXT = re.compile(_KEY_PATTERN.pattern.strip("^$"))
+
+
+def content_key(data: bytes) -> str:
+    """The key these exact bytes are stored under, anywhere.
+
+    Sharded two levels so no single directory holds every object - the
+    filesystem backend cares, and object stores are indifferent to it.
+    """
+    digest = hashlib.sha256(data).hexdigest()
+    return f"{DIGEST_ALGORITHM}/{digest[:2]}/{digest[2:4]}/{digest}"
+
+
+def validate_key(key: str) -> str:
+    """The key, or a refusal. Never a path."""
+    if not _KEY_PATTERN.match(key):
+        raise ValueError(f"not a content-addressed storage key: {key!r}")
+    return key
+
+
+@runtime_checkable
+class ObjectStorage(Protocol):
+    """What every backend can do, and nothing more.
+
+    Deliberately small. Ranges and lifecycle rules are additions a later
+    backend can offer; they are not what a caller needs to store a
+    document and read it back. ``presigned_url`` is the one extra: a
+    bucket can hand out a time-limited link, a filesystem cannot.
+    """
+
+    backend_name: str
+
+    async def put(self, data: bytes, *, content_type: str | None = None) -> str:
+        """Store the bytes and return the key they now live under."""
+        ...
+
+    async def get(self, key: str) -> bytes | None:
+        """The bytes, or None when nothing is stored under that key."""
+        ...
+
+    async def exists(self, key: str) -> bool: ...
+
+    async def delete(self, key: str) -> bool:
+        """True when this call removed an object, False when there was
+        nothing to remove - absence is an answer, not an error."""
+        ...
+
+    async def presigned_url(
+        self, key: str, *, expires_seconds: int = 600
+    ) -> str | None:
+        """A time-limited link straight to the object, or None when this
+        backend can only serve through the app."""
+        ...
+
+
+class FilesystemStorage:
+    """Objects as files under a root directory.
+
+    The backend for stacks without a bucket: tests, a laptop, a single
+    container. ``content_type`` is accepted and ignored - it is a fact
+    about the object that object stores record and a filesystem has
+    nowhere to put; the referencing row keeps it.
+    """
+
+    backend_name = "filesystem"
+
+    def __init__(self, root: Path | str) -> None:
+        self._root = Path(root)
+
+    def _path(self, key: str) -> Path:
+        return self._root / validate_key(key)
+
+    @staticmethod
+    def _write(path: Path, data: bytes) -> None:
+        """Write, then move into place under the real key.
+
+        Staged under a name unique to this write rather than a fixed
+        ``.partial``: two callers storing the SAME bytes is the common
+        case, not a rare one, and a shared staging path lets them
+        interleave into a corrupt object. The move is atomic, so a
+        reader either sees a complete object or no object.
+        """
+        if path.exists():
+            # Same bytes, same key, same object: storing twice costs one.
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, staged = tempfile.mkstemp(dir=path.parent, suffix=".partial")
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+            os.replace(staged, path)
+        except BaseException:
+            Path(staged).unlink(missing_ok=True)
+            raise
+
+    async def put(self, data: bytes, *, content_type: str | None = None) -> str:
+        key = content_key(data)
+        # Every filesystem touch happens in the thread, including the
+        # stat: a stat on a slow or network disk blocks the event loop
+        # exactly as a read does.
+        await asyncio.to_thread(self._write, self._path(key), data)
+        return key
+
+    @staticmethod
+    def _read(path: Path) -> bytes | None:
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            # Absence is an answer, and asking first would be a second
+            # syscall that another process can invalidate anyway.
+            return None
+
+    async def get(self, key: str) -> bytes | None:
+        return await asyncio.to_thread(self._read, self._path(key))
+
+    async def exists(self, key: str) -> bool:
+        return await asyncio.to_thread(self._path(key).exists)
+
+    @staticmethod
+    def _unlink(path: Path) -> bool:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            # Checking first then unlinking is a race: another worker can
+            # remove it in between, turning "absent" into a crash.
+            return False
+        return True
+
+    async def delete(self, key: str) -> bool:
+        return await asyncio.to_thread(self._unlink, self._path(key))
+
+    async def presigned_url(
+        self, key: str, *, expires_seconds: int = 600
+    ) -> str | None:
+        validate_key(key)
+        return None
+
+
+_storage: ObjectStorage | None = None
+
+
+def get_storage() -> ObjectStorage:
+    """The configured object store.
+
+    One instance per process, chosen from settings: a bucket when the
+    storage component set ``STORAGE_BACKEND`` to ``s3``, the filesystem
+    otherwise. Every caller speaks the protocol either way.
+    """
+    global _storage
+    if _storage is None:
+        from app.core.config import settings
+
+        if getattr(settings, "STORAGE_BACKEND", "filesystem") == "s3":
+            from app.components.storage.s3 import S3Storage
+
+            _storage = S3Storage.from_settings(settings)
+        else:
+            _storage = FilesystemStorage(settings.STORAGE_ROOT)
+    return _storage
+
+
+def set_storage(storage: ObjectStorage | None) -> None:
+    """Point the process at a different store (tests, a backend swap)."""
+    global _storage
+    _storage = storage
+
+
+def _kind(column: Any) -> Any:
+    """The column's SQL type; SQLModel's ``AutoString`` wraps ``String``."""
+    return getattr(column.type, "impl_instance", column.type)
+
+
+def _naming_columns() -> tuple[list[Any], list[Any]]:
+    """The columns a row names a stored object in: ``*_key`` strings (a
+    document's file) and JSON documents (a chat attachment, a paste). A
+    value names one only if it is a content key, so ``payee_key`` and the
+    like name nothing."""
+    from sqlalchemy import JSON, String
+    from sqlmodel import SQLModel
+
+    from app.core.model_registry import import_all_models
+
+    import_all_models()
+    columns = [c for t in SQLModel.metadata.tables.values() for c in t.columns]
+    named = [
+        c for c in columns if c.name.endswith("_key") and isinstance(_kind(c), String)
+    ]
+    return named, [c for c in columns if isinstance(_kind(c), JSON)]
+
+
+async def missing_objects(session: AsyncSession) -> list[str]:
+    """Every object a row names that the configured store lacks.
+
+    A copy that brought the database and not the store (a first deploy, a
+    restore) leaves rows pointing at nothing, found only when a page shows
+    a broken file.
+
+    ponytail: one ``exists`` per key, and every JSON column read through;
+    list the store, and mark the columns, if either grows large.
+    """
+    from sqlalchemy import String, cast, select, union, union_all
+
+    columns, docs = _naming_columns()
+    named = [
+        select(c.label("v")).where(c.like(f"{DIGEST_ALGORITHM}/%")) for c in columns
+    ]
+    inside = [
+        select(d.label("v")).where(d.like(f"%{DIGEST_ALGORITHM}/%"))
+        for d in (cast(c, String) for c in docs)
+    ]
+    keys: set[str] = set()
+    if named:
+        keys.update((await session.execute(union(*named))).scalars())
+    if inside:
+        for doc in (await session.execute(union_all(*inside))).scalars():
+            keys.update(_KEY_IN_TEXT.findall(doc))
+    found = sorted(keys)
+    storage = get_storage()
+    held = await asyncio.gather(*(storage.exists(key) for key in found))
+    return [key for key, ok in zip(found, held, strict=True) if not ok]
+
+
+async def held(session: AsyncSession, key: str) -> bool:
+    """Whether a row names ``key``, so its object must stay in the store.
+    One statement over every column a key can be in, each stopping at its
+    first row.
+
+    ponytail: an unindexed column, and every JSON document, is read
+    through on a miss; index the ``*_key`` columns, and mark the columns,
+    if deletes grow slow.
+    """
+    from sqlalchemy import String, cast, exists, or_, select
+
+    validate_key(key)
+    columns, docs = _naming_columns()
+    naming = [c == key for c in columns]
+    naming += [cast(c, String).like(f"%{key}%") for c in docs]
+    if not naming:
+        return False
+    found = select(or_(*(exists().where(match) for match in naming)))
+    return bool((await session.execute(found)).scalar())

@@ -1,0 +1,74 @@
+"""Worker settings per queue, validated when the settings load.
+
+``Settings.WORKER_QUEUES`` maps a queue name to its ``QueueWorker``; any
+queue not listed uses ``Settings.WORKER_QUEUE_DEFAULT``. Every worker
+engine reads its concurrency from here (taskiq's max async tasks,
+dramatiq's threads, arq's ``max_jobs``), so the number has one home.
+
+Queue names are strings: queues are discovered from
+``app/components/worker/queues/`` and services add their own, so the set is
+open. The ones the stack ships are named in ``QueueName``. A name that
+matches no queue is caught when a worker starts
+(``app.components.worker.runtime.check_queues``).
+"""
+
+from pydantic import BaseModel, ConfigDict, PositiveInt
+
+from app.core.constants import QueueName
+
+
+class QueueWorker(BaseModel):
+    """How the workers on one queue run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    concurrency: PositiveInt = 10  # jobs one worker process runs at once
+    # The oldest waiting job past this marks the queue backed up.
+    max_wait_seconds: PositiveInt = 300
+    # A job running longer than this is stopped: nothing else frees its slot.
+    timeout_seconds: PositiveInt = 300
+
+
+# The queues the stack ships with; then the ones plugins brought, with the
+# concurrency their plugin asked for (``app/core/plugin_queue_defaults.py``,
+# rendered from the plugins in ``.copier-answers.yml``). Override any of
+# them, or add others, with ``WORKER_QUEUES='{"lenny": {"concurrency": 100}}'``.
+_STACK_QUEUES: dict[str, QueueWorker] = {
+    # Low concurrency and slow tasks: a backlog you can see. That's the joke.
+    QueueName.HOMER: QueueWorker(concurrency=3, timeout_seconds=600),
+    QueueName.LENNY: QueueWorker(concurrency=15, timeout_seconds=120),
+    QueueName.CARL: QueueWorker(concurrency=15, timeout_seconds=120),
+    QueueName.CHARLIE: QueueWorker(concurrency=10, timeout_seconds=120),
+    QueueName.INANIMATE_ROD: QueueWorker(concurrency=15, timeout_seconds=300),
+    # One ghost, one task at a time.
+    QueueName.GRIMEY: QueueWorker(concurrency=1, timeout_seconds=600),
+}
+
+# Guarded: a project generated before plugins could ship queue defaults
+# gains the module on its next ``aegis add``/``update``, and must keep
+# importing until then.
+try:
+    from app.core.plugin_queue_defaults import PLUGIN_QUEUE_DEFAULTS
+except ImportError:  # pragma: no cover - projects predating the hook
+    PLUGIN_QUEUE_DEFAULTS = {}
+
+DEFAULT_QUEUES: dict[str, QueueWorker] = {**_STACK_QUEUES, **PLUGIN_QUEUE_DEFAULTS}
+
+
+def queue_worker(
+    queue: str, queues: dict[str, QueueWorker], default: QueueWorker
+) -> QueueWorker:
+    """``queue``'s settings, or the default when it is not listed."""
+    return queues.get(queue, default)
+
+
+def settings_for(queue: str) -> QueueWorker:
+    """``queue``'s worker settings, read from the live settings."""
+    from app.core.config import settings
+
+    return queue_worker(queue, settings.WORKER_QUEUES, settings.WORKER_QUEUE_DEFAULT)
+
+
+def concurrency_for(queue: str) -> int:
+    """Jobs one worker process runs at once on ``queue``, per the settings."""
+    return settings_for(queue).concurrency

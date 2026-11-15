@@ -1,0 +1,60 @@
+"""What the Overseer saved, applied to this process as it starts.
+
+Code reads ``settings`` synchronously, so a value saved while the app runs
+reaches it on the next start: each process (webserver, scheduler, worker)
+awaits ``apply_saved_overrides`` before its own work. A missing store or
+table (migrations not yet run) never stops a process from booting: it runs
+on ``.env``, which is already in effect.
+"""
+
+from app.core import edges_http, run_log, saved_settings
+from app.core.log import apply_log_level, logger, setup_logging
+
+
+async def apply_before_serving() -> None:
+    """``apply_saved_overrides`` for a process that reads on one event loop
+    and serves on another (the webserver's entrypoint): what the read
+    opened is closed before that loop ends, so serving opens its own rather
+    than reusing connections bound to a closed loop."""
+    await apply_saved_overrides()
+    await release()
+
+
+async def release() -> None:
+    """What this process opened on its event loop (the cache's pool, the
+    database's, the queue brokers), closed while the loop still runs: left
+    to Python, each is closed after the loop has gone and logs "Event loop
+    is closed"."""
+    from app.core.cache import get_cache
+
+    await get_cache().aclose()
+    from app.core.db import async_engine
+
+    await async_engine.dispose()
+    from app.components.worker.pools import shutdown_brokers
+
+    await shutdown_brokers()
+
+
+async def apply_saved_overrides() -> None:
+    """Saved settings."""
+    # Idempotent; a worker started by its own CLI (taskiq, dramatiq) has no
+    # entrypoint of ours to set logging up, so every process does it here,
+    # and starts counting its calls out (``edges``).
+    setup_logging()
+    edges_http.install()
+    try:
+        applied = await saved_settings.apply_saved()
+    except Exception:
+        logger.exception("Could not apply saved settings")
+    else:
+        if applied:
+            logger.info("Saved settings applied: %s", ", ".join(applied))
+    apply_log_level()
+    # A run's log where every process reads it: the webserver what a worker
+    # or the scheduler wrote.
+    from app.core.config import settings
+
+    run_log.attach_redis(
+        settings.redis_url_effective, settings.TASK_HISTORY_TTL_SECONDS
+    )

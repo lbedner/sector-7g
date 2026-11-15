@@ -1,5 +1,5 @@
 """
-Lenny Leonard worker tasks for arq.
+Lenny Leonard worker tasks.
 
 Thin wrappers around services/springfield/lenny.py, burns.py, and plant.py functions.
 """
@@ -16,33 +16,31 @@ from app.services.springfield.lenny import (
 from app.services.springfield.plant import night_maintenance
 
 
-async def run_diagnostics_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def run_diagnostics_task(**kwargs: Any) -> dict[str, Any]:
     """Lenny runs reactor diagnostics."""
     return await run_diagnostics()
 
 
-async def file_report_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def file_report_task(**kwargs: Any) -> dict[str, Any]:
     """Lenny files a report."""
     return await file_report()
 
 
-async def check_cooling_tower_task(
-    ctx: dict[str, Any], **kwargs: Any
-) -> dict[str, Any]:
+async def check_cooling_tower_task(**kwargs: Any) -> dict[str, Any]:
     """Lenny checks cooling tower sensors."""
     return await check_cooling_tower()
 
 
-async def morning_inspection_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def morning_inspection_task(**kwargs: Any) -> dict[str, Any]:
     """Lenny does morning inspection."""
     return await morning_inspection()
 
 
-async def open_plant_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def open_plant_task(**kwargs: Any) -> dict[str, Any]:
     """Mr. Burns opens the plant (dispatched to Lenny's queue)."""
     return await open_plant()
 
 
-async def night_maintenance_task(ctx: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+async def night_maintenance_task(**kwargs: Any) -> dict[str, Any]:
     """Automated night maintenance."""
     return await night_maintenance()

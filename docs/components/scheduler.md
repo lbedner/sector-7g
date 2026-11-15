@@ -92,155 +92,132 @@ The scheduler component card provides:
 
 ## Job Configuration
 
-The scheduler is configured in `app/components/scheduler/main.py`:
+Each service lists its own scheduled jobs, as `JOBS` in
+`app/services/<service>/scheduled_jobs.py`. The scheduler (`main.py`)
+schedules every service's entries (`app.core.schedule.service_jobs`); the
+heartbeat is the only job it registers on its own. A service you write, or a
+plugin, adds jobs with no edit outside its own package.
 
 ```python
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+# app/services/system/scheduled_jobs.py
+from app.core.schedule import LONG_RUNNING, ServiceJob
+from app.services.system.backup import backup_database_job
 
-def create_scheduler() -> AsyncIOScheduler:
-# Configured with SQLAlchemy jobstore for persistence
-    from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-    from app.core.db import engine, init_database
-
-    init_database()
-    jobstore = SQLAlchemyJobStore(engine=engine, tablename='apscheduler_jobs')
-    scheduler = AsyncIOScheduler(jobstores={'default': jobstore})
-# Add your jobs here
-    scheduler.add_job(
-        func=system_maintenance_job,
-        trigger=CronTrigger(hour=2),  # Run daily at 2 AM
-        id="system_maintenance",
-        name="System Maintenance",
-        replace_existing=True
-    )
-
-    return scheduler
-```
-
-### Pre-configured Jobs
-
-Your scheduler includes these automatic jobs:
-
-#### Database Backup Job
-```python
-# Automatically included when database component is present
-scheduler.add_job(
-    backup_database_job,
-    trigger="cron",
-    hour=2,
-    minute=0,
-    id="database_backup",
-    name="Daily Database Backup",
-    max_instances=1,
-    coalesce=True,
-    replace_existing=True
+JOBS: tuple[ServiceJob, ...] = (
+    ServiceJob(
+        backup_database_job,
+        "database_backup",
+        "Daily Database Backup",
+        {"trigger": "cron", "hour": 2, "minute": 0},
+        timeout=LONG_RUNNING,
+    ),
 )
 ```
 
-This job:
+Each entry is a job function, a stable id, a display name, the trigger as
+`add_job` keyword arguments, and an optional `timeout` (below). Every entry
+gets `max_instances=1`, `coalesce=True` and `replace_existing=True`. Two
+entries may not share an id or a function name: the scheduler keys on the
+id and the worker on the name, so startup fails rather than letting one
+replace the other.
 
-- Runs daily at 2:00 AM UTC
-- Creates timestamped database backups
-- Handles rotation of old backup files
-- Logs backup success/failure status
-- Prevents overlapping executions
+### Where jobs run
+
+This project has a worker, so the scheduler only produces. Each entry is
+scheduled as an enqueue of the job's function name onto the `system` queue,
+and the worker registers the same entry as a task under that name and runs
+it, with the worker's resources, retries and live feed. The heartbeat stays
+in the scheduler, because it proves the scheduler's own loop is alive.
+
+- **Timeouts.** A job runs under the system queue's limit (five minutes)
+  unless its entry sets `timeout`; the long jobs set `LONG_RUNNING`.
+- **Run Now** (the dashboard button, `POST /api/v1/scheduler/jobs/{id}/run`,
+  or `tasks trigger`) repeats the stored call, so a manual run is an enqueue
+  too and lands on the worker, never in the webserver.
+- **Run history.** The Scheduler page records the enqueue, which takes
+  milliseconds; the job's own run time and outcome are on the Worker page.
+- **Redis down.** A job that cannot be enqueued is recorded as a failed run.
+
+### Pre-configured Jobs
+
+With the database component, the system service schedules a daily backup
+at 2:00 UTC that writes a timestamped backup, rotates old files and never
+overlaps itself. Other services bring their own entries (the AI catalog
+sync, the finance snapshot jobs, and so on) when they are installed, and
+take them away when they are removed.
 
 ## Adding Custom Jobs
 
 ### 1. Create Job Function
-Create job functions in `app/services/`:
+
+Create the job with the service it belongs to, as an `async def` that takes
+no arguments:
 
 ```python
-# app/services/my_jobs.py
-import asyncio
+# app/services/reports/jobs.py
 from app.core.log import logger
 
-async def process_daily_reports():
+
+async def process_daily_reports() -> None:
     """Generate daily reports."""
     logger.info("Starting daily report generation")
-
     # Your job logic here
-    await asyncio.sleep(1)  # Simulate work
-
-    logger.info("Daily reports completed")
-
-async def cleanup_old_files():
-    """Clean up old temporary files."""
-    logger.info("Starting file cleanup")
-
-    # Your cleanup logic here
-
-    logger.info("File cleanup completed")
 ```
 
-### 2. Register Jobs in Scheduler
-Add jobs to the scheduler configuration:
+### 2. List It in the Service's `scheduled_jobs.py`
 
 ```python
-# app/components/scheduler/main.py
-from app.services.my_jobs import process_daily_reports, cleanup_old_files
+# app/services/reports/scheduled_jobs.py
+from app.core.schedule import ServiceJob
+from app.services.reports.jobs import process_daily_reports
 
-def create_scheduler() -> AsyncIOScheduler:
-# Configure persistent scheduler (already initialized above)
-    scheduler = AsyncIOScheduler(jobstores={'default': jobstore})
-
-    # Check for existing jobs to respect runtime modifications
-    force_update = os.getenv("SCHEDULER_FORCE_UPDATE", "false").lower() == "true"
-
-    # Daily report at 6 AM (check if exists first)
-    if not _job_exists_in_database("daily_reports") or force_update:
-        scheduler.add_job(
-            func=process_daily_reports,
-            trigger=CronTrigger(hour=6, minute=0),
-            id="daily_reports",
-            name="Daily Report Generation",
-            replace_existing=True
-        )
-
-    # Weekly cleanup on Sundays at midnight
-    if not _job_exists_in_database("weekly_cleanup") or force_update:
-        scheduler.add_job(
-            func=cleanup_old_files,
-            trigger=CronTrigger(day_of_week="sun", hour=0, minute=0),
-            id="weekly_cleanup",
-            name="Weekly File Cleanup",
-            replace_existing=True
-        )
-return scheduler
+JOBS: tuple[ServiceJob, ...] = (
+    ServiceJob(
+        process_daily_reports,
+        "daily_reports",
+        "Daily Report Generation",
+        {"trigger": "cron", "hour": 6, "minute": 0},
+    ),
+)
 ```
+
+Code is the source of truth: every startup re-registers each entry via
+`replace_existing=True`, so editing a trigger and redeploying is all it
+takes to change a schedule.
 
 ## Job Scheduling Options
 
 ### Cron-Style Triggers
-```python
-from apscheduler.triggers.cron import CronTrigger
 
+Put `trigger="cron"` plus the cron fields in the entry's trigger:
+
+```python
 # Every day at 2:30 AM
-CronTrigger(hour=2, minute=30)
+trigger="cron", hour=2, minute=30
 
 # Every Monday at 9:00 AM
-CronTrigger(day_of_week="mon", hour=9, minute=0)
+trigger="cron", day_of_week="mon", hour=9, minute=0
 
 # Every 15 minutes
-CronTrigger(minute="*/15")
+trigger="cron", minute="*/15"
 
 # First day of every month at midnight
-CronTrigger(day=1, hour=0, minute=0)
+trigger="cron", day=1, hour=0, minute=0
 ```
 
 ### Interval Triggers
-```python
-from apscheduler.triggers.interval import IntervalTrigger
 
+Put `trigger="interval"` plus the interval span in the entry's trigger:
+
+```python
 # Every 5 minutes
-IntervalTrigger(minutes=5)
+trigger="interval", minutes=5
 
 # Every 2 hours
-IntervalTrigger(hours=2)
+trigger="interval", hours=2
 
 # Every 30 seconds
-IntervalTrigger(seconds=30)
+trigger="interval", seconds=30
 ```
 
 ### One-Time Jobs
@@ -249,7 +226,7 @@ from datetime import datetime, timedelta
 
 # Run once in 1 hour
 scheduler.add_job(
-    func=one_time_task,
+    one_time_task,
     trigger="date",
     run_date=datetime.now() + timedelta(hours=1),
     id="one_time_task"
@@ -283,20 +260,14 @@ scheduler.modify_job("daily_reports", hour=7)  # Change to 7 AM
 
 ### Production Job Updates
 
-For persistent schedulers, use environment variables to control job updates:
+To change a schedule in production, edit the entry's trigger in its
+service's ``scheduled_jobs.py`` and redeploy. Every entry is
+scheduled with ``replace_existing=True``, so the new trigger overwrites
+the persisted row on the next scheduler restart.
 
-```bash
-# Force update all jobs from code configuration (useful during deployments)
-SCHEDULER_FORCE_UPDATE=true docker compose up -d scheduler
-
-# Normal startup (preserves runtime job modifications)
-docker compose up -d scheduler
-```
-
-This pattern allows:
-- **Development**: Jobs update automatically when code changes
-- **Production**: Runtime job modifications are preserved across restarts
-- **Deployments**: Force updates when needed with environment flag
+Runtime edits via ``scheduler.modify_job()`` are intentionally not
+preserved across restarts — code wins, so deploys never silently
+drift from the committed configuration.
 
 ## Error Handling
 
@@ -478,7 +449,6 @@ async def idempotent_job():
 - Confirm jobstore table creation
 
 **Jobs not persisting:**
-- Check if SCHEDULER_FORCE_UPDATE is set incorrectly
 - Verify database write permissions
 - Review SQLAlchemy jobstore logs
 **High memory usage:**
@@ -518,4 +488,4 @@ for job in scheduler.get_jobs():
 3. **Resource Limits**: Configure appropriate memory and CPU limits
 4. **Timezone Handling**: All jobs use UTC (configured automatically)
 5. **Error Notifications**: Implement alerting for critical job failures
-6. **Job Updates**: Use SCHEDULER_FORCE_UPDATE for deployment job updates
+6. **Job Updates**: Edit triggers in the service's ``scheduled_jobs.py`` and redeploy; code is the source of truth

@@ -1,27 +1,48 @@
 """
 Scheduler component for sector-7g.
 
-Simple, explicit job scheduling - just import functions and schedule them.
-Add your own jobs by importing service functions and calling scheduler.add_job().
+Schedules every service's jobs (``app.core.schedule``): a service lists its
+own in ``app/services/<service>/scheduled_jobs.py``.
 """
 
 import asyncio
+from datetime import datetime
+import logging
 from typing import Any
 
-from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
+from apscheduler.events import (
+    EVENT_JOB_ERROR,
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_MISSED,
+    EVENT_JOB_SUBMITTED,
+)
+from apscheduler.job import Job
+from apscheduler.jobstores.base import ConflictingIdError
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from app.core.db import engine, init_database, db_session
-from app.services.scheduler.models import APSchedulerJob
-from app.services.system.backup import backup_database_job
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy import select
 
-
-
+from app.components.worker.pools import enqueue_task
+from app.core import edges, run_log
+from app.core.boot import apply_saved_overrides, release
 from app.core.config import settings
+from app.core.constants import ComponentName, QueueName
+from app.core.db import db_session, engine, init_database
 from app.core.log import logger
+from app.core.schedule import service_jobs
+from app.services.scheduler.execution_log import (
+    cancel_stale_running_rows,
+    prune_executions,
+    record_job_finished,
+    record_job_missed,
+    record_job_started,
+)
+from app.services.scheduler.orphans import drop_unknown_persisted_jobs
+from app.services.springfield.schedules import register_springfield_jobs
 from app.services.system import activity
 
+from .heartbeat import is_heartbeat_event, register_heartbeat_job
+from .resilient import ResilientScheduler
 
 
 def _cleanup_stale_jobs() -> None:
@@ -68,29 +89,79 @@ def _cleanup_stale_jobs() -> None:
         logger.debug(f"Stale job cleanup skipped: {e}")
 
 
-def _job_exists_in_database(job_id: str) -> bool:
-    """Check if a job already exists in the persistence database using SQLModel."""
-    try:
-        from sqlmodel import select
-
-        with db_session() as session:
-            # Query for job by ID using modern SQLModel pattern
-            query = select(APSchedulerJob).where(APSchedulerJob.id == job_id)
-            result = session.exec(query)
-            job = result.first()
-            return job is not None
-    except Exception as e:
-        logger.warning(f"Could not check for existing job {job_id}: {e}")
-        # If we can't check, assume it doesn't exist (safer to add than skip)
-        return False
+# Interval jobs count from this fixed start, not from when the process
+# started. Every startup re-adds each job, and an interval with no start date
+# counts from that moment, so each restart pushed every interval job back a
+# full interval (a daily job restarted more than daily never ran). Anchored,
+# runs land on fixed boundaries: every 24h at midnight, every 6h at 00/06/12/
+# 18, hourly on the hour, in the scheduler's timezone.
+INTERVAL_ANCHOR = datetime(2000, 1, 1)
+# Each job's run in flight, by job id, as the JobExecution row SUBMITTED
+# opened for it: closed by EXECUTED/ERROR, bound by ``scheduled_run``. One
+# per job (``max_instances=1``); one process, so no locking.
+_in_flight: dict[str, int] = {}
 
 
+async def scheduled_run(job_id: str, task_name: str) -> Any:
+    """One run of a scheduled job: its task enqueued
+    for the worker, which does the work.
+
+    Bound as the history row ``record_job_started`` opened for it, so what
+    the run logs (the hand-off, naming the task) is read from the
+    row (``run_log``).
+    """
+    execution_id = _in_flight.get(job_id)
+    with run_log.bind_run(str(execution_id) if execution_id is not None else None):
+        return await enqueue_task(task_name, QueueName.SYSTEM)
 
 
+class StoredJobs(SQLAlchemyJobStore):
+    """The jobs kept in the database. A job added that is kept already
+    conflicts before any INSERT (the scheduler then updates it, as
+    ``replace_existing`` asks): Postgres logs each INSERT that fails on its
+    key as an ERROR, one for every job on every start."""
+
+    def add_job(self, job: Job) -> None:
+        kept = select(self.jobs_t.c.id).where(self.jobs_t.c.id == job.id)
+        with self.engine.begin() as connection:
+            if connection.execute(kept).first() is not None:
+                raise ConflictingIdError(job.id)
+        super().add_job(job)
+
+
+def register_service_jobs(scheduler: AsyncIOScheduler) -> None:
+    """Schedule every service job (``service_jobs``) as a ``scheduled_run``.
+
+    The scheduler only produces: each job is scheduled as an enqueue of its
+    task name onto the system queue, and a worker runs it. A manual run
+    repeats the stored call, so it lands on the worker too.
+    """
+    for job in service_jobs():
+        trigger = dict(job.trigger)
+        if trigger.get("trigger") == "interval":
+            trigger.setdefault("start_date", INTERVAL_ANCHOR)
+        scheduler.add_job(
+            scheduled_run,
+            args=[job.id, job.task_name],
+            id=job.id,
+            name=job.name,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+            **trigger,
+        )
+
+
+def _quiet_successful_runs() -> None:
+    """APScheduler logs every run at INFO ("Running job", "executed
+    successfully"); the heartbeat alone writes two lines every 15 seconds.
+    Failures still log at ERROR."""
+    logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
 
 
 def create_scheduler() -> AsyncIOScheduler:
     """Create and configure the scheduler with all jobs."""
+    _quiet_successful_runs()
 
     # Ensure database is initialized before creating jobstore
     init_database()
@@ -100,64 +171,32 @@ def create_scheduler() -> AsyncIOScheduler:
     _cleanup_stale_jobs()
 
     # Configure SQLAlchemy jobstore for persistence
-    jobstore = SQLAlchemyJobStore(engine=engine, tablename='apscheduler_jobs')
-    jobstores = {'default': jobstore}
-    scheduler = AsyncIOScheduler(jobstores=jobstores)
+    jobstore = StoredJobs(engine=engine, tablename="apscheduler_jobs")
+    jobstores = {"default": jobstore}
+    # misfire_grace_time=None: always run missed jobs when the scheduler wakes
+    # (host sleep, container pause, deploy gap). Assumes jobs are idempotent.
+    # coalesce=True collapses multiple missed runs into a single catch-up.
+    job_defaults = {"misfire_grace_time": None, "coalesce": True}
+    scheduler = ResilientScheduler(
+        jobstores=jobstores,
+        job_defaults=job_defaults,
+        timezone=settings.SCHEDULER_TIMEZONE,
+    )
     logger.info("Scheduler using postgres database for job persistence")
 
+    # Code is the source of truth: every startup re-registers each job via
+    # ``replace_existing=True``, so runtime edits to persisted jobs do not
+    # survive a restart by design.
+    register_heartbeat_job(scheduler)
+    register_service_jobs(scheduler)
+    register_springfield_jobs(scheduler)
 
-    # ============================================================================
-    # JOB SCHEDULE CONFIGURATION
-    #
-    # PERSISTENCE BEHAVIOR:
-    # - Jobs are checked against the database first
-    # - Existing jobs are preserved (respects runtime modifications)
-    # - New jobs are added from code configuration
-    # - Set SCHEDULER_FORCE_UPDATE=true to override all jobs from code
-    #
-    # To update schedules during deployment:
-    #   SCHEDULER_FORCE_UPDATE=true docker-compose up -d scheduler
-    # ============================================================================
-
-
-    # Check config flag for force updates (useful during deployments)
-    force_update = settings.SCHEDULER_FORCE_UPDATE
-    # Database backup job (runs daily at 2 AM when database is available)
-    job_id = "database_backup"
-
-    # For persistent schedulers, check database directly since
-    # scheduler hasn't loaded jobs yet
-    job_exists = _job_exists_in_database(job_id)
-
-
-    if not job_exists or force_update:
-        if job_exists and force_update:
-            logger.info(f"Force updating job '{job_id}' from code configuration")
-        else:
-            logger.info(f"Adding new job '{job_id}'")
-
-        scheduler.add_job(
-            backup_database_job,
-            trigger="cron",
-            hour=2,
-            minute=0,
-            id=job_id,
-            name="Daily Database Backup",
-            max_instances=1,
-            coalesce=True,
-            replace_existing=True  # Safe to use since we check first
-        )
-    else:
-
-        msg = f"Job '{job_id}' exists in database, preserving current configuration"
-        logger.info(msg)
-
-
-
-
-
-    # Add your own scheduled jobs here by importing service functions
-    # and calling scheduler.add_job() with your custom business logic
+    # Drop persisted jobs whose ``add_job`` call has been removed from
+    # code since the last deploy. ``replace_existing=True`` covers the
+    # "schedule changed" case for jobs that still exist; this covers the
+    # "job deleted" case so persistent storage doesn't keep firing an
+    # obsolete job ID forever.
+    drop_unknown_persisted_jobs(scheduler)
 
     return scheduler
 
@@ -167,35 +206,83 @@ async def run_scheduler() -> None:
 
     logger.info("Starting sector-7g Scheduler")
 
+    # Startup hooks are the webserver's; without this the scheduler's jobs
+    # would run on .env while the webserver used what the Overseer saved.
+    await apply_saved_overrides()
+
     scheduler = create_scheduler()
 
     def _on_job_event(event: Any) -> None:
-        """Emit activity events for job execution results."""
+        """Emit activity events (and persist execution history) for jobs."""
+        if is_heartbeat_event(event):
+            return
+        if event.code in (EVENT_JOB_EXECUTED, EVENT_JOB_ERROR):
+            job = scheduler.get_job(event.job_id)
+            error = event.code == EVENT_JOB_ERROR
+            edges.into(job.func if job else None, source=edges.SCHEDULER, error=error)
+        if event.code == EVENT_JOB_SUBMITTED:
+            # JobSubmissionEvent carries `scheduled_run_times` (a list).
+            run_times = getattr(event, "scheduled_run_times", None)
+            job = scheduler.get_job(event.job_id)
+            execution_id = record_job_started(
+                event.job_id,
+                job.name if job else event.job_id,
+                run_times[0] if run_times else None,
+            )
+            if execution_id is not None:
+                _in_flight[event.job_id] = execution_id
+            return
+        execution_id = _in_flight.pop(event.job_id, None)
         if event.code == EVENT_JOB_EXECUTED:
             activity.add_event(
-                component="scheduler",
+                component=ComponentName.SCHEDULER,
                 event_type="job_complete",
                 message=f"Job '{event.job_id}' completed",
                 status="success",
             )
+            record_job_finished(execution_id, event.job_id, success=True)
+            prune_executions(event.job_id)
         elif event.code == EVENT_JOB_ERROR:
             activity.add_event(
-                component="scheduler",
+                component=ComponentName.SCHEDULER,
                 event_type="job_failed",
                 message=f"Job '{event.job_id}' failed",
                 status="error",
                 details=str(event.exception),
             )
+            record_job_finished(
+                execution_id,
+                event.job_id,
+                success=False,
+                error=str(event.exception),
+                traceback=event.traceback,
+            )
+            prune_executions(event.job_id)
+        elif event.code == EVENT_JOB_MISSED:
+            activity.add_event(
+                component=ComponentName.SCHEDULER,
+                event_type="job_missed",
+                message=f"Job '{event.job_id}' missed its scheduled run",
+                status="warning",
+                details=f"scheduled_run={event.scheduled_run_time.isoformat()}",
+            )
+            record_job_missed(event.job_id, event.scheduled_run_time)
 
     try:
         scheduler.start()
-        scheduler.add_listener(_on_job_event, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+        scheduler.add_listener(
+            _on_job_event,
+            EVENT_JOB_EXECUTED
+            | EVENT_JOB_ERROR
+            | EVENT_JOB_MISSED
+            | EVENT_JOB_SUBMITTED,
+        )
+        cancel_stale_running_rows()
         logger.info("Scheduler started successfully")
         logger.info(f"{len(scheduler.get_jobs())} jobs scheduled:")
 
         for job in scheduler.get_jobs():
             logger.info(f"   • {job.name} - {job.trigger}")
-
 
         # Keep the scheduler running
         while True:
@@ -210,3 +297,4 @@ async def run_scheduler() -> None:
         if scheduler.running:
             scheduler.shutdown()
             logger.info("Scheduler stopped gracefully")
+        await release()

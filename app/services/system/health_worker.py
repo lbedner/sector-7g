@@ -1,0 +1,350 @@
+"""Worker health for taskiq."""
+
+from collections import Counter
+import time
+from typing import Any, cast
+
+from app.components.worker.heartbeat import read_reports
+from app.core.config import settings
+from app.core.constants import ComponentName
+from app.core.log import logger
+from app.core.queue_workers import settings_for
+from app.services.system.health import propagate_status
+from app.services.system.health_worker_rules import (
+    broken_queue_status,
+    last_delivered,
+    last_start,
+    live_workers,
+    queue_status,
+    reported_busy,
+    stream_age,
+    taskiq_group_stats,
+)
+from app.services.system.models import ComponentStatus, ComponentStatusType
+
+
+async def check_worker_health() -> ComponentStatus:
+    """
+    Check TaskIQ worker status using Redis Stream info.
+
+    TaskIQ uses Redis Streams for task queuing. We query stream and consumer
+    group info to determine worker health and queue statistics.
+
+    Returns:
+        ComponentStatus indicating worker infrastructure health with queue
+        sub-components
+    """
+    # A queue file that exists but cannot import (a missing broker library)
+    # is an outage, not a worker with no queues.
+    if (broken := broken_queue_status()) is not None:
+        return broken
+
+    try:
+        import redis.asyncio as aioredis
+
+        # Create Redis connection with auto-detection for local vs Docker
+        redis_connection = aioredis.from_url(  # type: ignore[no-untyped-call]
+            settings.redis_url_effective,
+            db=settings.REDIS_DB,
+            socket_timeout=3,
+            socket_connect_timeout=3,
+        )
+        redis_client: aioredis.Redis = cast(aioredis.Redis, redis_connection)
+
+        # Get queue metadata from registry
+        from app.components.worker import queue_discovery
+        from app.components.worker.registry import get_all_queue_metadata
+
+        functional_queues = get_all_queue_metadata()
+
+        # Check each queue and create sub-components
+        queue_sub_components = {}
+        total_queued = 0
+        total_processed = 0
+        total_ongoing = 0
+        active_workers = 0
+        live = await read_reports(redis_client)
+        reports = Counter(r.get("queue") for r in live)
+
+        for queue_type, queue_config in functional_queues.items():
+            stream_name = queue_config.get("stream_name", f"taskiq:{queue_type}")
+
+            try:
+                # Get stream info using XINFO STREAM
+                stream_info: dict[str, Any] = {}
+                try:
+                    stream_info = await redis_client.xinfo_stream(stream_name)
+                except aioredis.ResponseError as e:
+                    if "no such key" in str(e).lower():
+                        # Stream doesn't exist yet - no tasks have been sent
+                        stream_info = {"length": 0, "entries-added": 0}
+                    else:
+                        raise
+
+                stream_length = stream_info.get("length", 0)
+
+                try:
+                    groups_info = await redis_client.xinfo_groups(stream_name)
+                except aioredis.ResponseError:
+                    groups_info = []
+                consumer_count, pending_count, entries_read, lag = taskiq_group_stats(
+                    groups_info, stream_length
+                )
+                # The group's count includes consumers from processes that have
+                # since restarted away; only live ones hold slots.
+                consumers = (
+                    await redis_client.xinfo_consumers(stream_name, "taskiq")
+                    if consumer_count
+                    else []
+                )
+                consumer_count = live_workers(consumers, reports[queue_type])
+                queued_jobs = lag
+                # How long the oldest waiting job has waited: a small count
+                # can hide one stuck for an hour. It is the first entry past
+                # the group's last delivered id, and its id is its arrival.
+                oldest_waiting: float | None = None
+                if queued_jobs > 0:
+                    first = await redis_client.xrange(
+                        stream_name,
+                        min=f"({last_delivered(groups_info)}",
+                        max="+",
+                        count=1,
+                    )
+                    if first:
+                        oldest_waiting = stream_age(
+                            first[0][0], int(time.time() * 1000)
+                        )
+                jobs_ongoing = pending_count
+                jobs_completed = (
+                    entries_read - jobs_ongoing if entries_read > jobs_ongoing else 0
+                )
+
+                # Enrich with task history for failure tracking
+                from app.components.worker.task_history import get_queue_stats
+
+                stats = await get_queue_stats(redis_client, queue_type)
+                jobs_failed = stats["failed"]
+                if stats["total"] > 0:
+                    jobs_completed = stats["completed"]
+                    jobs_ongoing = stats["running"]
+                busy = reported_busy(live, queue_type)
+                if busy is not None:
+                    jobs_ongoing = busy
+                total_finished = jobs_completed + jobs_failed
+                failure_rate = (
+                    (jobs_failed / total_finished * 100) if total_finished > 0 else 0.0
+                )
+
+                total_queued += queued_jobs
+                total_processed += jobs_completed
+                total_ongoing += jobs_ongoing
+
+                # Worker is alive if there are consumers in the group
+                worker_alive = consumer_count > 0
+                if worker_alive:
+                    active_workers += 1
+
+                queue_functions = queue_config.get("functions", [])
+                has_functions = len(queue_functions) > 0
+                max_wait = settings_for(queue_type).max_wait_seconds
+                last_started = last_start(consumers)
+                queue_state, lead = queue_status(
+                    worker_alive=worker_alive,
+                    has_functions=has_functions,
+                    waiting=queued_jobs,
+                    failure_rate=failure_rate,
+                    oldest_waiting=oldest_waiting,
+                    max_wait=max_wait,
+                    last_started=last_started,
+                )
+                status_parts = [lead] if lead else []
+                if worker_alive and has_functions:
+                    if jobs_ongoing > 0:
+                        status_parts.append(f"{jobs_ongoing} processing")
+                    elif queued_jobs > 0:
+                        status_parts.append(f"{queued_jobs} queued")
+                    else:
+                        status_parts.append("idle")
+                    if jobs_completed > 0:
+                        status_parts.append(f"{jobs_completed} completed")
+
+                queue_message = (
+                    f"{queue_config['description']}: {', '.join(status_parts)}"
+                )
+
+                queue_metadata: dict[str, Any] = {
+                    "queue_type": queue_type,
+                    "stream_name": stream_name,
+                    "queued_jobs": queued_jobs,
+                    "oldest_waiting_seconds": oldest_waiting,
+                    "max_wait_seconds": max_wait,
+                    "last_started_seconds": last_started,
+                    "jobs_ongoing": jobs_ongoing,
+                    "jobs_completed": jobs_completed,
+                    "jobs_failed": jobs_failed,
+                    "failure_rate_percent": round(failure_rate, 1),
+                    "consumer_count": consumer_count,
+                    "max_concurrency": queue_config["max_jobs"],
+                    "timeout_seconds": queue_config["timeout"],
+                    "description": queue_config["description"],
+                    "worker_alive": worker_alive,
+                }
+
+                queue_sub_components[queue_type] = ComponentStatus(
+                    name=queue_type,
+                    status=queue_state,
+                    message=queue_message,
+                    response_time_ms=None,
+                    metadata=queue_metadata,
+                    sub_components={},
+                )
+
+            except aioredis.ConnectionError as e:
+                logger.error(f"Redis connection failed for {queue_type}: {e}")
+
+                error_details = str(e).lower()
+                if "connection refused" in error_details:
+                    connection_issue = "Redis server not running"
+                elif (
+                    "name or service not known" in error_details
+                    or "nodename nor servname" in error_details
+                ):
+                    connection_issue = "Redis server DNS resolution failed"
+                elif "timeout" in error_details:
+                    connection_issue = "Redis server connection timeout"
+                else:
+                    connection_issue = "Redis server unreachable"
+
+                queue_sub_components[queue_type] = ComponentStatus(
+                    name=queue_type,
+                    status=ComponentStatusType.UNHEALTHY,
+                    message=f"{connection_issue} - worker offline",
+                    response_time_ms=None,
+                    metadata={
+                        "queue_type": queue_type,
+                        "stream_name": stream_name,
+                        "error_type": "redis_connection_error",
+                        "error": str(e),
+                        "connection_issue": connection_issue,
+                        "recommendation": (
+                            "Check Redis server status and network connectivity"
+                        ),
+                    },
+                    sub_components={},
+                )
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error checking {queue_type} queue health: {e}"
+                )
+                queue_sub_components[queue_type] = ComponentStatus(
+                    name=queue_type,
+                    status=ComponentStatusType.UNHEALTHY,
+                    message=f"Health check failed: {type(e).__name__}",
+                    response_time_ms=None,
+                    metadata={
+                        "queue_type": queue_type,
+                        "stream_name": stream_name,
+                        "error_type": "unexpected_error",
+                        "error": str(e),
+                        "exception_class": type(e).__name__,
+                    },
+                    sub_components={},
+                )
+
+        await redis_client.aclose()
+
+        # Create main worker status message
+        message_parts = []
+        if active_workers == 0:
+            message_parts.append("No active workers")
+        else:
+            message_parts.append(
+                f"{active_workers}/{len(functional_queues)} queues with workers"
+            )
+
+        if total_queued > 0:
+            message_parts.append(f"{total_queued} queued")
+        if total_ongoing > 0:
+            message_parts.append(f"{total_ongoing} processing")
+        if total_processed > 0:
+            message_parts.append(f"{total_processed} completed")
+
+        main_message = f"TaskIQ worker infrastructure: {', '.join(message_parts)}"
+
+        # Create queues component
+        queue_statuses = [queue.status for queue in queue_sub_components.values()]
+        queues_status = propagate_status(queue_statuses)
+
+        queues_message = f"{len(functional_queues)} queues configured"
+        if active_workers < len(functional_queues):
+            queues_message += f" ({active_workers} with consumers)"
+
+        queues_component = ComponentStatus(
+            name="queues",
+            status=queues_status,
+            message=queues_message,
+            response_time_ms=None,
+            metadata={
+                "configured_queues": len(functional_queues),
+                "active_workers": active_workers,
+                "queue_types": list(functional_queues.keys()),
+            },
+            sub_components=queue_sub_components,
+        )
+
+        worker_status = propagate_status([queues_status])
+
+        # Get arq version for display
+        try:
+            import arq
+
+            arq_version = getattr(arq, "VERSION", "")
+            if isinstance(arq_version, tuple):
+                arq_version = ".".join(str(v) for v in arq_version)
+        except ImportError:
+            arq_version = ""
+
+        # Compute totals across all queues
+        total_failed = sum(
+            q.metadata.get("jobs_failed", 0) for q in queue_sub_components.values()
+        )
+
+        return ComponentStatus(
+            name=ComponentName.WORKER,
+            status=worker_status,
+            message=main_message,
+            response_time_ms=None,
+            metadata={
+                "total_queued": total_queued,
+                "total_completed": total_processed,
+                "total_ongoing": total_ongoing,
+                "total_failed": total_failed,
+                "active_workers": active_workers,
+                "redis_url": settings.redis_url_effective,
+                "version": arq_version,
+                "queue_configuration": queue_discovery.configuration(functional_queues),
+            },
+            sub_components={"queues": queues_component},
+        )
+
+    except ImportError:
+        return ComponentStatus(
+            name=ComponentName.WORKER,
+            status=ComponentStatusType.UNHEALTHY,
+            message="Redis library not available for worker health check",
+            response_time_ms=None,
+            sub_components={},
+        )
+    except Exception as e:
+        logger.error(f"Worker health check failed: {e}")
+        return ComponentStatus(
+            name=ComponentName.WORKER,
+            status=ComponentStatusType.UNHEALTHY,
+            message=f"Worker health check failed: {str(e)}",
+            response_time_ms=None,
+            metadata={
+                "error": str(e),
+                "redis_url": settings.redis_url_effective,
+            },
+            sub_components={},
+        )

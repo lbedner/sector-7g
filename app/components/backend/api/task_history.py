@@ -7,7 +7,9 @@ written by the task_history module.
 
 from typing import Any
 
+from fastapi import APIRouter, HTTPException
 import redis.asyncio as aioredis
+
 from app.components.backend.api.models import (
     TaskHistoryListResponse,
     TaskHistoryRecord,
@@ -19,9 +21,11 @@ from app.components.worker.task_history import (
 )
 from app.core.config import settings
 from app.core.log import logger
-from fastapi import APIRouter, HTTPException
 
-router = APIRouter(prefix="/tasks/history", tags=["task-history"])
+router = APIRouter(
+    prefix="/tasks/history",
+    tags=["task-history"],
+)
 
 # Lazy-initialized Redis client
 _redis: aioredis.Redis | None = None
@@ -31,11 +35,7 @@ async def _get_redis() -> aioredis.Redis:
     """Get or create an async Redis client."""
     global _redis
     if _redis is None:
-        redis_url = (
-            settings.redis_url_effective
-            if hasattr(settings, "redis_url_effective")
-            else settings.REDIS_URL
-        )
+        redis_url = settings.redis_url_effective
         _redis = aioredis.from_url(redis_url, decode_responses=True)
     return _redis
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import flet as ft
 
-from app.components.frontend.styles import FontConfig
+from app.components.frontend.styles import BrandPalette, FontConfig
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class DarkColorPalette:
     """Dark mode color palette - official design system colors."""
 
     # Core colors
-    BG_PRIMARY: str = "#090B0D"  # Main page background
+    BG_PRIMARY: str = "#000000"  # Main page background (black, as htmx's)
     BG_SECONDARY: str = "#111418"  # Card backgrounds
     BG_SELECTED: str = "#212530"  # Secondary/selected states
     BG_HOVER: str = "#1A1D24"  # Muted/hover backgrounds
@@ -26,20 +26,20 @@ class DarkColorPalette:
     TEXT_PRIMARY_DEFAULT: str = "#EEF1F4"  # Main text (foreground)
     TEXT_SECONDARY_DEFAULT: str = "#7E8A9A"  # Muted/placeholder text
 
-    # Brand colors
-    ACCENT: str = "#17CCBF"  # Primary teal/cyan
-    ACCENT_SECONDARY: str = "#248F87"  # Darker teal (secondary accent)
+    # Brand colors — derived from the canonical BrandPalette (styles.py)
+    ACCENT: str = BrandPalette.TEAL  # Primary teal/cyan
+    ACCENT_SECONDARY: str = BrandPalette.TEAL_DARK  # Darker teal (secondary accent)
 
     # Semantic colors
-    ACCENT_SUCCESS: str = "#22C55E"  # Success green
-    ACCENT_WARNING: str = "#F5A623"  # Warning orange/amber
-    ACCENT_STOP: str = "#E23E3E"  # Destructive/error red
-    ERROR: str = "#E23E3E"  # Alias for destructive
+    ACCENT_SUCCESS: str = BrandPalette.TEAL  # Success teal (brand standard)
+    ACCENT_WARNING: str = BrandPalette.AMBER  # Warning orange/amber
+    ACCENT_STOP: str = BrandPalette.RED  # Destructive/error red
+    ERROR: str = BrandPalette.RED  # Alias for destructive
 
     # UI elements
     BORDER_PRIMARY: str = "#272C36"  # Borders, dividers
     DISABLED_COLOR: str = "#7E8A9A"  # Same as muted text
-    FOCUS_COLOR: str = "#17CCBF"  # Teal focus
+    FOCUS_COLOR: str = BrandPalette.TEAL  # Teal focus
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,7 @@ class LightColorPalette:
     TEXT_PRIMARY_DEFAULT: str = "#212121"
     TEXT_SECONDARY_DEFAULT: str = "#495057"
     ACCENT: str = "#2563eb"
-    ACCENT_SUCCESS: str = "#22C55E"
+    ACCENT_SUCCESS: str = BrandPalette.TEAL  # Success teal (brand standard)
     ACCENT_STOP: str = "#EF4444"
     ERROR: str = "#D32F2F"
     BORDER_PRIMARY: str = "#E0E3E7"
@@ -62,6 +62,21 @@ class LightColorPalette:
         "#9E9E9E"  # Darker gray for dividers (better light mode visibility)
     )
     FOCUS_COLOR: str = "#2563eb"
+
+
+class _PopupMenuTheme(ft.PopupMenuTheme):
+    """Constructible ``PopupMenuTheme`` for flet 0.28.3.
+
+    Upstream's ``__post_init__`` was copy-pasted from ``SliderTheme`` and
+    references fields this class does not have (``thumb_size``,
+    ``year_2023``), so constructing the stock class always raises. This
+    override keeps the one line that belongs here - normalizing
+    ``mouse_cursor`` into the control-state dict the serializer expects.
+    """
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mouse_cursor, dict):
+            self.mouse_cursor = {ft.ControlState.DEFAULT: self.mouse_cursor}
 
 
 class AegisTheme:
@@ -94,7 +109,7 @@ class AegisTheme:
         ACCENT_GLOW = DarkColorPalette.ACCENT
 
         # Status colors
-        SUCCESS = DarkColorPalette.ACCENT_SUCCESS  # #52D869
+        SUCCESS = DarkColorPalette.ACCENT_SUCCESS  # teal (brand standard)
         ERROR = DarkColorPalette.ERROR  # #FF6B6B
         WARNING = ft.Colors.AMBER_400
         INFO = ft.Colors.BLUE
@@ -108,6 +123,18 @@ class AegisTheme:
         BADGE_TEXT = ft.Colors.WHITE
         PRIMARY_DARK = DarkColorPalette.ACCENT
         PRIMARY_LIGHT = DarkColorPalette.ACCENT
+
+        @classmethod
+        def semantic(cls, name: str) -> str:
+            """A shared semantic colour name (green, blue, yellow, red, grey, as
+            ``get_status_color_name`` and ``ui_auth`` return) in this theme."""
+            return {
+                "green": cls.SUCCESS,
+                "blue": cls.INFO,
+                "yellow": cls.WARNING,
+                "red": cls.ERROR,
+                "grey": ft.Colors.ON_SURFACE_VARIANT,
+            }.get(name, cls.WARNING)
 
     class Typography:
         """Typography scale and weights."""
@@ -243,6 +270,23 @@ class AegisTheme:
             use_material3=True,
         )
 
+        # Popup menus (kebab menus, the account filter) style from the THEME,
+        # not from the button that opened them - per-call styling never
+        # sticks, which is why they kept rendering as stock Material. This
+        # gives every popup the card treatment: card surface, no Material
+        # tint wash, the card corner radius, primary-face text.
+        theme.popup_menu_theme = _PopupMenuTheme(
+            color=DarkColorPalette.BG_SECONDARY,
+            surface_tint_color=ft.Colors.TRANSPARENT,
+            shape=ft.RoundedRectangleBorder(radius=12),
+            elevation=4,
+            text_style=ft.TextStyle(
+                font_family=FontConfig.FAMILY_PRIMARY,
+                size=13,
+                color=DarkColorPalette.TEXT_PRIMARY_DEFAULT,
+            ),
+        )
+
         # Instant transitions
         theme.page_transitions = ft.PageTransitionsTheme(
             android=ft.PageTransitionTheme.NONE,
@@ -341,6 +385,19 @@ class AegisTheme:
             use_material3=True,
         )
 
+        # Mirrors the dark theme's popup treatment (see create_dark_theme).
+        theme.popup_menu_theme = _PopupMenuTheme(
+            color=LightColorPalette.BG_SECONDARY,
+            surface_tint_color=ft.Colors.TRANSPARENT,
+            shape=ft.RoundedRectangleBorder(radius=12),
+            elevation=4,
+            text_style=ft.TextStyle(
+                font_family=FontConfig.FAMILY_PRIMARY,
+                size=13,
+                color=LightColorPalette.TEXT_PRIMARY_DEFAULT,
+            ),
+        )
+
         # Instant transitions
         theme.page_transitions = ft.PageTransitionsTheme(
             android=ft.PageTransitionTheme.NONE,
@@ -353,169 +410,11 @@ class AegisTheme:
         return theme
 
 
-class ThemeManager:
-    """
-    Manages theme switching and state for Aegis Stack dashboard.
-
-    Provides instant light/dark mode switching with Material3 themes.
-    """
-
-    def __init__(self, page: ft.Page) -> None:
-        self.page = page
-        self._current_theme_mode = ft.ThemeMode.DARK  # Default to dark
-        self._themes_initialized = False
-
-    async def initialize_themes(self) -> None:
-        """Initialize both light and dark themes."""
-        if self._themes_initialized:
-            return
-
-        # Set both themes
-        self.page.theme = AegisTheme.create_light_theme()
-        self.page.dark_theme = AegisTheme.create_dark_theme()
-        self.page.theme_mode = self._current_theme_mode
-
-        self._themes_initialized = True
-        self.page.update()
-
-    async def toggle_theme(self) -> None:
-        """Toggle between light and dark mode."""
-        if self._current_theme_mode == ft.ThemeMode.DARK:
-            self._current_theme_mode = ft.ThemeMode.LIGHT
-        else:
-            self._current_theme_mode = ft.ThemeMode.DARK
-
-        self.page.theme_mode = self._current_theme_mode
-        self.page.update()
-
-    @property
-    def is_dark_mode(self) -> bool:
-        """Check if current theme is dark mode."""
-        return self._current_theme_mode == ft.ThemeMode.DARK
-
-    @property
-    def is_light_mode(self) -> bool:
-        """Check if current theme is light mode."""
-        return self._current_theme_mode == ft.ThemeMode.LIGHT
-
-    def get_status_colors(self, is_healthy: bool) -> tuple[str, str, str]:
-        """Get (background, text, border) colors for status indicators."""
-        if is_healthy:
-            if self.is_dark_mode:
-                return (ft.Colors.GREEN_900, ft.Colors.GREEN_100, ft.Colors.GREEN)
-            else:
-                return (ft.Colors.GREEN_100, ft.Colors.GREEN_800, ft.Colors.GREEN)
-        else:
-            if self.is_dark_mode:
-                return (ft.Colors.RED_900, ft.Colors.RED_100, ft.Colors.ERROR)
-            else:
-                return (ft.Colors.RED_100, ft.Colors.RED_800, ft.Colors.ERROR)
-
-    def get_info_colors(self) -> tuple[str, str, str]:
-        """Get (background, text, border) colors for info cards."""
-        if self.is_dark_mode:
-            return (ft.Colors.BLUE_900, ft.Colors.BLUE_100, ft.Colors.PRIMARY)
-        else:
-            return (ft.Colors.BLUE_100, ft.Colors.BLUE_800, ft.Colors.PRIMARY)
-
-    """
-    Centralized design system for Aegis Stack dashboard.
-
-    High-tech dark theme inspired by modern dev tools (Supabase, Vercel).
-    Single source of truth for colors, typography, spacing, and component styles.
-    """
-
-    class Colors:
-        """Color palette - official design system colors."""
-
-        # Primary Brand (Teal/Cyan - official)
-        PRIMARY = "#17CCBF"  # Primary teal/cyan
-        PRIMARY_DARK = "#248F87"  # Darker teal (secondary accent)
-        PRIMARY_LIGHT = "#5eead4"  # Lighter teal
-
-        # Accent (Vibrant highlights for CTAs and emphasis)
-        ACCENT = "#17CCBF"  # Same as primary
-        ACCENT_GLOW = "#17CCBF"  # Teal glow
-
-        # Status Colors (Semantic feedback)
-        SUCCESS = ft.Colors.GREEN_400
-        WARNING = ft.Colors.AMBER_400
-        ERROR = ft.Colors.RED_400
-        INFO = ft.Colors.BLUE
-
-        # Surface Levels (Semantic - auto-adapt to light/dark mode)
-        SURFACE_0 = ft.Colors.SURFACE  # Base background
-        SURFACE_1 = ft.Colors.with_opacity(
-            0.05, ft.Colors.ON_SURFACE
-        )  # Slight elevation
-        SURFACE_2 = ft.Colors.with_opacity(
-            0.08, ft.Colors.ON_SURFACE
-        )  # Medium elevation
-        SURFACE_3 = ft.Colors.SURFACE_CONTAINER_HIGHEST  # Highest elevation
-
-        # Text Colors (Semantic - auto-adapt to light/dark mode)
-        TEXT_PRIMARY = ft.Colors.ON_SURFACE  # Main content text
-        TEXT_SECONDARY = ft.Colors.ON_SURFACE_VARIANT  # Supporting text
-        TEXT_TERTIARY = ft.Colors.ON_SURFACE_VARIANT  # De-emphasized text
-        TEXT_DISABLED = ft.Colors.with_opacity(
-            0.5, ft.Colors.ON_SURFACE_VARIANT
-        )  # Disabled state (50% opacity)
-
-        # Borders & Dividers (Semantic - auto-adapt to light/dark mode)
-        BORDER_SUBTLE = ft.Colors.with_opacity(
-            0.3, ft.Colors.OUTLINE_VARIANT
-        )  # Minimal separation (30% opacity)
-        BORDER_DEFAULT = ft.Colors.OUTLINE_VARIANT  # Standard borders
-        BORDER_STRONG = ft.Colors.OUTLINE  # Emphasized borders
-
-        # Badge & Chip Text (High contrast for colored backgrounds)
-        BADGE_TEXT = (
-            ft.Colors.WHITE
-        )  # White text for status badges with colored backgrounds
-
-    class Typography:
-        """Typography scale and weights."""
-
-        # Size Scale (px)
-        DISPLAY = 32  # Hero/display text
-        H1 = 28  # Page titles
-        H2 = 24  # Major section headers
-        H3 = 18  # Subsection headers
-        BODY_LARGE = 16  # Emphasized body text
-        BODY = 14  # Default body text
-        BODY_SMALL = 12  # Supporting/secondary text
-        CAPTION = 10  # Labels, captions, compact UI
-
-        # Font Weights
-        WEIGHT_REGULAR = ft.FontWeight.W_400
-        WEIGHT_MEDIUM = ft.FontWeight.W_500
-        WEIGHT_SEMIBOLD = ft.FontWeight.W_600
-        WEIGHT_BOLD = ft.FontWeight.W_700
-
-    class Spacing:
-        """Spacing system based on 8px grid."""
-
-        XS = 4  # Minimal spacing
-        SM = 8  # Small spacing
-        MD = 16  # Default spacing
-        LG = 24  # Large spacing
-        XL = 32  # Extra large spacing
-        XXL = 48  # Maximum spacing
-
-    class Components:
-        """Component-specific styling constants."""
-
-        # Border Radius
-        CARD_RADIUS = 12  # Cards, containers
-        BADGE_RADIUS = 8  # Badges, pills
-        BUTTON_RADIUS = 6  # Buttons, inputs
-        INPUT_RADIUS = 6  # Form inputs
-
-        # Elevation (shadow depth)
-        CARD_ELEVATION = 2  # Default card shadow
-        CARD_ELEVATION_HOVER = 4  # Hover state shadow
-
-        # Animation Durations (ms)
-        TRANSITION_FAST = 150  # Quick interactions
-        TRANSITION_NORMAL = 200  # Standard transitions
-        TRANSITION_SLOW = 300  # Deliberate animations
+# A tone's colour (ok, warn, error, muted): what htmx's ``data-tone`` CSS
+# reads, for Flet's badges, log lines and chart guides alike.
+TONE_COLORS = {
+    "ok": AegisTheme.Colors.SUCCESS,
+    "warn": AegisTheme.Colors.WARNING,
+    "error": AegisTheme.Colors.ERROR,
+    "muted": ft.Colors.OUTLINE,
+}

@@ -1,0 +1,186 @@
+"""What every worker backend's health check decides the same way.
+
+The numbers come from somewhere different in each backend - a Redis
+stream, a list, arq's own health key - but the verdict does not depend on
+where they came from, and neither does the arithmetic that reads a
+consumer group.
+"""
+
+from typing import Any, NamedTuple
+
+from app.core.constants import ComponentName
+from app.core.formatting import format_span
+from app.services.system.models import ComponentStatus, ComponentStatusType
+from app.services.system.redis_facts import entry_time
+
+# Failure rates (%) past which a live queue is degraded, then failing.
+FAILURE_RATE_WARNING = 10
+FAILURE_RATE_UNHEALTHY = 25
+
+
+def taskiq_group_stats(
+    groups: list[dict[str, Any]], stream_length: int, group_name: str = "taskiq"
+) -> tuple[int, int, int, int]:
+    """Return (consumers, pending, entries_read, lag) for the ``taskiq`` group.
+
+    A stream nobody has ever consumed has no group at all, and Redis reports
+    that as an empty list rather than an error: every entry is then waiting.
+    """
+    for group in groups:
+        name = group.get("name", b"")
+        if isinstance(name, bytes):
+            name = name.decode()
+        if name != group_name:
+            continue
+        lag = group.get("lag")
+        return (
+            group.get("consumers", 0) or 0,
+            group.get("pending", 0) or 0,
+            group.get("entries-read", 0) or 0,
+            stream_length if lag is None else lag,
+        )
+    return 0, 0, 0, stream_length
+
+
+def last_delivered(groups: list[dict[str, Any]], group_name: str = "taskiq") -> str:
+    """The ``taskiq`` group's last delivered stream id; ``0-0`` when nothing
+    has consumed the stream yet, so every entry is still waiting."""
+    for group in groups:
+        name = group.get("name", b"")
+        if (name.decode() if isinstance(name, bytes) else name) == group_name:
+            last = group.get("last-delivered-id", b"0-0")
+            return last.decode() if isinstance(last, bytes) else str(last)
+    return "0-0"
+
+
+def stream_age(entry_id: bytes | str, now_ms: int) -> float:
+    """Seconds since a stream entry arrived: its id starts with that time."""
+    return round(now_ms / 1000 - entry_time(entry_id), 1)
+
+
+def broken_queue_status() -> ComponentStatus | None:
+    """An unhealthy worker status naming every queue that fails to import,
+    or None when they all import."""
+    from app.components.worker import queue_discovery
+
+    broken = queue_discovery.broken_queues()
+    if not broken:
+        return None
+    detail = "; ".join(f"{name}: {error}" for name, error in sorted(broken.items()))
+    return ComponentStatus(
+        name=ComponentName.WORKER,
+        status=ComponentStatusType.UNHEALTHY,
+        message=f"Worker queues failed to import: {detail}",
+        metadata={"broken_queues": broken},
+    )
+
+
+# A live consumer polls the stream every few seconds; one idle this long
+# belongs to a process that has gone (Redis never drops it on its own).
+LIVE_CONSUMER_IDLE_MS = 30_000
+
+
+def live_consumers(consumers: list[dict[str, Any]]) -> int:
+    """How many of a group's consumers (``XINFO CONSUMERS``) are still alive."""
+    return sum(1 for c in consumers if (c.get("idle") or 0) < LIVE_CONSUMER_IDLE_MS)
+
+
+def last_start(consumers: list[dict[str, Any]]) -> float | None:
+    """Seconds since the queue last handed a consumer a job (``XINFO
+    CONSUMERS`` ``inactive``, Redis 7.2+), or None when no consumer says.
+    A job reclaimed after the broker's ``idle_timeout`` counts as a start:
+    it does start again."""
+    reads = [c["inactive"] for c in consumers if c.get("inactive", -1) >= 0]
+    return round(min(reads) / 1000, 1) if reads else None
+
+
+def reported_busy(reports: list[dict[str, str]], queue: str) -> int | None:
+    """Jobs a queue's workers report running now (``with_busy``), or None
+    with no report. Task history's count keeps a "running" record for each
+    job a worker restart dropped."""
+    mine = [r for r in reports if r.get("queue") == queue]
+    return sum(int(r.get("busy") or 0) for r in mine) if mine else None
+
+
+def live_workers(consumers: list[dict[str, Any]], reports: int) -> int:
+    """How many workers serve a queue: its consumers that read lately, or
+    as many as report themselves (``worker.runtime``), whichever is more.
+    A worker working through what it claimed reads nothing for a while, so
+    its consumer goes idle, but it keeps reporting all the while."""
+    return max(live_consumers(consumers), reports)
+
+
+class Verdict(NamedTuple):
+    """A queue's health, why, and its state."""
+
+    status: ComponentStatusType
+    reason: str
+    state: str  # no_tasks, offline, failing, degraded, backed_up, healthy
+
+    @property
+    def lead(self) -> str:
+        """The reason as a message leads with it; a view shows the reason
+        beside the state's own label. Only a backlog's reason does not name
+        its state."""
+        if self.state == "backed_up":
+            return f"backed up, {self.reason}"
+        return self.reason
+
+
+def queue_verdict(
+    *,
+    worker_alive: bool,
+    has_functions: bool,
+    waiting: int,
+    failure_rate: float = 0.0,
+    oldest_waiting: float | None = None,
+    max_wait: float | None = None,
+    last_started: float | None = None,
+) -> Verdict:
+    """What one worker queue's state means, for every backend and every view.
+
+    A queue nobody consumes is a problem: with work waiting it is an
+    outage (UNHEALTHY), idle it is a warning. Info is only for a queue
+    with no functions registered, which cannot have a consumer that
+    matters. A live consumer is healthy until failures pile up, or until
+    its oldest waiting job has waited past ``max_wait`` with no job started
+    in that time either (``last_started``, when the backend knows it): a
+    queue still handing out jobs is busy, not backed up.
+    """
+    if not has_functions:
+        return Verdict(
+            ComponentStatusType.INFO, "configured - no functions defined", "no_tasks"
+        )
+    if not worker_alive:
+        if waiting > 0:
+            return Verdict(
+                ComponentStatusType.UNHEALTHY,
+                f"no worker consuming, {waiting} waiting",
+                "offline",
+            )
+        return Verdict(ComponentStatusType.WARNING, "no worker consuming", "offline")
+    if failure_rate > FAILURE_RATE_UNHEALTHY:
+        return Verdict(
+            ComponentStatusType.UNHEALTHY, f"{failure_rate:.1f}% failing", "failing"
+        )
+    if failure_rate > FAILURE_RATE_WARNING:
+        return Verdict(
+            ComponentStatusType.WARNING, f"{failure_rate:.1f}% failing", "degraded"
+        )
+    if (
+        oldest_waiting is not None
+        and max_wait
+        and oldest_waiting > max_wait
+        and (last_started is None or last_started > max_wait)
+    ):
+        reason = f"oldest waiting {format_span(oldest_waiting)}"
+        if last_started is not None:
+            reason += f", nothing started for {format_span(last_started)}"
+        return Verdict(ComponentStatusType.WARNING, reason, "backed_up")
+    return Verdict(ComponentStatusType.HEALTHY, "", "healthy")
+
+
+def queue_status(**facts: Any) -> tuple[ComponentStatusType, str]:
+    """``queue_verdict``'s status and lead, for the health checks."""
+    verdict = queue_verdict(**facts)
+    return verdict.status, verdict.lead

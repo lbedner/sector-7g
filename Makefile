@@ -2,6 +2,10 @@
 # Developer-friendly commands for Docker workflow
 
 COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE_PROD = docker compose -f docker-compose.yml -f docker-compose.prod.yml
+# Biome's scope. Pointing it at the project root would reformat every .js in
+# the repo (docs scripts included) the first time anyone runs `make fix`.
+WEB_JS_DIR = app/components/web_frontend/static/js
 
 #=============================================================================
 # CORE DOCKER COMMANDS
@@ -11,13 +15,23 @@ build: ## Build Docker image
 	@echo "Building Docker image..."
 	@$(COMPOSE_DEV) build webserver
 
-serve: build ## Run all services (builds if needed)
-	@echo "Starting services... (Press Ctrl+C to stop)"
-	@$(COMPOSE_DEV) --profile dev up --remove-orphans
+build-static: ## Compile Tailwind CSS and fingerprint assets into static/dist
+	@echo "Building static assets..."
+	@npm run build
+	@uv run python -m app.components.web_frontend.build
 
-serve-bg: ## Run all services in background
-	@echo "Starting services in background..."
-	@$(COMPOSE_DEV) --profile dev up -d --remove-orphans
+serve: build ## Run all services (ENGINE=granian swaps the ASGI server for this run)
+	@uv run python scripts/dev_tasks.py serve
+
+serve-bg: ## Run all services in background (auto-selects a free host port if the default is taken)
+	@uv run python scripts/dev_tasks.py serve-bg
+
+serve-prod: ## Run all services with the production profile (prod config; no dev mounts/debug ports)
+	@uv run python scripts/dev_tasks.py serve-prod
+
+stop-prod: ## Stop the production-profile services
+	@echo "Stopping production services..."
+	@$(COMPOSE_PROD) --profile prod down --remove-orphans
 
 stop: ## Gracefully stop all services
 	@echo "Stopping services..."
@@ -51,7 +65,7 @@ logs-web: ## Follow webserver logs only
 
 logs-worker: ## Follow worker logs only
 	@echo "Following worker logs..."
-	@docker compose logs -f worker-inanimate-rod worker-homer worker-lenny worker-carl worker-charlie worker-grimey
+	@docker compose logs -f worker-grimey
 
 logs-redis: ## Follow Redis logs only
 	@echo "Following Redis logs..."
@@ -65,9 +79,12 @@ shell: ## Open shell in webserver container
 	@echo "Opening shell in webserver container..."
 	@docker compose exec webserver /bin/bash
 
+cli: ## Run the app CLI where the database is (make cli ARGS="--help")
+	@docker compose exec webserver /opt/venv/bin/python -c "from app.cli.main import main; main()" $(ARGS)
+
 shell-worker: ## Open shell in worker container
 	@echo "Opening shell in worker container..."
-	@docker compose exec worker-homer /bin/bash
+	@docker compose exec worker-grimey /bin/bash
 
 ps: ## Show running containers
 	@echo "Docker containers status:"
@@ -111,6 +128,9 @@ health-json: ## System health as JSON
 health-probe: ## Health probe (exits 1 if unhealthy)
 	@uv run sector-7g health probe
 
+bench-engines: ## Compare ASGI engines head to head (ARGS="--path /health/ -n 3000")
+	@uv run sector-7g bench engines $(ARGS)
+
 test: ## Run tests locally
 	@echo "Running tests..."
 	@uv run pytest
@@ -126,19 +146,38 @@ test-verbose: ## Run tests with verbose output
 lint: ## Check code style with ruff
 	@echo "Running linting..."
 	@uv run ruff check .
+	@$(MAKE) lint-frontend
+
+lint-frontend: ## Lint static JS (Biome) + Jinja templates (djlint)
+	@echo "Linting frontend (Biome JS + djlint templates)..."
+	@npx --yes @biomejs/biome@2.5.1 lint $(WEB_JS_DIR)
+	@uvx djlint@1.39.4 app/components/web_frontend/templates
 
 fix: ## Auto-fix linting and formatting issues
 	@echo "Auto-fixing code issues..."
-	@uv run ruff check . --fix
+	@-uv run ruff check . --fix
 	@uv run ruff format .
+	@-npx --yes @biomejs/biome@2.5.1 lint --write $(WEB_JS_DIR)
 
 format: ## Format code with ruff
 	@echo "Formatting code..."
 	@uv run ruff format .
 
+format-frontend: ## Format static JS with Biome (opt-in; reflows files)
+	@echo "Formatting frontend JS with Biome..."
+	@npx --yes @biomejs/biome@2.5.1 format --write $(WEB_JS_DIR)
+
 typecheck: ## Run type checking with ty
 	@echo "Running type checking..."
 	@uv run ty check
+
+check-queries: ## Fail on N+1 queries not already in .queryspy-baseline.json
+	@echo "Checking for N+1 queries..."
+	@uv run pytest --queryspy-strict --queryspy-baseline .queryspy-baseline.json
+
+check-queries-baseline: ## Rewrite .queryspy-baseline.json from the current suite
+	@# -n 0: under xdist the baseline is written by the controller, which runs no tests, so it comes out empty.
+	@uv run pytest -n 0 --queryspy-strict --queryspy-baseline .queryspy-baseline.json --queryspy-baseline-update
 
 check: lint typecheck test ## Run all code quality checks
 	@echo "All checks completed successfully!"
@@ -149,7 +188,7 @@ check: lint typecheck test ## Run all code quality checks
 
 install: ## Install/sync dependencies with uv
 	@echo "Installing dependencies..."
-	@uv sync --all-extras
+	@uv sync
 
 deps-update: ## Update dependencies
 	@echo "Updating dependencies..."
@@ -164,9 +203,8 @@ clean-cache: ## Clean Python cache files
 # DOCUMENTATION
 #=============================================================================
 
-docs-serve: ## Serve documentation locally (http://localhost:8001)
-	@echo "Serving documentation on http://localhost:8001"
-	@uv run mkdocs serve --dev-addr 0.0.0.0:8001
+docs-serve: ## Serve documentation locally (port resolved like make serve)
+	@uv run python scripts/dev_tasks.py docs
 
 docs-build: ## Build static documentation
 	@echo "Building documentation..."
@@ -188,12 +226,11 @@ migrate-history: ## Show migration history
 	@echo "Migration history:"
 	@docker compose exec webserver uv run alembic -c alembic/alembic.ini history --verbose
 
+migrate-fix: ## Auto-fix schema mismatches after upgrade (safe: only adds, never drops)
+	@docker compose exec webserver uv run python -m app.cli.migrate_fix
+
 migrate-reset: ## Reset database (WARNING: destructive)
-	@echo "WARNING: This will destroy all data in the database!"
-	@read -p "Are you sure? Type 'yes' to continue: " confirm && [ "$$confirm" = "yes" ] || exit 1
-	@docker compose exec webserver uv run alembic -c alembic/alembic.ini downgrade base
-	@docker compose exec webserver uv run alembic -c alembic/alembic.ini upgrade head
-	@echo "Database reset complete"
+	@uv run python scripts/dev_tasks.py migrate-reset
 
 
 db-clean: ## Remove postgres volume (nuclear reset when DB is broken)
@@ -206,14 +243,6 @@ db-fresh: db-clean serve ## Nuclear DB reset + restart
 
 
 
-
-#=============================================================================
-# WORKER DEBUGGING (arq)
-#=============================================================================
-
-worker-test: ## Test workers in burst mode (process and exit)
-	@echo "Testing system worker in burst mode..."
-	@uv run python -m arq app.components.worker.queues.homer.WorkerSettings --burst
 
 #=============================================================================
 # HELP AND INFO
@@ -241,7 +270,7 @@ help: ## Show this help message
 	@echo
 	@echo "TIP: Use 'make refresh' when everything is broken!"
 
-.PHONY: build serve stop clean rebuild refresh restart logs logs-web logs-worker logs-redis logs-scheduler shell shell-worker ps redis-cli redis-stats redis-keys redis-reset health health-detailed health-json health-probe test test-verbose lint fix format typecheck check install deps-update clean-cache docs-serve docs-build migrate migrate-check migrate-history migrate-reset db-clean db-fresh worker-test status help
+.PHONY: build build-static lint-frontend format-frontend serve serve-bg serve-prod stop-prod stop clean rebuild refresh restart logs logs-web logs-worker logs-redis logs-scheduler shell shell-worker ps redis-cli redis-stats redis-keys redis-reset health health-detailed health-json health-probe test test-verbose lint fix format typecheck check install deps-update clean-cache docs-serve docs-build migrate migrate-check migrate-history migrate-reset db-clean db-fresh status help
 
 # Default target - show help
 .DEFAULT_GOAL := help

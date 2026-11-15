@@ -1,0 +1,183 @@
+"""Where a scheduled job runs.
+
+With a worker, the scheduler only produces: every service job is scheduled
+as an enqueue of its own name onto the system queue, and a worker runs it
+under the worker's sizing, with its retries and its live feed. The
+heartbeat stays in the scheduler, since it proves the scheduler's own loop
+is alive. Without a worker, the scheduler runs each job itself.
+"""
+
+import logging
+from typing import Any
+
+from apscheduler.job import Job
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import pytest
+
+from app.components.scheduler.main import _quiet_successful_runs, register_service_jobs
+from app.core.constants import QueueName
+from app.core.schedule import ServiceJob, service_jobs
+
+
+def _scheduled() -> dict[str, Job]:
+    scheduler = AsyncIOScheduler()
+    register_service_jobs(scheduler)
+    return {job.id: job for job in scheduler.get_jobs()}
+
+
+def test_every_service_job_is_scheduled() -> None:
+    assert set(_scheduled()) == {job.id for job in service_jobs()}
+
+
+def test_a_run_that_succeeds_logs_nothing() -> None:
+    """APScheduler logs every run at INFO; the heartbeat alone wrote two
+    lines every 15 seconds. Failures still log."""
+    root = logging.getLogger()
+    previous = root.level
+    root.setLevel(logging.INFO)
+    try:
+        _quiet_successful_runs()
+        executor = logging.getLogger("apscheduler.executors.default")
+        assert not executor.isEnabledFor(logging.INFO)
+        assert executor.isEnabledFor(logging.ERROR)
+    finally:
+        root.setLevel(previous)
+
+
+def test_the_scheduler_only_enqueues() -> None:
+    from app.components.scheduler.main import scheduled_run
+
+    scheduled = _scheduled()
+    for job in service_jobs():
+        assert scheduled[job.id].func is scheduled_run, job.id
+        assert list(scheduled[job.id].args) == [job.id, job.task_name]
+
+
+def test_every_enqueued_name_is_a_system_task() -> None:
+    """Pins the scheduler's list to the worker's: a name the worker does not
+    register would be enqueued forever and run never."""
+    from app.components.worker.registry import queue_tasks
+
+    registered = set(queue_tasks(QueueName.SYSTEM))
+    missing = {job.task_name for job in service_jobs()} - registered
+    assert not missing, f"scheduled but not registered on the worker: {missing}"
+
+
+async def _fake_job() -> None:
+    """A job that records that it ran."""
+    from structlog.contextvars import get_contextvars
+
+    _RAN.append(get_contextvars().get("app_service"))
+
+
+_RAN: list[str | None] = []
+_FAKE = ServiceJob(
+    _fake_job,
+    "fake",
+    "Fake",
+    {"trigger": "interval", "hours": 1},
+    timeout=123,
+    app_service="demo",
+)
+
+
+async def test_a_worker_task_runs_its_job_under_its_own_name() -> None:
+    from app.components.worker.queues.grimey import broker
+    from app.components.worker.tasks.service_jobs import as_task
+
+    _RAN.clear()
+    task = as_task(_FAKE, broker)
+
+    assert task.task_name == "_fake_job"
+    assert task.labels["timeout"] == 123
+    await task.original_func()
+    assert _RAN == ["demo"]
+
+
+def test_registering_leaves_the_job_function_alone() -> None:
+    """TaskIQ renames the function it decorates (``__name__`` gains
+    ``__taskiq_original``). The job's function is the scheduler's too, and
+    its name is the task name, so it must never be the one decorated."""
+    from app.components.worker.queues.grimey import broker
+    from app.components.worker.tasks.service_jobs import as_task
+
+    as_task(_FAKE, broker)
+
+    assert _fake_job.__name__ == "_fake_job"
+    assert _FAKE.task_name == "_fake_job"
+
+
+async def test_running_a_job_by_hand_passes_its_stored_args(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scheduled enqueue is stored with the task name as its argument;
+    "Run Now" calling it bare would fail every time."""
+    import structlog
+
+    from app.services.scheduler import trigger
+
+    monkeypatch.setattr(trigger, "record_job_started", lambda *_: 1)
+    monkeypatch.setattr(trigger, "record_job_finished", lambda *_, **__: None)
+    seen: list[tuple[Any, ...]] = []
+
+    async def job(*args: Any) -> None:
+        # Bound as its history row, so the row keeps what it logs.
+        seen.append((*args, structlog.contextvars.get_contextvars().get("run_id")))
+
+    assert await trigger.run_triggered_job(job, "id", "Name", ["a_job", "system"])
+    assert seen == [("a_job", "system", "1")]
+
+
+async def test_a_job_kept_already_is_updated_without_a_failed_insert() -> None:
+    """Every start adds each job again. Inserted first, one kept already
+    failed on its key before it was updated: Postgres logged an ERROR for
+    every job on every start."""
+    from apscheduler.jobstores.base import ConflictingIdError
+    from sqlalchemy import create_engine, event
+
+    from app.components.scheduler.main import StoredJobs
+
+    store = StoredJobs(engine=create_engine("sqlite://"))
+    scheduler = AsyncIOScheduler(jobstores={"default": store})
+    scheduler.start(paused=True)
+    scheduler.add_job(print, "interval", hours=1, id="chore", name="Chore")
+    sent: list[str] = []
+    event.listen(store.engine, "before_cursor_execute", lambda *a: sent.append(a[2]))
+
+    again = scheduler.add_job(
+        print, "interval", hours=2, id="chore", name="Chore", replace_existing=True
+    )
+
+    assert not [statement for statement in sent if statement.startswith("INSERT")]
+    assert scheduler.get_job("chore").trigger.interval.total_seconds() == 7200
+    with pytest.raises(ConflictingIdError):
+        store.add_job(again)
+    scheduler.shutdown(wait=False)
+
+
+def test_interval_jobs_keep_their_times_across_restarts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every startup re-adds each job. An interval trigger with no start
+    date counts from that moment, so each restart pushed every interval job
+    back a full interval (in dev, a daily job restarted hourly never ran).
+    Anchored to a fixed start, the next run is the same whenever it starts."""
+    from datetime import UTC, datetime, timedelta
+
+    import app.components.scheduler.main as scheduler_main
+    from app.core.schedule import ServiceJob
+
+    async def daily() -> None:
+        """A daily chore."""
+
+    job = ServiceJob(daily, "daily", "Daily", {"trigger": "interval", "hours": 24})
+    monkeypatch.setattr(scheduler_main, "service_jobs", lambda: (job,))
+    trigger = _scheduled()["daily"].trigger
+    started = [
+        datetime(2026, 9, 26, 22, 0, tzinfo=UTC),
+        datetime(2026, 9, 26, 23, 54, tzinfo=UTC),
+    ]
+    next_runs = {trigger.get_next_fire_time(None, now) for now in started}
+    assert len(next_runs) == 1
+    (next_run,) = next_runs
+    assert next_run - min(started) < timedelta(hours=24, seconds=1)

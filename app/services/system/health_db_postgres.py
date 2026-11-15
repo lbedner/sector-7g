@@ -1,9 +1,8 @@
 """
 PostgreSQL database health check for sector-7g.
 
-Provides comprehensive health checking for PostgreSQL databases including
-connection testing, version info, database size, connection counts, and
-server settings.
+Checks a PostgreSQL database: the connection, its version and size,
+connection counts and server settings.
 """
 
 import os
@@ -12,12 +11,16 @@ import re
 from typing import Any
 
 from app.core.config import settings
+from app.core.constants import ComponentName
+from app.core.formatting import format_bytes
 from app.core.log import logger
-from app.services.system.health import format_bytes
-from app.services.system.models import ComponentStatus, ComponentStatusType
+from app.services.system.models import (
+    ComponentStatus,
+    ComponentStatusType,
+    MigrationInfo,
+)
 
-# Cache static data that doesn't change at runtime
-_migration_cache: list[dict[str, Any]] | None = None
+_migration_cache: list[MigrationInfo] | None = None
 _pg_settings_cache: dict[str, Any] | None = None
 _schema_cache: dict[str, Any] | None = None
 
@@ -32,8 +35,9 @@ async def check_database_health() -> ComponentStatus:
     global _migration_cache, _pg_settings_cache, _schema_cache
 
     try:
-        from app.core.db import get_async_session
         from sqlalchemy import text
+
+        from app.core.db import get_async_session
 
         # Use effective URL which handles Docker vs local hostname translation
         db_url = settings.database_url_effective
@@ -42,6 +46,9 @@ async def check_database_health() -> ComponentStatus:
         enhanced_metadata: dict[str, Any] = {
             "implementation": "postgresql",
             "url": db_url,
+            # True when connected to Neon's cloud (vs a local postgres
+            # container), so the UI can label the subtitle "(Neon)".
+            "is_neon": ".neon.tech" in (db_url or ""),
             "database_exists": True,
             "engine_echo": settings.DATABASE_ENGINE_ECHO,
         }
@@ -65,9 +72,11 @@ async def check_database_health() -> ComponentStatus:
 
             # Get database size
             try:
-                result = (await session.execute(
-                    text("SELECT pg_database_size(current_database())")
-                )).fetchone()
+                result = (
+                    await session.execute(
+                        text("SELECT pg_database_size(current_database())")
+                    )
+                ).fetchone()
                 if result:
                     db_size = result[0]
                     enhanced_metadata["database_size_bytes"] = db_size
@@ -77,12 +86,14 @@ async def check_database_health() -> ComponentStatus:
 
             # Get active connection count
             try:
-                result = (await session.execute(
-                    text(
-                        "SELECT count(*) FROM pg_stat_activity "
-                        "WHERE datname = current_database()"
+                result = (
+                    await session.execute(
+                        text(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE datname = current_database()"
+                        )
                     )
-                )).fetchone()
+                ).fetchone()
                 if result:
                     enhanced_metadata["active_connections"] = result[0]
             except Exception:
@@ -91,12 +102,13 @@ async def check_database_health() -> ComponentStatus:
             # Get connection pool information
             try:
                 from app.core.db import async_engine
+
                 pool = async_engine.pool
-                if hasattr(pool, 'size'):
+                if hasattr(pool, "size"):
                     enhanced_metadata["connection_pool_size"] = pool.size()
-                if hasattr(pool, 'checkedin'):
+                if hasattr(pool, "checkedin"):
                     enhanced_metadata["pool_checked_in"] = pool.checkedin()
-                if hasattr(pool, 'checkedout'):
+                if hasattr(pool, "checkedout"):
                     enhanced_metadata["pool_checked_out"] = pool.checkedout()
             except Exception:
                 logger.debug("Failed to get pool information", exc_info=True)
@@ -108,12 +120,16 @@ async def check_database_health() -> ComponentStatus:
                 try:
                     pg_settings: dict[str, Any] = {}
 
-                    rows = (await session.execute(text(
-                        "SELECT name, setting FROM pg_settings "
-                        "WHERE name IN ("
-                        "'max_connections','shared_buffers','work_mem',"
-                        "'effective_cache_size','maintenance_work_mem','wal_level')"
-                    ))).fetchall()
+                    rows = (
+                        await session.execute(
+                            text(
+                                "SELECT name, setting FROM pg_settings "
+                                "WHERE name IN ("
+                                "'max_connections','shared_buffers','work_mem',"
+                                "'effective_cache_size','maintenance_work_mem','wal_level')"
+                            )
+                        )
+                    ).fetchall()
                     for row in rows:
                         pg_settings[row[0]] = row[1]
 
@@ -121,25 +137,24 @@ async def check_database_health() -> ComponentStatus:
                     enhanced_metadata["pg_settings"] = pg_settings
 
                 except Exception:
-                    logger.debug(
-                        "Failed to collect PostgreSQL settings", exc_info=True
-                    )
+                    logger.debug("Failed to collect PostgreSQL settings", exc_info=True)
 
             # Collect table row counts using pg_stat_user_tables
             # (single query instead of N individual COUNT(*) queries)
             # Note: n_live_tup is an estimate updated by autovacuum, perfect for monitoring
             table_info: list[dict[str, Any]] = []
             try:
-                rows = (await session.execute(text(
-                    "SELECT relname, n_live_tup FROM pg_stat_user_tables "
-                    "ORDER BY relname"
-                ))).fetchall()
+                rows = (
+                    await session.execute(
+                        text(
+                            "SELECT relname, n_live_tup FROM pg_stat_user_tables "
+                            "ORDER BY relname"
+                        )
+                    )
+                ).fetchall()
 
                 for row in rows:
-                    table_info.append({
-                        "name": row[0],
-                        "rows": row[1]
-                    })
+                    table_info.append({"name": row[0], "rows": row[1]})
 
                 enhanced_metadata["tables"] = table_info
                 enhanced_metadata["table_count"] = len(table_info)
@@ -164,14 +179,14 @@ async def check_database_health() -> ComponentStatus:
                     row_map = {t["name"]: t["rows"] for t in table_info}
                     table_schemas = []
                     for schema in _schema_cache["table_schemas"]:
-                        table_schemas.append({
-                            **schema,
-                            "rows": row_map.get(schema["name"], 0),
-                        })
+                        table_schemas.append(
+                            {
+                                **schema,
+                                "rows": row_map.get(schema["name"], 0),
+                            }
+                        )
                     enhanced_metadata["table_schemas"] = table_schemas
-                    enhanced_metadata["total_indexes"] = _schema_cache[
-                        "total_indexes"
-                    ]
+                    enhanced_metadata["total_indexes"] = _schema_cache["total_indexes"]
                     enhanced_metadata["total_foreign_keys"] = _schema_cache[
                         "total_foreign_keys"
                     ]
@@ -185,58 +200,76 @@ async def check_database_health() -> ComponentStatus:
                         row_count_map = {t["name"]: t["rows"] for t in table_info}
 
                         # Batch query 1: All columns with types
-                        columns_rows = (await session.execute(text(
-                            "SELECT table_name, column_name, data_type, "
-                            "is_nullable, column_default "
-                            "FROM information_schema.columns "
-                            "WHERE table_schema = 'public' "
-                            "ORDER BY table_name, ordinal_position"
-                        ))).fetchall()
+                        columns_rows = (
+                            await session.execute(
+                                text(
+                                    "SELECT table_name, column_name, data_type, "
+                                    "is_nullable, column_default "
+                                    "FROM information_schema.columns "
+                                    "WHERE table_schema = 'public' "
+                                    "ORDER BY table_name, ordinal_position"
+                                )
+                            )
+                        ).fetchall()
 
                         # Batch query 2: Primary key columns
-                        pk_rows = (await session.execute(text(
-                            "SELECT tc.table_name, kcu.column_name "
-                            "FROM information_schema.table_constraints tc "
-                            "JOIN information_schema.key_column_usage kcu "
-                            "ON tc.constraint_name = kcu.constraint_name "
-                            "AND tc.table_schema = kcu.table_schema "
-                            "WHERE tc.constraint_type = 'PRIMARY KEY' "
-                            "AND tc.table_schema = 'public'"
-                        ))).fetchall()
+                        pk_rows = (
+                            await session.execute(
+                                text(
+                                    "SELECT tc.table_name, kcu.column_name "
+                                    "FROM information_schema.table_constraints tc "
+                                    "JOIN information_schema.key_column_usage kcu "
+                                    "ON tc.constraint_name = kcu.constraint_name "
+                                    "AND tc.table_schema = kcu.table_schema "
+                                    "WHERE tc.constraint_type = 'PRIMARY KEY' "
+                                    "AND tc.table_schema = 'public'"
+                                )
+                            )
+                        ).fetchall()
 
                         # Batch query 3: Indexes
-                        idx_rows = (await session.execute(text(
-                            "SELECT tablename, indexname, "
-                            "indexdef LIKE '%UNIQUE%' AS is_unique "
-                            "FROM pg_indexes "
-                            "WHERE schemaname = 'public'"
-                        ))).fetchall()
+                        idx_rows = (
+                            await session.execute(
+                                text(
+                                    "SELECT tablename, indexname, "
+                                    "indexdef LIKE '%UNIQUE%' AS is_unique "
+                                    "FROM pg_indexes "
+                                    "WHERE schemaname = 'public'"
+                                )
+                            )
+                        ).fetchall()
 
                         # Batch query 4: Foreign keys
-                        fk_rows = (await session.execute(text(
-                            "SELECT tc.table_name, tc.constraint_name, "
-                            "kcu.column_name, ccu.table_name AS referred_table, "
-                            "ccu.column_name AS referred_column "
-                            "FROM information_schema.table_constraints tc "
-                            "JOIN information_schema.key_column_usage kcu "
-                            "ON tc.constraint_name = kcu.constraint_name "
-                            "AND tc.table_schema = kcu.table_schema "
-                            "JOIN information_schema.constraint_column_usage ccu "
-                            "ON tc.constraint_name = ccu.constraint_name "
-                            "AND tc.table_schema = ccu.table_schema "
-                            "WHERE tc.constraint_type = 'FOREIGN KEY' "
-                            "AND tc.table_schema = 'public'"
-                        ))).fetchall()
+                        fk_rows = (
+                            await session.execute(
+                                text(
+                                    "SELECT tc.table_name, tc.constraint_name, "
+                                    "kcu.column_name, ccu.table_name AS referred_table, "
+                                    "ccu.column_name AS referred_column "
+                                    "FROM information_schema.table_constraints tc "
+                                    "JOIN information_schema.key_column_usage kcu "
+                                    "ON tc.constraint_name = kcu.constraint_name "
+                                    "AND tc.table_schema = kcu.table_schema "
+                                    "JOIN information_schema.constraint_column_usage ccu "
+                                    "ON tc.constraint_name = ccu.constraint_name "
+                                    "AND tc.table_schema = ccu.table_schema "
+                                    "WHERE tc.constraint_type = 'FOREIGN KEY' "
+                                    "AND tc.table_schema = 'public'"
+                                )
+                            )
+                        ).fetchall()
 
                         # Group columns by table
                         columns_by_table: dict[str, list[dict[str, Any]]] = {}
                         for row in columns_rows:
-                            columns_by_table.setdefault(row[0], []).append({
-                                "name": row[1],
-                                "type": row[2],
-                                "nullable": row[3] == "YES",
-                                "default": str(row[4] or ""),
-                            })
+                            columns_by_table.setdefault(row[0], []).append(
+                                {
+                                    "name": row[1],
+                                    "type": row[2],
+                                    "nullable": row[3] == "YES",
+                                    "default": str(row[4] or ""),
+                                }
+                            )
 
                         # Group primary keys by table
                         pk_by_table: dict[str, set[str]] = {}
@@ -246,11 +279,13 @@ async def check_database_health() -> ComponentStatus:
                         # Group indexes by table
                         idx_by_table: dict[str, list[dict[str, Any]]] = {}
                         for row in idx_rows:
-                            idx_by_table.setdefault(row[0], []).append({
-                                "name": row[1],
-                                "unique": bool(row[2]),
-                                "columns": [],
-                            })
+                            idx_by_table.setdefault(row[0], []).append(
+                                {
+                                    "name": row[1],
+                                    "unique": bool(row[2]),
+                                    "columns": [],
+                                }
+                            )
 
                         # Group foreign keys by table
                         fk_by_table: dict[str, dict[str, dict[str, Any]]] = {}
@@ -287,13 +322,15 @@ async def check_database_health() -> ComponentStatus:
                             fks = list(fk_by_table.get(tname, {}).values())
                             total_foreign_keys += len(fks)
 
-                            table_schemas_list.append({
-                                "name": tname,
-                                "rows": row_count_map.get(tname, 0),
-                                "columns": cols,
-                                "indexes": indexes,
-                                "foreign_keys": fks,
-                            })
+                            table_schemas_list.append(
+                                {
+                                    "name": tname,
+                                    "rows": row_count_map.get(tname, 0),
+                                    "columns": cols,
+                                    "indexes": indexes,
+                                    "foreign_keys": fks,
+                                }
+                            )
 
                         _schema_cache = {
                             "table_schemas": table_schemas_list,
@@ -303,9 +340,7 @@ async def check_database_health() -> ComponentStatus:
 
                         enhanced_metadata["table_schemas"] = table_schemas_list
                         enhanced_metadata["total_indexes"] = total_indexes
-                        enhanced_metadata["total_foreign_keys"] = (
-                            total_foreign_keys
-                        )
+                        enhanced_metadata["total_foreign_keys"] = total_foreign_keys
 
                     except Exception:
                         logger.debug(
@@ -322,27 +357,36 @@ async def check_database_health() -> ComponentStatus:
             # Collect migration history from Alembic
             # Migration files are cached since they don't change at runtime
             try:
-                result = (await session.execute(
-                    text(
-                        "SELECT EXISTS ("
-                        "SELECT FROM information_schema.tables "
-                        "WHERE table_name = 'alembic_version'"
-                        ")"
+                result = (
+                    await session.execute(
+                        text(
+                            "SELECT EXISTS ("
+                            "SELECT FROM information_schema.tables "
+                            "WHERE table_name = 'alembic_version'"
+                            ")"
+                        )
                     )
-                )).fetchone()
+                ).fetchone()
 
                 if result and result[0]:
                     # Always query current HEAD live
-                    version_result = (await session.execute(
-                        text("SELECT version_num FROM alembic_version")
-                    )).fetchone()
+                    version_result = (
+                        await session.execute(
+                            text("SELECT version_num FROM alembic_version")
+                        )
+                    ).fetchone()
                     current_version = version_result[0] if version_result else None
                     enhanced_metadata["current_migration"] = current_version
 
                     # Parse migration files once, cache forever
                     if _migration_cache is None:
                         _migration_cache = []
-                        alembic_versions_path = Path("alembic/versions")
+                        # Absolute path anchored to the project root (this file is
+                        # app/services/system/...), so the scan does not depend on
+                        # the process CWD and can't silently cache an empty list.
+                        alembic_versions_path = (
+                            Path(__file__).resolve().parents[3] / "alembic" / "versions"
+                        )
                         if alembic_versions_path.exists():
                             migration_files = alembic_versions_path.glob("*.py")
                             for migration_file in sorted(migration_files):
@@ -359,9 +403,7 @@ async def check_database_health() -> ComponentStatus:
                                     create_date = None
 
                                     doc_pat = r'"""(.+?)"""'
-                                    doc_match = re.search(
-                                        doc_pat, content, re.DOTALL
-                                    )
+                                    doc_match = re.search(doc_pat, content, re.DOTALL)
                                     if doc_match:
                                         description = doc_match.group(1).strip()
 
@@ -370,30 +412,29 @@ async def check_database_health() -> ComponentStatus:
                                     if revision_match:
                                         revision_id = revision_match.group(1)
 
-                                    down_pat = (
-                                        r'down_revision\s*=\s*[\'"](.+?)[\'"]'
-                                    )
+                                    down_pat = r'down_revision\s*=\s*[\'"](.+?)[\'"]'
                                     down_match = re.search(down_pat, content)
                                     if down_match:
                                         down_revision = down_match.group(1)
 
-                                    date_pat = (
-                                        r'create_date\s*=\s*.+?datetime\((.+?)\)'
-                                    )
+                                    date_pat = r"create_date\s*=\s*.+?datetime\((.+?)\)"
                                     date_match = re.search(date_pat, content)
                                     if date_match:
                                         create_date = date_match.group(0)
 
                                     file_mtime = os.path.getmtime(migration_file)
 
-                                    _migration_cache.append({
-                                        "revision": revision_id,
-                                        "down_revision": down_revision,
-                                        "description": description,
-                                        "file_mtime": file_mtime,
-                                        "create_date": create_date,
-                                        "file_path": str(migration_file),
-                                    })
+                                    _migration_cache.append(
+                                        MigrationInfo(
+                                            revision=revision_id,
+                                            down_revision=down_revision,
+                                            description=description,
+                                            content=content,
+                                            file_mtime=file_mtime,
+                                            create_date=create_date,
+                                            file_path=str(migration_file),
+                                        )
+                                    )
 
                                 except Exception as e:
                                     logger.debug(
@@ -403,11 +444,15 @@ async def check_database_health() -> ComponentStatus:
 
                     # Stamp is_current from live HEAD onto cached data
                     migrations = [
-                        {**m, "is_current": m["revision"] == current_version}
+                        m.model_copy(
+                            update={"is_current": m.revision == current_version}
+                        )
                         for m in _migration_cache
                     ]
 
-                    enhanced_metadata["migrations"] = migrations
+                    enhanced_metadata["migrations"] = [
+                        m.model_dump() for m in migrations
+                    ]
                     enhanced_metadata["migration_count"] = len(migrations)
                 else:
                     enhanced_metadata["current_migration"] = None
@@ -420,7 +465,7 @@ async def check_database_health() -> ComponentStatus:
                 enhanced_metadata["migration_count"] = 0
 
         return ComponentStatus(
-            name="database",
+            name=ComponentName.DATABASE,
             status=ComponentStatusType.HEALTHY,
             message="Database connection successful",
             response_time_ms=None,
@@ -429,7 +474,7 @@ async def check_database_health() -> ComponentStatus:
 
     except ImportError:
         return ComponentStatus(
-            name="database",
+            name=ComponentName.DATABASE,
             status=ComponentStatusType.UNHEALTHY,
             message="Database module not available",
             response_time_ms=None,
@@ -442,7 +487,7 @@ async def check_database_health() -> ComponentStatus:
         error_str = str(e).lower()
         if "connection refused" in error_str:
             return ComponentStatus(
-                name="database",
+                name=ComponentName.DATABASE,
                 status=ComponentStatusType.UNHEALTHY,
                 message="PostgreSQL server not reachable",
                 response_time_ms=None,
@@ -455,7 +500,7 @@ async def check_database_health() -> ComponentStatus:
             )
         if "authentication failed" in error_str or "password" in error_str:
             return ComponentStatus(
-                name="database",
+                name=ComponentName.DATABASE,
                 status=ComponentStatusType.UNHEALTHY,
                 message="PostgreSQL authentication failed",
                 response_time_ms=None,
@@ -468,7 +513,7 @@ async def check_database_health() -> ComponentStatus:
             )
         if "does not exist" in error_str:
             return ComponentStatus(
-                name="database",
+                name=ComponentName.DATABASE,
                 status=ComponentStatusType.WARNING,
                 message="PostgreSQL database does not exist",
                 response_time_ms=None,
@@ -481,7 +526,7 @@ async def check_database_health() -> ComponentStatus:
             )
 
         return ComponentStatus(
-            name="database",
+            name=ComponentName.DATABASE,
             status=ComponentStatusType.UNHEALTHY,
             message=f"Database connection failed: {str(e)}",
             response_time_ms=None,
@@ -491,4 +536,3 @@ async def check_database_health() -> ComponentStatus:
                 "error": str(e),
             },
         )
-
