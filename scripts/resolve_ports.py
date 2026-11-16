@@ -23,6 +23,8 @@ _PERSISTED_KEYS = {
     "POSTGRES_HOST_PORT",
     "REDIS_HOST_PORT",
     "OLLAMA_HOST_PORT",
+    "LLAMACPP_HOST_PORT",
+    "SPEECH_HOST_PORT",
     "BROWSER_HOST_PORT",
     "INGRESS_DASHBOARD_PORT",
 }
@@ -140,6 +142,8 @@ def resolve_ports(
     ollama: bool,
     browser: bool,
     storage: bool,
+    speech: bool = False,
+    llamacpp: bool = False,
     ports_file: Path | None = None,
 ) -> dict[str, int]:
     """Resolve host ports for the requested services and persist them.
@@ -189,6 +193,14 @@ def resolve_ports(
     if ollama:
         ports["OLLAMA_HOST_PORT"] = pick(
             "OLLAMA_HOST_PORT", "OLLAMA_PORT_BASE", "11434", "ollama", ""
+        )
+    if llamacpp:
+        ports["LLAMACPP_HOST_PORT"] = pick(
+            "LLAMACPP_HOST_PORT", "LLAMACPP_PORT_BASE", "8080", "llama-server"
+        )
+    if speech:
+        ports["SPEECH_HOST_PORT"] = pick(
+            "SPEECH_HOST_PORT", "SPEECH_PORT_BASE", "8880", "speech server"
         )
     if browser:
         ports["BROWSER_HOST_PORT"] = pick(

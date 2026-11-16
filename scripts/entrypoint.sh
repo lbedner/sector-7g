@@ -58,8 +58,8 @@ elif [ "$run_command" = "scheduler" ]; then
     if { [ "$APP_ENV" = "dev" ] || [ "$SCHEDULER_WATCH" = "true" ]; } \
         && "${RUN[@]}" python -c "import watchfiles" 2>/dev/null; then
         echo "Starting scheduler with auto-reload..."
-        exec "${RUN[@]}" watchfiles --filter python \
-            "python -m app.entrypoints.scheduler" /code/app
+        exec "${RUN[@]}" python -m app.entrypoints.reloading /code/app \
+            python -m app.entrypoints.scheduler
     else
         # watchfiles ships via uvicorn[standard] (not guaranteed in every
         # stack shape) - a missing watcher must not stop the scheduler.
@@ -106,12 +106,12 @@ elif [ "$run_command" = "worker" ]; then
     # re-imports modules fresh on every restart, so new tasks register
     # immediately. TaskIQ's own ``--reload`` needs its ``reload`` extra
     # and has been broken in released versions (FileWatcher: NoneType is
-    # not callable), so the restart comes from watchfiles, the same
-    # wrapper the scheduler and webserver branches use.
+    # not callable), so the restart comes from the app's supervisor over
+    # watchfiles (app/entrypoints/reloading.py), as the scheduler's does.
     if worker_watch && "${RUN[@]}" python -c "import watchfiles" 2>/dev/null; then
         echo "Starting ${queue_type} taskiq worker with auto-reload (1 process, forkserver disabled)..."
-        exec "${RUN[@]}" watchfiles --filter python \
-            "taskiq worker ${broker_module} --workers 1 --max-async-tasks ${concurrency} $*" /code/app
+        exec "${RUN[@]}" python -m app.entrypoints.reloading /code/app \
+            taskiq worker "${broker_module}" --workers 1 --max-async-tasks "${concurrency}" "$@"
     fi
 
     # watchfiles ships via uvicorn[standard] (not guaranteed in every

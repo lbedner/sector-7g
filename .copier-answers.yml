@@ -1,6 +1,6 @@
-_commit: f6a2dba03226402b1dc343d7afc8f2b8c9880266
+_commit: f9357874d42c2def82255398b4d0f927a7eb0856
 _src_path: gh:lbedner/aegis-stack
-_template_version: 0.20.0
+_template_version: 0.20.0.post39+gf9357874d
 aegis_version: 0.20.0
 ai_backend: memory
 ai_framework: pydantic-ai
