@@ -11,12 +11,17 @@ UI hides its write controls where ``operator_refusal`` says why not.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request, status
 
 from app.core import exposure
 from app.core.tools import current_admin
+
+if TYPE_CHECKING:
+    # No database in every stack without auth: named for the checker only.
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Without auth, an operator's change is asked only at these (``refusal_at``).
 LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -91,6 +96,11 @@ async def get_owner_user_id() -> int | None:
 # Nobody signs in, so a route that also serves anonymous callers scopes
 # the same way.
 get_optional_owner_user_id = get_owner_user_id
+
+
+async def owner_is_admin(session: "AsyncSession", owner_user_id: int | None) -> bool:
+    """Whether what is done for ``owner_user_id`` is done for an admin: anyone, with no one to sign in."""
+    return True
 
 
 async def caller_is_admin() -> bool:

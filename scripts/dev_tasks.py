@@ -101,6 +101,8 @@ def serve(*, detach: bool = False) -> None:
         postgres=True,
         redis=True,
         ollama=False,
+        llamacpp=False,
+        speech=False,
         browser=False,
         storage=False,
     )

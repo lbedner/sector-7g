@@ -25,7 +25,8 @@ class QueueWorker(BaseModel):
     concurrency: PositiveInt = 10  # jobs one worker process runs at once
     # The oldest waiting job past this marks the queue backed up.
     max_wait_seconds: PositiveInt = 300
-    # A job running longer than this is stopped: nothing else frees its slot.
+    # How long a job may run, unless its task names its own ``timeout``
+    # (a taskiq ``timeout``, a dramatiq ``time_limit``; arq's ``job_timeout``).
     timeout_seconds: PositiveInt = 300
 
 

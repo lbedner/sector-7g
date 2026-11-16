@@ -97,6 +97,7 @@ def get_component_title(component_name: str) -> str:
 
 def get_component_label(component_name: str) -> str:
     """Map component keys to user-facing labels (brand or friendly name)."""
+
     mapping = {
         ComponentName.BACKEND: "FastAPI + Flet",
         # Both frontends ship: Flet at /dashboard, htmx pages at /.
